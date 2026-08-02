@@ -70,11 +70,4 @@ cd Frontend/vestora && npm install && npm run dev
 
 ---
 
-## تحذيرات مهمة قبل أي إطلاق
-
-1. 🔴 **المشروع مش تحت Git.** مفيش version control ولا استرجاع. أول أمر تعمله: `git init`.
-2. 🟠 **حماية الأدوار في الـ frontend على العميل بس** (`RequireAuth`) — الحماية الحقيقية في الـ backend عبر `[Authorize]`. الصفحة بتتحمّل الأول وبعدين بتوجّه.
-3. 🟠 **الإيميل محتاج مزوّد شغّال** عشان التفعيل وإعادة تعيين كلمة السرّ — التفاصيل في [docs/07-SETUP.md](docs/07-SETUP.md).
-4. 🟢 الأسرار **نضيفة** في `appsettings.json` (placeholders فاضية) — متحطّش قيمة حقيقية فيه أبدًا.
-
 القائمة الكاملة في [docs/09-STATUS.md](docs/09-STATUS.md).
