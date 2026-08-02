@@ -1,0 +1,26 @@
+sequenceDiagram
+    autonumber
+    actor U as Visitor
+    participant W as Web app
+    participant A as AuthController
+    participant S as AuthService
+    participant DB as SQL Server
+    participant M as SMTP relay
+
+    U->>W: submit registration
+    W->>A: POST /api/auth/register
+    A->>S: RegisterAsync(dto)
+    S->>S: hash password (BCrypt)
+    S->>DB: insert User (IsEmailVerified = false)
+    S->>DB: store verification token hash (60 min)
+    S->>M: send verification link
+    S-->>A: Created
+    A-->>W: 201 (identical whether or not the address exists)
+    Note over A,W: no account-existence oracle
+    U->>W: open link
+    W->>A: POST /api/auth/verify-email
+    A->>S: VerifyAsync(token)
+    S->>DB: match hash, check expiry, single use
+    S->>DB: set IsEmailVerified = true
+    S-->>A: Ok
+    A-->>W: 200 - sign-in now permitted

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>Vestora — Brand Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Aref+Ruqaa:wght@400;700&family=Karla:wght@400;500;600;700&family=Cairo:wght@400;500;600&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   VESTORA — DESIGN TOKENS
+   Source of truth for colors and typography. Use these values
+   directly when implementing the product (Tailwind, CSS, etc).
+   ============================================================ */
+:root {
+  /* Colors — Light mode */
+  --color-bronze:            #8B4F2A;
+  --color-gold:               #B08A3F;
+  --color-ink:                 #241C14;
+  --color-text-secondary:  #71614C;
+  --color-bg:                 #F6F2E7;
+  --color-surface:           #FCFAF3;
+  --color-border:             #E3D9C4;
+
+  /* Colors — Dark mode */
+  --color-bronze-dark:      #C88254;
+  --color-gold-dark:          #C7A968;
+  --color-ink-dark:            #F0EAE0;
+  --color-text-secondary-dark: #A89C89;
+  --color-bg-dark:            #0A0908;
+  --color-surface-dark:      #141210;
+  --color-border-dark:        #241F1A;
+
+  /* Fixed */
+  --color-cta-text:           #1E140F; /* text color on gold buttons, both modes */
+
+  /* Typography */
+  --font-heading-en:  'Cinzel', Georgia, serif;   /* EN headlines — CAPS only, tracked, hero/H1/H2 only */
+  --font-heading-ar:  'Aref Ruqaa', serif;        /* AR headlines — decorative diwani/ruqaa, logo & big titles */
+  --font-body-en:      'Karla', sans-serif;         /* EN body, buttons, labels */
+  --font-body-ar:      'Cairo', sans-serif;         /* AR body, buttons, labels */
+  --font-numerals:    'Spectral', serif;          /* all financial figures, both languages */
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body-ar);
+  transition: background .2s, color .2s;
+  padding: 40px 24px 80px;
+}
+body[data-theme="dark"] {
+  background: var(--color-bg-dark);
+  color: var(--color-ink-dark);
+}
+.wrap { max-width: 880px; margin: 0 auto; }
+
+/* header */
+.header { text-align: center; margin-bottom: 48px; }
+.icon-mark { width: 96px; height: 96px; display: block; margin: 0 auto 18px; }
+.wordmark { font-family: var(--font-heading-en); font-weight: 700; font-size: 34px; letter-spacing: 4px; margin: 0; }
+.tagline { font-family: var(--font-body-ar); color: var(--color-text-secondary); margin-top: 10px; font-size: 15px; }
+body[data-theme="dark"] .tagline { color: var(--color-text-secondary-dark); }
+.hairline { width: 60px; height: 1px; background: var(--color-gold); margin: 20px auto; }
+
+/* theme toggle */
+.toggle { display:flex; gap:8px; justify-content:center; margin-bottom: 40px; }
+.toggle button {
+  font-family: var(--font-body-ar); font-size: 13px; padding: 8px 18px; border-radius: 6px;
+  border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-ink); cursor: pointer;
+}
+body[data-theme="dark"] .toggle button { border-color: var(--color-border-dark); background: var(--color-surface-dark); color: var(--color-ink-dark); }
+.toggle button.active { background: var(--color-gold); color: var(--color-cta-text); border-color: var(--color-gold); }
+
+/* sections */
+section { margin-bottom: 44px; }
+h2 {
+  font-family: var(--font-body-ar); font-weight: 700; font-size: 20px;
+  border-bottom: 1px solid var(--color-gold); padding-bottom: 10px; margin-bottom: 18px;
+}
+p { line-height: 1.9; font-size: 15px; }
+p.muted { color: var(--color-text-secondary); }
+body[data-theme="dark"] p.muted { color: var(--color-text-secondary-dark); }
+
+/* swatches */
+.swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 14px; }
+.swatch { border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; }
+body[data-theme="dark"] .swatch { border-color: var(--color-border-dark); }
+.swatch-color { height: 64px; }
+.swatch-label { padding: 8px 10px; font-size: 12px; }
+.swatch-label b { display:block; font-size: 12.5px; margin-bottom: 2px; }
+.swatch-label span { font-family: monospace; color: var(--color-text-secondary); }
+body[data-theme="dark"] .swatch-label span { color: var(--color-text-secondary-dark); }
+
+/* type table */
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: right; padding: 10px 12px; border-bottom: 1px solid var(--color-border); }
+body[data-theme="dark"] th, body[data-theme="dark"] td { border-color: var(--color-border-dark); }
+th { background: var(--color-ink); color: var(--color-bg); font-weight: 700; font-size: 13px; }
+body[data-theme="dark"] th { background: var(--color-ink-dark); color: var(--color-bg-dark); }
+
+/* specimens */
+.specimen { margin: 10px 0; }
+.specimen .en-h { font-family: var(--font-heading-en); font-weight: 700; font-size: 30px; letter-spacing: 2px; }
+.specimen .ar-h { font-family: var(--font-heading-ar); font-weight: 700; font-size: 30px; }
+.specimen .en-b { font-family: var(--font-body-en); font-size: 16px; }
+.specimen .ar-b { font-family: var(--font-body-ar); font-size: 16px; }
+.specimen .num  { font-family: var(--font-numerals); font-size: 18px; color: var(--color-bronze); }
+body[data-theme="dark"] .specimen .num { color: var(--color-bronze-dark); }
+
+/* code block */
+pre {
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px;
+  padding: 16px 18px; overflow-x: auto; font-size: 13px; direction: ltr; text-align: left;
+}
+body[data-theme="dark"] pre { background: var(--color-surface-dark); border-color: var(--color-border-dark); }
+code { font-family: Consolas, monospace; }
+
+/* rules list */
+ul.rules { padding-right: 20px; margin: 0; }
+ul.rules li { line-height: 2; font-size: 14.5px; }
+
+/* button demo */
+.btn-demo {
+  display: inline-block; font-family: var(--font-body-ar); font-weight: 600; font-size: 14px;
+  background: var(--color-gold); color: var(--color-cta-text); padding: 10px 22px; border-radius: 6px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <!-- icon mark: two strokes (gold + bronze) converging to an ink point — extracted 1:1 from the approved design -->
+    <svg class="icon-mark" viewBox="430 247 340 340" xmlns="http://www.w3.org/2000/svg">
+      <g fill="none" stroke-linecap="round">
+        <path d="M470 300 L600 530" stroke="var(--color-gold)" stroke-width="26"/>
+        <path d="M730 300 L600 530" stroke="var(--color-bronze)" stroke-width="26"/>
+      </g>
+      <circle cx="600" cy="530" r="18" fill="var(--color-ink)"/>
+    </svg>
+    <p class="wordmark">VESTORA</p>
+    <div class="hairline"></div>
+    <p class="tagline">منصة استثمار خاصة تربط رواد الأعمال بالمستثمرين</p>
+  </div>
+
+  <div class="toggle">
+    <button id="btn-light" onclick="setTheme('light')">فاتح Light</button>
+    <button id="btn-dark" onclick="setTheme('dark')">غامق Dark</button>
+  </div>
+
+  <section>
+    <h2>نظرة عامة</h2>
+    <p>Vestora منصة رقمية تربط المستثمرين برواد الأعمال، وتحوّل الأفكار الواعدة إلى مشاريع قابلة للنمو والاستثمار. الشخصية البصرية: <b>فخم وهادئ</b> — إحساس private banking / old money، ثقة بدون ضجيج.</p>
+  </section>
+
+  <section>
+    <h2>لوحة الألوان</h2>
+    <p class="muted">الوضع الفاتح</p>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-bronze)"></div><div class="swatch-label"><b>برونزي/نحاسي</b><span>#8B4F2A</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-gold)"></div><div class="swatch-label"><b>ذهبي (CTA)</b><span>#B08A3F</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-ink)"></div><div class="swatch-label"><b>حبري (نص أساسي)</b><span>#241C14</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-text-secondary)"></div><div class="swatch-label"><b>نص ثانوي</b><span>#71614C</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-bg)"></div><div class="swatch-label"><b>خلفية</b><span>#F6F2E7</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-surface)"></div><div class="swatch-label"><b>سطح</b><span>#FCFAF3</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-border)"></div><div class="swatch-label"><b>حدود</b><span>#E3D9C4</span></div></div>
+    </div>
+
+    <p class="muted" style="margin-top:24px;">الوضع الغامق</p>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-bronze-dark)"></div><div class="swatch-label"><b>برونزي/نحاسي</b><span>#C88254</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-gold-dark)"></div><div class="swatch-label"><b>ذهبي (CTA)</b><span>#C7A968</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-ink-dark)"></div><div class="swatch-label"><b>نص أساسي (فاتح)</b><span>#F0EAE0</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-text-secondary-dark)"></div><div class="swatch-label"><b>نص ثانوي</b><span>#A89C89</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-bg-dark)"></div><div class="swatch-label"><b>خلفية</b><span>#0A0908</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-surface-dark)"></div><div class="swatch-label"><b>سطح</b><span>#141210</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--color-border-dark)"></div><div class="swatch-label"><b>حدود</b><span>#241F1A</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>الخطوط</h2>
+    <table>
+      <tr><th>الدور</th><th>الخط</th><th>الوزن</th><th>الاستخدام</th></tr>
+      <tr><td>عناوين إنجليزية</td><td>Cinzel</td><td>600 / 700</td><td>كابيتال فقط، متباعد — hero وعناوين رئيسية فقط</td></tr>
+      <tr><td>عناوين عربية</td><td>Aref Ruqaa</td><td>700</td><td>ديواني/رقعة زخرفي — الشعار والعناوين الكبيرة</td></tr>
+      <tr><td>نصوص إنجليزية</td><td>Karla</td><td>400 / 500 / 600</td><td>فقرات، أزرار، ليبلز</td></tr>
+      <tr><td>نصوص عربية</td><td>Cairo</td><td>400 / 500 / 600</td><td>فقرات، أزرار، ليبلز</td></tr>
+      <tr><td>أرقام ومؤشرات</td><td>Spectral</td><td>500</td><td>كل الأرقام المالية — تناسق تابيولار</td></tr>
+    </table>
+
+    <div class="specimen" style="margin-top:22px;">
+      <div class="en-h">WHERE CAPITAL MEETS CONVICTION</div>
+      <div class="ar-h">فيستورا</div>
+      <div class="en-b">Vestora connects vetted entrepreneurs with investors.</div>
+      <div class="ar-b">حيث يلتقي رأس المال بالثقة.</div>
+      <div class="num">$124,500 · +18.4% · #VES-0142</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>العنصر المميز (Signature)</h2>
+    <p>خط ذهبي رفيع (1px) تحت اللوجو وفي فواصل الأقسام — زي الخطوط المحفورة في الشيكات البنكية القديمة. عنصر واحد بس، بيُستخدم بحرص.</p>
+    <button class="btn-demo">طلب دعوة خاصة</button>
+  </section>
+
+  <section>
+    <h2>قواعد الاستخدام</h2>
+    <ul class="rules">
+      <li>الذهبي مخصص للأكشن الأساسي (أزرار، الخط الفاصل) فقط — لا يُستخدم كخلفية كبيرة.</li>
+      <li>البرونزي/النحاسي للتفاصيل والأرقام والهايلايتس — مش للخلفيات.</li>
+      <li>Cinzel يُكتب بحروف كابيتال فقط، وللعناوين الكبيرة فقط.</li>
+      <li>الوضعان الفاتح والغامق متاحان بنفس القواعد؛ التبديل حسب السياق أو تفضيل المستخدم.</li>
+      <li>اللوجو الحالي: علامة مكوّنة من خطين (ذهبي + برونزي) يلتقوا في نقطة حبرية، فوق اسم Vestora بخط Cinzel.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>التطبيق التقني — Tailwind</h2>
+    <pre><code>colors: {
+  bronze:    { DEFAULT: '#8B4F2A', dark: '#C88254' },
+  gold:      { DEFAULT: '#B08A3F', dark: '#C7A968' },
+  ink:       { DEFAULT: '#241C14', dark: '#F0EAE0' },
+  parchment: { DEFAULT: '#F6F2E7', dark: '#0A0908' },
+  surface:   { DEFAULT: '#FCFAF3', dark: '#141210' },
+  border:    { DEFAULT: '#E3D9C4', dark: '#241F1A' },
+}</code></pre>
+  </section>
+
+</div>
+
+<script>
+function setTheme(t) {
+  document.body.setAttribute('data-theme', t);
+  document.getElementById('btn-light').classList.toggle('active', t === 'light');
+  document.getElementById('btn-dark').classList.toggle('active', t === 'dark');
+}
+setTheme('light');
+</script>
+</body>
+</html>

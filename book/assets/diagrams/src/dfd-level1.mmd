@@ -1,0 +1,39 @@
+flowchart LR
+    inv(["Investor"])
+    fnd(["Founder"])
+    adm(["Administrator"])
+
+    p1["1.0<br/>Manage identity"]
+    p2["2.0<br/>Manage ventures"]
+    p3["3.0<br/>Moderate"]
+    p4["4.0<br/>Discover"]
+    p5["5.0<br/>Commit and settle"]
+    p6["6.0<br/>Communicate"]
+
+    d1[("D1 Users")]
+    d2[("D2 Projects")]
+    d3[("D3 Funding chain")]
+    d4[("D4 Messages")]
+    d5[("D5 Audit and security logs")]
+
+    fnd --> p1
+    inv --> p1
+    p1 <--> d1
+    p1 --> d5
+
+    fnd --> p2
+    p2 <--> d2
+    adm --> p3
+    p3 --> d2
+    p3 --> d5
+
+    inv --> p4
+    p4 --> d2
+    inv --> p5
+    p5 --> d3
+    p5 --> d2
+    fnd --> p5
+
+    inv --> p6
+    fnd --> p6
+    p6 <--> d4

@@ -1,0 +1,20 @@
+stateDiagram-v2
+    direction LR
+    state "ModerationStatus - written by administrator" as M {
+        [*] --> Pending
+        Pending --> Approved: approve
+        Pending --> Rejected: reject with reason
+        Rejected --> Pending: resubmit
+        Approved --> Pending: edited, needs re-review
+    }
+    state "LifecycleStatus - written by owner or system" as L {
+        [*] --> Active
+        Active --> Paused: owner pauses
+        Paused --> Active: owner resumes
+        Active --> Closed: target met or withdrawn
+    }
+    state "Stage - written by the funding pipeline" as S {
+        [*] --> Seeking
+        Seeking --> Raising: first settled payment
+        Raising --> Committed: target reached
+    }

@@ -1,0 +1,26 @@
+flowchart TB
+    subgraph client["Client device"]
+        br["Browser"]
+    end
+    subgraph host["Managed host - single instance"]
+        web["Next.js application<br/>port 443"]
+        api["ASP.NET Core API + SignalR hub<br/>one artefact"]
+    end
+    subgraph dbhost["Managed database host"]
+        db[("SQL Server<br/>encrypted connection")]
+    end
+    subgraph ext["External"]
+        pay["Payment provider"]
+        smtp["SMTP relay"]
+    end
+
+    br -->|"HTTPS"| web
+    br -->|"HTTPS + WebSocket"| api
+    web -->|"server-side fetch"| api
+    api -->|"TLS, credentials from config"| db
+    api --> pay
+    pay -.->|"signed webhook"| api
+    api --> smtp
+
+    classDef ext fill:#F6F2E7,stroke:#B08A3F,color:#241C14
+    class pay,smtp ext

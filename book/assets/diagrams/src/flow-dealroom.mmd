@@ -1,0 +1,19 @@
+flowchart LR
+    I(["Investor"]) --> V["Venture page"]
+    V --> O["Open documents<br/>readable by anyone"]
+    V --> R["Request a<br/>restricted document"]
+    R --> N["Founder notified"]
+    N --> D{"Founder<br/>decides"}
+    D -->|"refuse"| X["No access<br/>investor informed"]
+    D -->|"grant"| G["Access recorded"]
+    G --> DL["Download<br/>entitlement re-checked"]
+    DL --> L["Logged<br/>who, what, when"]
+    V --> M["Message the founder"]
+    M --> DR["Deal room<br/>thread + documents + commitment"]
+    G --> DR
+    DR --> C["Commit"]
+
+    classDef gate fill:#F6F2E7,stroke:#B08A3F,color:#241C14
+    classDef key fill:#FCFAF3,stroke:#8B4F2A,stroke-width:2px,color:#241C14
+    class D gate
+    class DR key

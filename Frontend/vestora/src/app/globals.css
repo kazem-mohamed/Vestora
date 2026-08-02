@@ -1,0 +1,752 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================
+   VESTORA — brand tokens mapped onto shadcn semantic tokens.
+   Source of truth: Vestora-Brand-Sheet.html
+   Personality: quiet luxury / private-banking. Gold = primary
+   action + hairline only; bronze = numbers, details, highlights.
+   ============================================================ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-heading);
+  --font-numeric: var(--font-numeric);
+  --color-bronze: var(--bronze);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-ink: var(--primary-ink);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Fonts — Latin defaults; Arabic overrides via [lang="ar"] below. */
+:root {
+  --font-sans: var(--font-karla), system-ui, sans-serif;
+  --font-heading: var(--font-cinzel), Georgia, serif;
+  --font-numeric: var(--font-spectral), Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ── Type scale ────────────────────────────────────────────────────────
+     Six steps with visible jumps between them. The page previously ran
+     36/44/48/50/51/52/72 — seven H2s inside a 16px band, which is not a
+     scale: three different sections rendered at the same optical weight, so
+     nothing could out-rank anything. Worse, `About` (72) outranked the H1
+     (69) on every viewport under ~1333px.
+
+     Each step is now ~1.5× its neighbour, and the display step is reserved
+     for the H1 alone. Section headings take `--fs-h2` and earn emphasis from
+     position and surface, never from creeping a few pixels larger. */
+  --fs-display: clamp(2.6rem, 5.6vw, 5rem); /* H1 — hero only */
+  --fs-h2: clamp(2rem, 3.6vw, 3.25rem); /* every section heading */
+  --fs-h3: clamp(1.25rem, 1.5vw, 1.5rem); /* card / step titles */
+  --fs-lead: clamp(1.0625rem, 1.25vw, 1.25rem); /* the explainer under a heading */
+  --fs-body: 0.9375rem;
+  --fs-label: 0.6875rem; /* tracked caps eyebrows */
+
+  /* ── Chamfer ───────────────────────────────────────────────────────────
+     The house corner. Cut on two opposite corners only — a four-corner cut
+     reads as a badge, two reads as a plate. Every card surface on the
+     landing page uses one of these instead of a large border-radius, which
+     is what made the page read as SaaS rather than as a document. */
+  --chamfer: polygon(
+    14px 0,
+    100% 0,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    0 100%,
+    0 14px
+  );
+  --chamfer-lg: polygon(
+    28px 0,
+    100% 0,
+    100% calc(100% - 28px),
+    calc(100% - 28px) 100%,
+    0 100%,
+    0 28px
+  );
+}
+
+[lang="ar"] {
+  --font-sans: var(--font-cairo), system-ui, sans-serif;
+  --font-heading: var(--font-aref), serif;
+}
+
+/* Light — parchment */
+:root {
+  --radius: 0.5rem;
+
+  --background: #f6f2e7;
+  --foreground: #241c14;
+  --card: #fcfaf3;
+  --card-foreground: #241c14;
+  --popover: #fcfaf3;
+  --popover-foreground: #241c14;
+  --primary: #b08a3f;
+  --primary-foreground: #1e140f;
+  /* Gold as INK, not as fill.
+     `--primary` on parchment measures 2.86:1 — under AA, and every eyebrow on
+     the page is gold at 11px with wide tracking, which is the hardest reading
+     case there is. This darker gold measures 4.9:1 and is visually the same
+     metal. Use it for gold TEXT; keep `--primary` for fills, hairlines and
+     rules, where contrast rules do not apply. Dark mode needs no such split
+     (gold on espresso is already 8.81:1), so there it resolves to the same
+     token. */
+  --primary-ink: #8a6a28;
+  --secondary: #ede6d5;
+  --secondary-foreground: #241c14;
+  --muted: #ede6d5;
+  --muted-foreground: #71614c;
+  --accent: #ede6d5;
+  --accent-foreground: #241c14;
+  --destructive: #a5402c;
+  --border: #e3d9c4;
+  --input: #e3d9c4;
+  --ring: #b08a3f;
+  --bronze: #8b4f2a;
+
+  --chart-1: #b08a3f;
+  --chart-2: #8b4f2a;
+  --chart-3: #71614c;
+  --chart-4: #c7a968;
+  --chart-5: #241c14;
+
+  --sidebar: #fcfaf3;
+  --sidebar-foreground: #241c14;
+  --sidebar-primary: #b08a3f;
+  --sidebar-primary-foreground: #1e140f;
+  --sidebar-accent: #ede6d5;
+  --sidebar-accent-foreground: #241c14;
+  --sidebar-border: #e3d9c4;
+  --sidebar-ring: #b08a3f;
+}
+
+/* Dark — deep espresso */
+.dark {
+  --background: #0a0908;
+  --foreground: #f0eae0;
+  --card: #141210;
+  --card-foreground: #f0eae0;
+  --popover: #141210;
+  --popover-foreground: #f0eae0;
+  --primary: #c7a968;
+  --primary-foreground: #1e140f;
+  /* Gold on espresso is already 8.81:1 — ink and fill are the same metal. */
+  --primary-ink: #c7a968;
+  --secondary: #1f1b17;
+  --secondary-foreground: #f0eae0;
+  --muted: #1f1b17;
+  --muted-foreground: #a89c89;
+  --accent: #1f1b17;
+  --accent-foreground: #f0eae0;
+  --destructive: #e0705e;
+  --border: #241f1a;
+  --input: #241f1a;
+  --ring: #c7a968;
+  --bronze: #c88254;
+
+  --chart-1: #c7a968;
+  --chart-2: #c88254;
+  --chart-3: #a89c89;
+  --chart-4: #b08a3f;
+  --chart-5: #f0eae0;
+
+  --sidebar: #141210;
+  --sidebar-foreground: #f0eae0;
+  --sidebar-primary: #c7a968;
+  --sidebar-primary-foreground: #1e140f;
+  --sidebar-accent: #1f1b17;
+  --sidebar-accent-foreground: #f0eae0;
+  --sidebar-border: #241f1a;
+  --sidebar-ring: #c7a968;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  /* Financial figures use Spectral with tabular alignment. */
+  .font-numeric {
+    font-family: var(--font-numeric);
+    font-variant-numeric: tabular-nums;
+  }
+  /* Interactive elements read as clickable everywhere (native pointer). On the
+     showpiece pages the gold ring takes over on desktop — see .cursor-showpiece. */
+  button:not(:disabled),
+  [role="button"],
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+}
+
+/* Showpiece pages (projects, landing) hide the native cursor on desktop and
+   let the custom gold ring signal clickability. !important + descendant reach
+   so it wins over the base pointer rule above. */
+@media (min-width: 1024px) and (pointer: fine) {
+  .cursor-showpiece,
+  .cursor-showpiece * {
+    cursor: none !important;
+  }
+}
+
+/* Primary gold CTA — the gold enriches, a light sweeps across, and the button
+   lifts on a cinematic ease. */
+.gold-cta {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition:
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.4s ease;
+}
+.gold-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 80%
+  );
+  transform: translateX(-125%);
+  transition: transform 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+.gold-cta:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05) saturate(1.04);
+  box-shadow: 0 14px 34px -14px color-mix(in oklab, var(--primary) 70%, transparent);
+}
+.gold-cta:active {
+  transform: translateY(0);
+}
+.gold-cta:hover::after {
+  transform: translateX(125%);
+}
+
+/* Text link — a gold hairline sweeps in from the leading edge. */
+.link-underline {
+  position: relative;
+}
+.link-underline::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: -2px;
+  height: 1px;
+  background: var(--primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+[dir="rtl"] .link-underline::after {
+  transform-origin: right;
+}
+.link-underline:hover::after,
+.link-underline.is-active::after {
+  transform: scaleX(1);
+}
+
+/* A light sheen sweeping across a filled progress bar. */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Vestora liquid glass — a near-transparent warm surface with a gold hairline
+   stroke that catches light at the top and bottom edges. Token-driven, so it
+   adapts to whatever theme scope it sits in (the landing hero scopes itself
+   dark because it always renders over dark cinematic footage). */
+.liquid-glass {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--foreground) 5%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: inset 0 1px 1px color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--foreground) 38%, transparent) 0%,
+    color-mix(in srgb, var(--foreground) 12%, transparent) 25%,
+    transparent 52%,
+    color-mix(in srgb, var(--foreground) 20%, transparent) 100%
+  );
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+}
+
+/* Film grain — inline SVG turbulence tile; pair with a low opacity and
+   mix-blend-overlay. */
+.film-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+/* Soft-light noise texture for tinted panels (bento voice/contact cards). */
+.noise-overlay {
+  position: relative;
+}
+.noise-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size: 240px 240px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   THE PLATE SYSTEM — the page's card language.
+   ------------------------------------------------------------------------
+   Vestora's surfaces used `rounded-2xl` / `rounded-3xl`, which is the house
+   style of every SaaS marketing page built since 2020. A private bank's
+   printed matter has no such corner: a share certificate, a statement, a
+   deed all sit inside a ruled plate with a cut corner and a hairline edge.
+
+   `.plate` is that. A 1px gradient edge drawn as padding (a clipped element
+   cannot also carry a border — the clip eats it), with the child clipped to
+   the same path so the edge reads as a stroke around the content.
+
+   Usage:  <div class="plate"><div class="plate-face"> … </div></div>
+   ════════════════════════════════════════════════════════════════════════ */
+.plate {
+  position: relative;
+  padding: 1px;
+  clip-path: var(--chamfer);
+  /* A plate is almost always a grid or flex item, and both give their children
+     `min-width: auto` — meaning the item refuses to shrink below its content.
+     One plate holds a `w-max` marquee row about 1000px wide, which blew its
+     grid track out to 1254px and pushed 761px of the card off-screen, leaving
+     a blank slab where the content should have been. Overflow is clipped here
+     as well as on the face: the face is what rounds the corners, but the plate
+     is what the layout measures. */
+  min-width: 0;
+  overflow: hidden;
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--primary) 55%, transparent) 0%,
+    color-mix(in oklab, var(--primary) 14%, transparent) 38%,
+    color-mix(in oklab, var(--primary) 8%, transparent) 62%,
+    color-mix(in oklab, var(--bronze) 42%, transparent) 100%
+  );
+  transition: background 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.plate:hover {
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--primary) 85%, transparent) 0%,
+    color-mix(in oklab, var(--primary) 30%, transparent) 38%,
+    color-mix(in oklab, var(--primary) 18%, transparent) 62%,
+    color-mix(in oklab, var(--bronze) 70%, transparent) 100%
+  );
+}
+.plate-face {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  clip-path: var(--chamfer);
+  background: var(--card);
+}
+/* Larger cut for full-width panels and hero-scale tiles. */
+.plate-lg,
+.plate-lg > .plate-face {
+  clip-path: var(--chamfer-lg);
+}
+/* Face that sits directly on footage — no fill of its own. */
+.plate-face-bare {
+  background: transparent;
+}
+
+/* ── Hairline rule ───────────────────────────────────────────────────────
+   The gold rule that separates a ledger's rows. Fades at both ends so it
+   never collides with the container edge. */
+.rule-gold {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in oklab, var(--primary) 42%, transparent) 18%,
+    color-mix(in oklab, var(--primary) 42%, transparent) 82%,
+    transparent
+  );
+}
+
+/* ── Foil sweep ──────────────────────────────────────────────────────────
+   A single pass of light across gold-filled display numerals, fired once on
+   reveal. Foil stamping catches the light once as the page turns; it does
+   not shimmer continuously, which is what separates a stamped number from a
+   glowing one. */
+@keyframes foil-pass {
+  0% {
+    background-position: -180% 0;
+  }
+  100% {
+    background-position: 180% 0;
+  }
+}
+.foil {
+  background-image: linear-gradient(
+    100deg,
+    var(--bronze) 0%,
+    var(--primary) 32%,
+    #f2e3bb 48%,
+    var(--primary) 64%,
+    var(--bronze) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.foil-animate {
+  animation: foil-pass 1.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .foil-animate {
+    animation: none;
+  }
+}
+
+/* Seamless marquee rows (industry tiles in the bento). */
+@keyframes marquee-left {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes marquee-right {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+.animate-marquee-left {
+  animation: marquee-left 26s linear infinite;
+}
+.animate-marquee-right {
+  animation: marquee-right 30s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee-left,
+  .animate-marquee-right {
+    animation: none;
+  }
+}
+
+/* Premium skeleton — a still base with a gold light sweeping across, instead
+   of a flat grey pulse. Drop-in: any element with .skeleton-shimmer. */
+@keyframes skeleton-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--foreground) 6%, var(--muted));
+}
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--primary) 16%, transparent),
+    transparent
+  );
+  animation: skeleton-sweep 1.7s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+}
+
+/* ── Browse: venture discovery ─────────────────────────────────────────────
+   A very slow drift on the spotlight plate only. One element, transform-only,
+   so it composites on the GPU and never touches layout. Long enough (28s) that
+   it reads as a living image rather than an animation competing with the text
+   beside it. */
+@keyframes spotlight-drift {
+  from {
+    transform: scale(1.04) translate3d(-0.8%, -0.6%, 0);
+  }
+  to {
+    transform: scale(1.11) translate3d(0.8%, 0.6%, 0);
+  }
+}
+
+/* Shared-element morph between a venture's plate on Browse and its detail hero.
+   The house curve, so the transition belongs to the same motion system. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[spotlight-drift_28s_ease-in-out_infinite_alternate\] {
+    animation: none;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* ============================================================================
+   Toasts
+   ----------------------------------------------------------------------------
+   The classes Sonner is pointed at, actually defined this time — the previous
+   config referenced `cn-toast`, which existed nowhere in the project.
+
+   Restraint on purpose. A toast is a glance: a hairline-ruled plate with a gold
+   edge on the leading side, one line of type in the reading face, and no shadow
+   deep enough to read as a dialog. `richColors` is off, so semantic meaning comes
+   from that single edge and the outlined glyph rather than a coloured tint over
+   the whole surface.
+   ========================================================================= */
+
+.vt-toast {
+  /* Sonner sets its own custom properties; overriding these is what removes the
+     library look without fighting its layout. */
+  --normal-bg: color-mix(in oklab, var(--popover) 92%, transparent);
+  --normal-text: var(--popover-foreground);
+  --normal-border: var(--border);
+
+  gap: 0.7rem !important;
+  align-items: flex-start !important;
+  padding: 0.8rem 0.95rem !important;
+  border-radius: 1rem !important;
+  border: 1px solid var(--border) !important;
+  background: color-mix(in oklab, var(--popover) 92%, transparent) !important;
+  backdrop-filter: blur(14px) saturate(1.1);
+  box-shadow:
+    0 1px 0 0 color-mix(in oklab, var(--foreground) 4%, transparent) inset,
+    0 18px 40px -28px rgb(0 0 0 / 0.55);
+  /* Sits above the semantic edge drawn below. */
+  position: relative;
+  overflow: hidden;
+}
+
+/* The leading gold hairline — the same device the header, footer and every plate
+   in Vestora uses. Logical inset, so it moves to the right edge in Arabic. */
+.vt-toast::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 1.5px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in oklab, var(--primary) 70%, transparent),
+    transparent
+  );
+}
+
+.vt-toast-error::before {
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in oklab, var(--destructive) 75%, transparent),
+    transparent
+  );
+}
+
+.vt-toast-warning::before {
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in oklab, var(--bronze) 75%, transparent),
+    transparent
+  );
+}
+
+.vt-toast-title {
+  font-family: var(--font-heading);
+  font-size: 0.82rem !important;
+  font-weight: 600;
+  line-height: 1.45 !important;
+  letter-spacing: 0.005em;
+  /* Long messages wrap rather than being clipped — several of Vestora's error
+     strings are full sentences from the API. */
+  overflow-wrap: anywhere;
+}
+
+.vt-toast-desc {
+  font-size: 0.76rem !important;
+  line-height: 1.6 !important;
+  color: var(--muted-foreground) !important;
+  overflow-wrap: anywhere;
+}
+
+/* Actions read as the product's own pills, not as browser buttons. */
+.vt-toast-action {
+  border-radius: 999px !important;
+  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent) !important;
+  background: color-mix(in oklab, var(--primary) 12%, transparent) !important;
+  color: var(--foreground) !important;
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  padding: 0.3rem 0.7rem !important;
+  transition: background-color 0.25s, border-color 0.25s;
+}
+
+.vt-toast-action:hover {
+  background: color-mix(in oklab, var(--primary) 20%, transparent) !important;
+}
+
+.vt-toast-cancel,
+.vt-toast-close {
+  border-radius: 999px !important;
+  border: 1px solid var(--border) !important;
+  background: transparent !important;
+  color: var(--muted-foreground) !important;
+  font-size: 0.72rem !important;
+  transition: color 0.25s, border-color 0.25s;
+}
+
+.vt-toast-cancel:hover,
+.vt-toast-close:hover {
+  color: var(--foreground) !important;
+  border-color: color-mix(in oklab, var(--primary) 45%, transparent) !important;
+}
+
+/* The stack breathes rather than overlapping into a deck of cards. */
+[data-sonner-toaster] {
+  --width: 22rem;
+  gap: 0.6rem;
+}
+
+/* Full width on a phone, clear of the notch, so a long error is readable
+   instead of being squeezed into a 22rem column at 375px. */
+@media (max-width: 640px) {
+  [data-sonner-toaster] {
+    --width: calc(100vw - 1.5rem);
+    inset-inline: 0.75rem !important;
+    top: calc(0.75rem + env(safe-area-inset-top)) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-toast {
+    backdrop-filter: none;
+  }
+}
+
+/* ── Reduced motion: the global backstop ──────────────────────────────────────
+   Framer Motion is handled at the root by <MotionConfig reducedMotion="user">
+   (see components/providers.tsx). This covers everything Framer never sees:
+   CSS transitions on hover, the named keyframes above, view transitions, and
+   smooth scrolling.
+
+   Durations collapse to 1ms rather than 0 so transitionend/animationend still
+   fire — anything waiting on those keeps working instead of hanging. Infinite
+   animations are stopped outright, since a loop has no end event to wait for.
+
+   Deliberately NOT disabled: opacity crossfades are unaffected by the rules
+   below because they carry no transform, and they are what stops content from
+   snapping into existence. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* A loop never completes, so shortening it would just make it flicker faster. */
+  *,
+  *::before,
+  *::after {
+    animation-iteration-count: 1 !important;
+  }
+
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  /* Lenis drives scrolling from JS; without this it keeps easing after the
+     browser has been told not to. */
+  html.lenis,
+  html.lenis body {
+    scroll-behavior: auto !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

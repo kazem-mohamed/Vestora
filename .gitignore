@@ -1,0 +1,62 @@
+# -----------------------------------------------------------------------------
+#  Vestora
+#
+#  This project was not under version control when the secrets rules below were
+#  written, which is exactly how a live database password ended up sitting in
+#  appsettings.json. The secret patterns come first so they cannot be missed.
+# -----------------------------------------------------------------------------
+
+# ---- Secrets: never commit ----
+# Real values belong in .NET user secrets (development) or environment
+# variables (production). appsettings.json itself IS committed and holds only
+# empty placeholders — see the note at the top of that file.
+appsettings.*.json
+!appsettings.Development.template.json
+*.env
+.env
+.env.*
+!.env.example
+secrets.json
+*.pfx
+*.p12
+*.pem
+*.key
+
+# ---- .NET ----
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userprefs
+.vs/
+TestResults/
+MyAppApi/MyAppApi/build-verify/
+MyAppApi/path/
+
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---- Logs & scratch ----
+*.log
+backend.stdout.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ---- Editors / OS ----
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+
+# ---- Agent tooling scratch ----
+.impeccable/
+**/.claude/settings.local.json

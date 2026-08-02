@@ -1,0 +1,34 @@
+sequenceDiagram
+    autonumber
+    actor A as Participant A
+    actor B as Participant B
+    participant H as ChatHub
+    participant PT as PresenceTracker
+    participant DB as SQL Server
+
+    A->>H: connect (same JWT as REST)
+    H->>PT: add connection for user A
+    PT-->>H: A is now online (set became non-empty)
+    H-->>B: presence - A online
+
+    A->>H: typing
+    H-->>B: typing indicator (never persisted)
+
+    A->>H: send message
+    H->>DB: persist message
+    Note over H,DB: persist first, push second - a pushed-but-unstored<br/>message is lost on reconnect
+    H-->>B: deliver
+    H-->>A: delivered
+
+    B->>H: open conversation
+    H->>DB: mark messages read (server-side, not a client claim)
+    H-->>A: read receipt
+
+    A->>H: disconnect (tab closed)
+    H->>PT: remove connection
+    alt other connections remain
+        PT-->>H: still online
+    else last connection
+        PT->>DB: write LastSeenUtc
+        H-->>B: presence - A offline
+    end

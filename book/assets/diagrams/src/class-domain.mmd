@@ -1,0 +1,64 @@
+classDiagram
+    direction TB
+    class User {
+        +int Id
+        +string Email
+        +string PasswordHash
+        +bool IsEmailVerified
+        +int FailedLoginAttempts
+        +DateTime LockoutEndUtc
+    }
+    class Investor
+    class Innovator
+    User <|-- Investor : discriminator
+    User <|-- Innovator : discriminator
+
+    class Project {
+        +decimal FundingGoal
+        +string ModerationStatus
+        +string LifecycleStatus
+        +string Stage
+    }
+    class Investment {
+        +decimal Amount
+        +string ApprovalStatus
+    }
+    class FundingRequest {
+        +decimal Amount
+        +DateTime ExpiresAtUtc
+    }
+    class PaymentTransaction {
+        +string Provider
+        +decimal Amount
+        +decimal FeeAmount
+        +string Status
+    }
+    class PaymentEvent {
+        +string ProviderEventId
+    }
+
+    Innovator "1" --> "*" Project : owns
+    Investor "1" --> "*" Investment : commits
+    Project "1" --> "*" Investment : attracts
+    Investment "1" --> "0..1" FundingRequest
+    FundingRequest "1" --> "*" PaymentTransaction
+    PaymentTransaction "1" --> "*" PaymentEvent
+
+    class FundingMath {
+        <<service>>
+        +RaisedAsync(projectId) decimal
+    }
+    class PipelineStages {
+        <<service>>
+        +CanTransition(from, to) bool
+    }
+    class IPaymentProvider {
+        <<interface>>
+        +CreateCheckoutAsync()
+        +GetSessionResultAsync()
+        +RefundAsync()
+    }
+    FundingMath ..> PaymentTransaction : reads Settled only
+    PipelineStages ..> Project : validates Stage
+    IPaymentProvider <|.. SimulatedPaymentProvider
+    IPaymentProvider <|.. StripeSandboxPaymentProvider

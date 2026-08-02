@@ -1,0 +1,36 @@
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant W as Web app
+    participant A as AuthController
+    participant S as AuthService
+    participant DB as SQL Server
+
+    U->>W: email + password
+    W->>A: POST /api/auth/login
+    A->>S: LoginAsync(dto)
+    S->>DB: load user by email
+    alt not verified or locked out
+        S-->>A: failure
+        A-->>W: 401 - message identical to a wrong password
+    else valid
+        S->>S: BCrypt.Verify
+        S->>S: issue access token (60 min)
+        S->>DB: store refresh token hash (14 days)
+        S-->>A: tokens
+        A-->>W: 200
+    end
+
+    Note over W,DB: later - access token expires
+    W->>A: POST /api/auth/refresh
+    A->>S: RefreshAsync(token)
+    S->>DB: match hash
+    alt token already rotated
+        S->>DB: invalidate the whole chain
+        S-->>A: replay detected
+        A-->>W: 401 - re-authenticate
+    else current
+        S->>DB: rotate - old invalidated, new stored
+        S-->>A: new pair
+        A-->>W: 200
+    end

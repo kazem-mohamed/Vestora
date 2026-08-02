@@ -1,0 +1,13 @@
+stateDiagram-v2
+    [*] --> Pending: checkout created
+    Pending --> Settled: provider confirmed
+    Pending --> Failed: provider declined
+    Pending --> Expired: time box elapsed
+    Settled --> Refunded: reversal
+    Failed --> [*]
+    Expired --> [*]
+    Refunded --> [*]
+    note right of Settled
+        Only this state counts
+        toward a venture total
+    end note

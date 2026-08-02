@@ -1,0 +1,83 @@
+erDiagram
+    USER ||--o{ PROJECT : "owns"
+    USER ||--o{ REFRESH_TOKEN : "holds"
+    USER ||--o{ SECURITY_LOG : "generates"
+    USER ||--o{ BOOKMARK : "saves"
+    USER ||--o{ FOLLOW : "follows"
+    USER ||--o{ COMMENT : "writes"
+    USER ||--o{ MESSAGE : "sends"
+    USER ||--o{ INVESTMENT : "commits"
+
+    PROJECT ||--o{ PROJECT_IMAGE : "has"
+    PROJECT ||--o{ PROJECT_DOCUMENT : "has"
+    PROJECT ||--o{ TEAM_MEMBER : "has"
+    PROJECT ||--o{ MILESTONE : "plans"
+    PROJECT ||--o{ PROJECT_UPDATE : "publishes"
+    PROJECT ||--o{ REVIEW : "receives"
+    PROJECT ||--o{ REPORT : "is flagged by"
+    PROJECT ||--o{ PROJECT_VIEW : "is viewed in"
+    PROJECT ||--o{ INVESTMENT : "attracts"
+
+    INVESTMENT ||--o| FUNDING_REQUEST : "is settled by"
+    FUNDING_REQUEST ||--o{ PAYMENT_TRANSACTION : "produces"
+    PAYMENT_TRANSACTION ||--o{ PAYMENT_EVENT : "records"
+
+    COMMENT ||--o{ REPLY : "receives"
+    MESSAGE ||--o| MESSAGE_ATTACHMENT : "carries"
+
+    USER {
+        int Id PK
+        string Email UK "unique index"
+        string PasswordHash
+        string UserType "TPH discriminator"
+        bool EmailVerified
+        int FailedLoginAttempts
+        datetime LockoutEndUtc
+        datetime LastSeenUtc
+    }
+
+    PROJECT {
+        int Id PK
+        int OwnerId FK
+        string Title
+        decimal FundingGoal
+        string ModerationStatus "admin state"
+        string LifecycleStatus "operational state"
+        string Stage "commercial state"
+        datetime CreatedDate
+    }
+
+    INVESTMENT {
+        int Id PK
+        int InvestorId FK
+        int ProjectId FK
+        decimal Amount
+        string ApprovalStatus
+        datetime Date
+    }
+
+    FUNDING_REQUEST {
+        int Id PK
+        int InvestmentId FK
+        decimal Amount
+        string Status
+        datetime ExpiresAtUtc
+    }
+
+    PAYMENT_TRANSACTION {
+        int Id PK
+        int FundingRequestId FK
+        string Provider "stripe or simulated"
+        string ProviderPaymentId
+        decimal Amount
+        decimal FeeAmount
+        string Status
+    }
+
+    PAYMENT_EVENT {
+        int Id PK
+        int PaymentTransactionId FK
+        string ProviderEventId UK "idempotency key"
+        string EventType
+        datetime ReceivedAtUtc
+    }

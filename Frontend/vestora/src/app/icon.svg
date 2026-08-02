@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    Vestora site icon.
+
+    The brand mark alone — two strokes converging to an ink point — with no wordmark,
+    because at 16px a word is a smudge. Colours are hard-coded rather than taken from
+    CSS variables: an icon is rendered outside the document and has no access to the
+    theme, and a favicon that resolves to `currentColor` renders black on black.
+
+    The plate is espresso so the gold reads on light and dark browser chrome alike.
+  -->
+  <rect width="512" height="512" rx="112" fill="#14120F"/>
+  <g fill="none" stroke-linecap="round">
+    <path d="M140 168 L256 372" stroke="#C7A968" stroke-width="46"/>
+    <path d="M372 168 L256 372" stroke="#8C6A43" stroke-width="46"/>
+  </g>
+  <circle cx="256" cy="372" r="32" fill="#F0EAE0"/>
+</svg>

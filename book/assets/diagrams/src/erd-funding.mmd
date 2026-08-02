@@ -1,0 +1,62 @@
+erDiagram
+    USER ||--o{ PROJECT : "owns"
+    USER ||--o{ INVESTMENT : "commits"
+    PROJECT ||--o{ INVESTMENT : "attracts"
+    INVESTMENT ||--o| FUNDING_REQUEST : "is settled by"
+    FUNDING_REQUEST ||--o{ PAYMENT_TRANSACTION : "produces"
+    PAYMENT_TRANSACTION ||--o{ PAYMENT_EVENT : "records"
+
+    USER {
+        int Id PK
+        string Email UK "unique index"
+        string PasswordHash
+        string UserType "TPH discriminator"
+        bool EmailVerified
+        int FailedLoginAttempts
+        datetime LockoutEndUtc
+    }
+
+    PROJECT {
+        int Id PK
+        int OwnerId FK
+        decimal FundingGoal
+        string ModerationStatus "admin state"
+        string LifecycleStatus "operational state"
+        string Stage "commercial state"
+        datetime CreatedDate
+    }
+
+    INVESTMENT {
+        int Id PK
+        int InvestorId FK
+        int ProjectId FK
+        decimal Amount
+        string ApprovalStatus "approved is not funded"
+        datetime Date
+    }
+
+    FUNDING_REQUEST {
+        int Id PK
+        int InvestmentId FK
+        decimal Amount
+        string Status
+        datetime ExpiresAtUtc "time box"
+    }
+
+    PAYMENT_TRANSACTION {
+        int Id PK
+        int FundingRequestId FK
+        string Provider "stripe or simulated"
+        string ProviderPaymentId
+        decimal Amount
+        decimal FeeAmount
+        string Status "only Settled counts"
+    }
+
+    PAYMENT_EVENT {
+        int Id PK
+        int PaymentTransactionId FK
+        string ProviderEventId UK "idempotency key"
+        string EventType
+        datetime ReceivedAtUtc
+    }

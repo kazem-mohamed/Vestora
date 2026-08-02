@@ -1,0 +1,40 @@
+sequenceDiagram
+    autonumber
+    actor I as Investor
+    participant W as Web app
+    participant P as PaymentsController
+    participant SV as PaymentService
+    participant PR as IPaymentProvider
+    participant DB as SQL Server
+    participant FM as FundingMath
+
+    I->>W: open checkout on an approved commitment
+    W->>P: POST /api/payments/checkout
+    P->>SV: OpenCheckoutAsync
+    SV->>DB: assert approved, unexpired, unsettled
+    SV->>DB: create FundingRequest (with expiry)
+    SV->>PR: CreateCheckoutAsync
+    PR-->>SV: session id + url
+    SV->>DB: create PaymentTransaction (Pending, Provider stamped)
+    SV-->>P: checkout url
+    P-->>W: 200
+    I->>PR: complete payment on the provider surface
+    Note over I,PR: no card data touches the platform
+
+    PR->>P: POST /api/payments/webhook/stripe
+    P->>P: verify signature over the raw body (constant time)
+    alt signature invalid
+        P-->>PR: 400 - rejected and logged, no state change
+    else valid
+        P->>DB: insert PaymentEvent (ProviderEventId unique)
+        alt duplicate event
+            P-->>PR: 200 - already handled, stop
+        else new
+            P->>SV: ApplyProviderEventAsync
+            SV->>DB: PaymentTransaction to Settled
+            P-->>PR: 200
+        end
+    end
+    W->>FM: read venture funding
+    FM->>DB: SUM over Settled transactions only
+    FM-->>W: raised amount (derived, never stored)

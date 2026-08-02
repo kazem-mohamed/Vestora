@@ -1,0 +1,35 @@
+flowchart LR
+    subgraph events["Recorded events - the only things written"]
+        PV["ProjectViews"]
+        UI["UserProjectInteractions"]
+        PT["PaymentTransactions<br/>Settled only"]
+        INV["Investments<br/>Approved"]
+        PRJ["Projects<br/>ModerationStatus"]
+    end
+
+    subgraph derived["Derived at read time - nothing stored"]
+        VW["Venture views"]
+        EN["Engagement score"]
+        FU["Funding raised"]
+        CO["Committed"]
+        RE["Fee revenue"]
+        ML["Moderation load"]
+    end
+
+    PV --> VW
+    UI --> EN
+    PT --> FU
+    PT --> RE
+    INV --> CO
+    PRJ --> ML
+
+    VW --> DASH["Dashboards<br/>&amp; analytics"]
+    EN --> DASH
+    FU --> DASH
+    CO --> DASH
+    RE --> DASH
+    ML --> DASH
+
+    classDef ev fill:#F6F2E7,stroke:#71614C,color:#241C14
+    classDef out fill:#FCFAF3,stroke:#8B4F2A,stroke-width:2px,color:#241C14
+    class DASH out

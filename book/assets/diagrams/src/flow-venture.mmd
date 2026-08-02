@@ -1,0 +1,18 @@
+flowchart LR
+    A(["Founder<br/>creates draft"]) --> B["Draft<br/>private"]
+    B --> C["Submitted<br/>Status = Pending"]
+    C --> D{"Admin<br/>review"}
+    D -->|"reject<br/>with reason"| E["Rejected<br/>returned to founder"]
+    E -->|"correct"| C
+    D -->|"approve"| F["Approved"]
+    F --> G{"Lifecycle<br/>= Active?"}
+    G -->|"no · paused"| H["Not listed"]
+    G -->|"yes"| I["Public<br/>listed &amp; discoverable"]
+    I --> J["Updates<br/>&amp; milestones"]
+    J --> I
+    I -->|"substantive edit"| C
+
+    classDef gate fill:#F6F2E7,stroke:#B08A3F,color:#241C14
+    classDef pub fill:#FCFAF3,stroke:#8B4F2A,stroke-width:2px,color:#241C14
+    class D,G gate
+    class I pub

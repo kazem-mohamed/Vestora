@@ -1,0 +1,32 @@
+flowchart TB
+    investor["Investor<br/>browses · funds · tracks"]
+    founder["Founder<br/>raises · reports"]
+    admin["Administrator<br/>approves · moderates"]
+
+    subgraph platform["Vestora Platform"]
+        direction TB
+        web["Web Application<br/>React · Next.js"]
+        api["REST API<br/>ASP.NET Core"]
+        hub["Realtime Hub<br/>SignalR"]
+        db[("Relational Store<br/>SQL Server")]
+    end
+
+    stripe["Payment provider<br/>Stripe-compatible"]
+    resend["SMTP relay<br/>MailKit"]
+
+    investor --> web
+    founder --> web
+    admin --> web
+
+    web -->|"HTTPS / JSON"| api
+    web <-->|"WebSocket"| hub
+    api --> db
+    hub --> db
+    api -->|"charges"| stripe
+    stripe -.->|"webhook"| api
+    api -->|"verification · OTP"| resend
+
+    classDef actor fill:#F6F2E7,stroke:#71614C,stroke-width:1px,color:#241C14
+    classDef ext fill:#F6F2E7,stroke:#B08A3F,stroke-width:1px,color:#241C14
+    class investor,founder,admin actor
+    class stripe,resend ext

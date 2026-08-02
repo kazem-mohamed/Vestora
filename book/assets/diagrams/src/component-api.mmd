@@ -1,0 +1,33 @@
+flowchart TB
+    subgraph ctl["Controllers - 22, 150 endpoints"]
+        direction LR
+        c1["Auth"]
+        c2["Projects · ProjectStory"]
+        c3["Capital · Payments"]
+        c4["Messages · Notification"]
+        c5["Admin · Moderation · Revenue"]
+    end
+    subgraph dom["Domain services - rules, no I/O"]
+        direction LR
+        s1["AuthService"]
+        s2["PipelineStages"]
+        s3["PaymentService"]
+        s4["FundingMath"]
+        s5["AccountRules"]
+    end
+    subgraph infra["Infrastructure services"]
+        direction LR
+        i1["FileUploadSecurity"]
+        i2["PresenceTracker"]
+        i3["NotificationFanOut"]
+        i4["MailKitEmailService"]
+        i5["IPaymentProvider"]
+    end
+    data[("AppDbContext<br/>the only component that talks to the database")]
+
+    ctl -->|"delegate, never query"| dom
+    dom --> data
+    dom --> infra
+    infra --> data
+
+    classDef note fill:#F6F2E7,stroke:#E3D9C4,color:#71614C

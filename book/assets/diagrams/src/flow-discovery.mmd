@@ -1,0 +1,22 @@
+flowchart LR
+    V(["Visitor<br/>no account"]) --> L["Venture listing<br/>approved + active only"]
+    L --> S["Search<br/>&amp; filter"]
+    S --> D["Venture page"]
+    D -->|"needs an account"| R["Register"]
+    R --> U(["Investor"])
+    U --> L
+    U --> W["Save to<br/>watchlist"]
+    U --> F["Follow<br/>founder"]
+    U --> Q["Save the<br/>search"]
+    W --> FE["Personal feed"]
+    F --> FE
+    Q -->|"re-run"| S
+    D --> RV["Review<br/>&amp; comment"]
+    D --> RP["Report"]
+    RV --> SG["Engagement<br/>signals"]
+    SG -->|"deterministic<br/>ranking"| L
+
+    classDef pub fill:#FCFAF3,stroke:#8B4F2A,stroke-width:2px,color:#241C14
+    classDef sig fill:#F6F2E7,stroke:#B08A3F,color:#241C14
+    class L pub
+    class SG sig
