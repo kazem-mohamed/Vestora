@@ -19,7 +19,7 @@ import { money } from "@/components/funding/funding-primitives";
 import { stageLabelKey } from "@/lib/deals/stages";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
-import type { DealEvent, DealEventType } from "@/lib/types/api";
+import type { DealEvent, DealEventType, StageDuration } from "@/lib/types/api";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -88,6 +88,16 @@ export function DealTimeline({ events }: { events: DealEvent[] }) {
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  /**
+   * A gap, at the coarsest unit that still says something. "2d" is the useful fact
+   * about a stalled deal; "2d 4h 11m" is the same fact wearing a disguise.
+   */
+  const elapsed = (minutes: number) => {
+    if (minutes >= 1440) return t("deal.dur.d").replace("{n}", String(Math.round(minutes / 1440)));
+    if (minutes >= 60) return t("deal.dur.h").replace("{n}", String(Math.round(minutes / 60)));
+    return t("deal.dur.m").replace("{n}", String(Math.max(1, minutes)));
+  };
 
   return (
     <div className="relative">
@@ -163,8 +173,28 @@ export function DealTimeline({ events }: { events: DealEvent[] }) {
                   </time>
                 </div>
 
-                {e.actorName && (
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">{e.actorName}</p>
+                {/* Who moved it, and how long it had been sitting still before they did.
+                    The gap between two stages is the part of a pipeline nobody can
+                    normally see, and it is usually where the deal was actually lost —
+                    so it is stated next to the move rather than left to be worked out
+                    from two timestamps. */}
+                {(e.actorName || e.durationMinutes != null) && (
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+                    {e.actorName}
+                    {e.actorName && e.durationMinutes != null && <span aria-hidden>·</span>}
+                    {e.durationMinutes != null && (
+                      <span className="text-muted-foreground/80">
+                        {t("deal.event.after").replace("{duration}", elapsed(e.durationMinutes))}
+                      </span>
+                    )}
+                  </p>
+                )}
+
+                {/* The reason, when one was given. Never invented when it wasn't. */}
+                {e.note && (
+                  <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted-foreground/90">
+                    {e.note}
+                  </p>
                 )}
 
                 {/* Amounts read as amounts, not as quoted prose in a blockquote. */}
@@ -201,5 +231,78 @@ export function DealTimeline({ events }: { events: DealEvent[] }) {
         })}
       </ol>
     </div>
+  );
+}
+
+/**
+ * Where the time actually went.
+ *
+ * The chronology says what happened; this says how long each part of it took, which is
+ * the question either side is really asking when a deal has gone quiet. Drawn as
+ * proportional bars rather than a table because the useful reading is comparative — one
+ * stage swallowing three weeks while four others took an afternoon is a shape, not a
+ * set of numbers.
+ *
+ * The current stage is marked and still counting, so its bar is a claim about now
+ * rather than a finished measurement.
+ */
+export function StageDurations({ durations }: { durations: StageDuration[] }) {
+  const { t, locale } = useLocale();
+  const rtl = locale === "ar";
+  const reduce = useReducedMotion() ?? false;
+
+  if (durations.length === 0) return null;
+
+  const longest = Math.max(...durations.map((d) => d.minutes), 1);
+
+  const label = (minutes: number) => {
+    if (minutes >= 1440) return t("deal.dur.d").replace("{n}", String(Math.round(minutes / 1440)));
+    if (minutes >= 60) return t("deal.dur.h").replace("{n}", String(Math.round(minutes / 60)));
+    return t("deal.dur.m").replace("{n}", String(Math.max(1, minutes)));
+  };
+
+  return (
+    <section>
+      <h2 className="text-base font-bold" style={{ fontFamily: "var(--font-heading)" }}>
+        {t("deal.stages.title")}
+      </h2>
+      <p className="mt-1.5 text-xs text-muted-foreground">{t("deal.stages.sub")}</p>
+
+      <ul className="mt-4 space-y-2.5">
+        {durations.map((d, i) => (
+          <li key={`${d.stage}-${i}`}>
+            <div className="flex items-baseline justify-between gap-3 text-[11.5px]">
+              <span className={cn("truncate", d.isCurrent ? "text-primary" : "text-foreground/80")}>
+                {t(stageLabelKey(d.stage))}
+                {d.isCurrent && (
+                  <span className="ms-1.5 text-[10px] text-muted-foreground">
+                    {t("deal.stages.current")}
+                  </span>
+                )}
+              </span>
+              <span className="font-numeric shrink-0 text-muted-foreground">
+                {label(d.minutes)}
+              </span>
+            </div>
+            <div className="mt-1 h-1 overflow-hidden rounded-full bg-secondary/60">
+              <motion.span
+                initial={reduce ? false : { scaleX: 0 }}
+                whileInView={{ scaleX: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: Math.min(i, 6) * 0.05, ease: EASE }}
+                className={cn(
+                  "block h-full rounded-full",
+                  d.isCurrent ? "bg-primary" : "bg-foreground/25"
+                )}
+                style={{
+                  width: `${Math.max(2, (d.minutes / longest) * 100)}%`,
+                  transformOrigin: rtl ? "right" : "left",
+                }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

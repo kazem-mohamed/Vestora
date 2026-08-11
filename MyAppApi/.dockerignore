@@ -1,0 +1,12 @@
+# Host build output must never enter the image — it would shadow the artefacts
+# produced inside the container and can carry a different target framework.
+**/bin/
+**/obj/
+
+# The test project is not part of the published API.
+MyAppApi.Tests/
+
+# Local-only material.
+**/*.user
+**/.vs/
+**/*.log

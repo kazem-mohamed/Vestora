@@ -59,6 +59,14 @@ export const usersApi = {
 
   updateMe: (input: UpdateProfileInput) =>
     api.put<UserProfile>("/api/users/me", toProfileFormData(input)),
+
+  // Records the first-run flow as done on the account. Idempotent server-side,
+  // so a double submit or a re-run is harmless.
+  markOnboarded: () =>
+    api.post<{ message: string; onboardedAtUtc: string | null }>(
+      "/api/users/me/onboarded",
+      {}
+    ),
 };
 
 export const avatarUrl = (id: number) => `${API_URL}/api/users/${id}/avatar`;

@@ -37,6 +37,8 @@ export function DealQuestions({
   const [draft, setDraft] = useState("");
   const [answering, setAnswering] = useState<number | null>(null);
   const [answer, setAnswer] = useState("");
+  const [followingUp, setFollowingUp] = useState<number | null>(null);
+  const [followUp, setFollowUp] = useState("");
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["deal", investmentId] });
 
@@ -45,6 +47,20 @@ export function DealQuestions({
     onSuccess: () => {
       toast.success(t("deal.q.sent"));
       setDraft("");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Pushing back on an answer. Its own mutation rather than a flag on `ask`, because
+  // the two have different empty states and different failure messages — "that answer
+  // doesn't cover it" is not the same act as opening a new line of enquiry.
+  const pushBack = useMutation({
+    mutationFn: (parentId: number) => dealsApi.ask(investmentId, followUp.trim(), parentId),
+    onSuccess: () => {
+      toast.success(t("deal.q.followUpSent"));
+      setFollowingUp(null);
+      setFollowUp("");
       invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -174,6 +190,22 @@ export function DealQuestions({
                       <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground/85">
                         {q.answer}
                       </p>
+
+                      {/* "Over what period?" — the sentence that used to send both
+                          sides back to chat, which is the surface this replaces. */}
+                      {q.canFollowUp && followingUp !== q.id && (
+                        <button
+                          type="button"
+                          data-cursor="hover"
+                          onClick={() => {
+                            setFollowingUp(q.id);
+                            setFollowUp("");
+                          }}
+                          className="link-underline mt-2.5 text-[11.5px] text-primary"
+                        >
+                          {t("deal.q.followUp")}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -242,6 +274,130 @@ export function DealQuestions({
                           type="button"
                           data-cursor="hover"
                           onClick={() => setAnswering(null)}
+                          className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          {t("form.cancel")}
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* ---- The thread ----
+                    Follow-ups sit inside the question they clarify, one level deep.
+                    Flat, they read as an unrelated question asked minutes later, which
+                    is exactly how the answers used to get lost. */}
+                {q.followUps.length > 0 && (
+                  <ul className="mt-4 space-y-3 border-s border-border/60 ps-4">
+                    {q.followUps.map((f) => (
+                      <li key={f.id}>
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <span className="text-[11px] font-medium text-foreground">
+                            {f.askedByName}
+                          </span>
+                          <time
+                            dateTime={f.createdAtUtc}
+                            className="font-numeric text-[10.5px] text-muted-foreground"
+                          >
+                            {fmt.format(new Date(f.createdAtUtc))}
+                          </time>
+                          {!f.answer && (
+                            <span className="rounded-full border border-bronze/40 bg-bronze/[0.06] px-1.5 py-0.5 text-[10px] text-bronze">
+                              {t("deal.q.awaiting")}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[13px] leading-relaxed text-foreground/85">
+                          {f.question}
+                        </p>
+
+                        {f.answer ? (
+                          <p className="mt-2 border-s-2 border-primary/30 ps-3 text-[13px] leading-relaxed text-foreground/80">
+                            {f.answer}
+                          </p>
+                        ) : f.canAnswer && answering !== f.id ? (
+                          <button
+                            type="button"
+                            data-cursor="hover"
+                            onClick={() => {
+                              setAnswering(f.id);
+                              setAnswer("");
+                            }}
+                            className="link-underline mt-1.5 text-[11.5px] text-primary"
+                          >
+                            {t("deal.q.answer")}
+                          </button>
+                        ) : null}
+
+                        {answering === f.id && (
+                          <div className="mt-2">
+                            <textarea
+                              value={answer}
+                              onChange={(e) => setAnswer(e.target.value.slice(0, 4000))}
+                              rows={2}
+                              autoFocus
+                              placeholder={t("deal.q.answerPlaceholder")}
+                              aria-label={t("deal.q.answerPlaceholder")}
+                              className="w-full resize-none rounded-xl border border-input bg-background/50 px-3.5 py-2.5 text-[13px] outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/25"
+                            />
+                            <div className="mt-2 flex items-center gap-3">
+                              <button
+                                type="button"
+                                disabled={answer.trim().length < 2 || reply.isPending}
+                                onClick={() => reply.mutate(f.id)}
+                                className="inline-flex min-h-9 items-center rounded-full bg-primary px-4 text-[11.5px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+                              >
+                                {reply.isPending ? t("deal.q.sending") : t("deal.q.submitAnswer")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setAnswering(null)}
+                                className="text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+                              >
+                                {t("form.cancel")}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Follow-up composer */}
+                <AnimatePresence>
+                  {followingUp === q.id && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.35, ease: EASE }}
+                      className="overflow-hidden"
+                    >
+                      <textarea
+                        value={followUp}
+                        onChange={(e) => setFollowUp(e.target.value.slice(0, 1000))}
+                        rows={2}
+                        autoFocus
+                        placeholder={t("deal.q.followUpPlaceholder")}
+                        aria-label={t("deal.q.followUpPlaceholder")}
+                        className="mt-3 w-full resize-none rounded-xl border border-input bg-background/50 px-4 py-3 text-sm outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/25"
+                      />
+                      <div className="mt-2 flex items-center gap-3">
+                        <button
+                          type="button"
+                          data-cursor="hover"
+                          disabled={followUp.trim().length < 5 || pushBack.isPending}
+                          onClick={() => pushBack.mutate(q.id)}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+                        >
+                          <CornerDownRight className="size-3.5 rtl:-scale-x-100" strokeWidth={1.9} />
+                          {pushBack.isPending ? t("deal.q.sending") : t("deal.q.followUpSend")}
+                        </button>
+                        <button
+                          type="button"
+                          data-cursor="hover"
+                          onClick={() => setFollowingUp(null)}
                           className="text-xs text-muted-foreground transition-colors hover:text-foreground"
                         >
                           {t("form.cancel")}

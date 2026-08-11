@@ -27,8 +27,9 @@ export const messagesApi = {
       projectId,
     }),
 
-  // Send an image attachment (optional caption) over multipart; the server
-  // returns the created message and broadcasts it to the receiver.
+  // Send an image or document attachment (optional caption) over multipart; the
+  // server returns the created message and broadcasts it to the receiver.
+  // Allowed types are enforced server-side — see lib/attachments.ts.
   sendAttachment: (receiverId: number, file: File, caption: string) => {
     const fd = new FormData();
     fd.append("ReceiverId", String(receiverId));

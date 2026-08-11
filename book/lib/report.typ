@@ -5,15 +5,23 @@
 #import "vestora.typ": chamfer, plate, note, full-page-figure
 
 #let REPORTS = (
-  "Foundation & Identity",
-  "Ventures & Moderation",
+  "Idea & Requirements",
+  "Foundation & Design System",
+  "Identity & Sessions",
+  "Ventures & Lifecycle",
+  "Review & Approval",
   "Discovery & Engagement",
-  "Investment & Payments",
-  "Real-Time Communication",
-  "Insight & Administration",
+  "Commitment & Pipeline",
+  "Payments",
+  "Messaging & Notifications",
+  "The Deal Room",
+  "Dashboards & Analytics",
+  "Administration & Evaluation",
 )
 
-// The six-part strip: shows the reader where this report sits in the series.
+// The series strip: shows the reader where this report sits in the series.
+// Twelve cells wrap to two rows of six rather than shrinking to a twelfth of
+// the measure, where the names would no longer be readable.
 #let series-strip(current) = {
   let cells = ()
   for (i, name) in REPORTS.enumerate() {
@@ -38,7 +46,7 @@
       },
     ))
   }
-  grid(columns: (1fr,) * 6, column-gutter: 2mm, ..cells)
+  grid(columns: (1fr,) * 6, column-gutter: 2mm, row-gutter: 2mm, ..cells)
 }
 
 #let report-cover(number: 1, title: "", subtitle: "", date: "") = {
@@ -79,7 +87,7 @@
   }))
 
   v(9mm)
-  align(center, eyebrow[Technical Progress Report #number of 6])
+  align(center, eyebrow[Technical Progress Report #number of #REPORTS.len()])
 
   v(11mm)
   align(center, block(width: 132mm)[

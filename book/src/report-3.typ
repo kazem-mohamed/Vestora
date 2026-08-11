@@ -3,447 +3,499 @@
 
 #report-cover(
   number: 3,
-  title: "Discovery & Engagement",
-  subtitle: "How a venture is found on its merits, and how interest is expressed",
+  title: "Identity & Sessions",
+  subtitle: "How Vestora learns who you are, and how it keeps knowing",
   date: "September 2026",
 )
 
-#show: report.with(number: 3, name: "Discovery & Engagement")
+#show: report.with(number: 3, name: "Identity & Sessions")
 
 = Introduction
 
-Report 2 produced a population of published ventures. This report is about the
-problem that population creates: *how does anyone find the right one?*
+Report 2 established the foundation: the four containers, the design system, and
+the relational core. It ended with a platform that could render a screen but did
+not yet know who was looking at it.
 
-That question is not a convenience. It is the platform's founding purpose. The
-whole premise of Vestora is that a venture should be found because of what it
-is, not because of who its founder knows. Every feature in this report exists to
-make that true — and to make it verifiable, since a ranking nobody can explain
-is indistinguishable from a ranking that is unfair.
+This report is about that gap. It covers one question and answers it in full:
+*how does the platform establish who a person is, and how does it stay
+confident about that answer over the following two weeks?*
 
-The report also covers *engagement* — the actions a user takes short of
-committing money. Saving, following, reviewing, commenting and reporting. These
-are how a user expresses interest before they are ready to act on it, and they
-are also the signals that make discovery better over time.
+Everything in reports 4 to 12 assumes this is settled. A venture has an owner. A
+commitment has an investor. A review has an administrator. A hub connection has
+a caller. None of those are possible until an account exists, has been proven to
+belong to a reachable person, and carries a role the server can check.
 
 = Objective
 
-*Make discovery attribute-driven.* A venture must be findable by sector, stage,
-location, funding progress and free text — by anyone, including someone who is
-not signed in.
+*Make identity trustworthy, and make the proof survive time.*
 
-*Make ranking explicable.* A founder who asks why their venture appears where it
-does must be able to receive an answer. That constraint rules out an opaque
-model and is the reason ranking here is deterministic.
+An account must belong to a real, reachable address — not merely claim one. A
+session must be revocable rather than merely expiring. A password must be
+resistant to guessing without punishing a user who mistypes. And what a user is
+permitted to do must be decided by the server on every request, never by the
+interface that happens to be drawing the screen.
 
-*Let interest be expressed and retained.* A user who is not ready to commit
-should still be able to save, follow and return — turning a one-off visit into a
-standing relationship with a venture or a founder.
-
-*Give the community a voice, safely.* Reviews and comments add signal the
-founder did not write themselves; reports give any user a route to
-administrative attention.
+Two properties carry the weight of this part. *Nothing sensitive is stored in a
+form that survives a database disclosure* — every credential and every token is
+persisted as a hash. And *every lifetime is configuration rather than a
+constant*, so a threshold can be tightened in an afternoon without a release.
 
 = Features Delivered
 
 #figure(
   table(
-    columns: (42mm, 1fr),
+    columns: (44mm, 1fr),
     align: (left + top, left + top),
     table.header([Feature], [What it does]),
-    [Public browsing], [Every approved, active venture, visible without an
-      account.],
-    [Free-text search], [Across venture title, description, sector, location
-      and founder.],
-    [Attribute filters], [Sector, stage, location and funding round.],
-    [Sorting], [Newest, closing soonest, momentum, largest round, most backed,
-      most viewed.],
-    [Saved searches], [A named filter combination that can be re-run.],
-    [Watchlist], [Save a venture to a personal shortlist.],
-    [Following], [Follow a founder and receive their updates.],
-    [Personalised feed], [Activity from followed founders and saved ventures.],
-    [Engagement signals], [Views and interactions recorded as ranking input.],
-    [Reviews], [A rated review, at most one per investor per venture.],
-    [Comments and replies], [Public discussion on a venture, one level of
-      nesting.],
-    [Reporting], [Raise a venture for administrative attention.],
-    [Investor directory], [Browse investors — the symmetric half of
-      discovery.],
+    [Registration], [Creates an unverified account and issues a single-use
+      verification code bound to the address that requested it.],
+    [Email verification], [Sign-in is refused until the address is confirmed, so
+      an account cannot be created against an address the registrant does not
+      control.],
+    [Resend, rate-limited], [A new code can be requested, but not faster than
+      once a minute — otherwise the resend endpoint becomes a mail cannon
+      pointed at a third party.],
+    [Sign-in], [Issues a short-lived access token carrying identity and role,
+      and a longer-lived refresh token.],
+    [Refresh with rotation], [Every refresh issues a new token and invalidates
+      the old one; a replayed token invalidates the whole chain.],
+    [Password reset], [A time-boxed, single-use code — deliberately shorter
+      lived than the verification code, with its own attempt limit.],
+    [Password change], [For a signed-in user, under the same password policy
+      registration enforces.],
+    [Lockout], [Blunts repeated password guessing without permanently locking
+      out a user who mistypes.],
+    [Roles], [Decides what an account is permitted to do, checked on the server
+      for every request.],
+    [Onboarding], [A first-run step that collects interests, skippable by
+      design — it shapes discovery but gates nothing.],
+    [Profiles], [A public profile, and account settings kept deliberately
+      separate from it.],
+    [Suspension], [An administrator can disable an account without deleting it.],
   ),
-  caption: [Features delivered in this part of the system.],
+  caption: [Identity features delivered in this part.],
 )
 
-= How Discovery Works
+= How an Account Comes Into Existence
+
+Registration does not create a usable account. It creates an *unverified* one
+and starts a proof.
 
 #full-page-figure(
-  "/assets/diagrams/out/flow-discovery.svg",
-  caption: [The discovery path. A visitor can reach a venture page without an
-    account; everything that *retains* interest — saving, following, saving a
-    search — requires one. Engagement signals feed back into ranking, which is
-    deterministic.],
+  "/assets/diagrams/out/seq-registration.svg",
+  caption: [Registration and email verification, end to end. The response at the
+    registration step is identical whether or not the address is already
+    registered — the endpoint is deliberately not an account-existence oracle.],
 )
 
-== The listing is the hottest path in the platform
+== The code is bound to the address
 
-The venture listing is the most-visited surface, and it is the query most likely
-to be slow, because it does three expensive things at once:
+The verification step takes *two* values, not one.
 
-+ It filters on *two* state columns — a venture is listed only when its
-  moderation status is approved and its lifecycle status is active (Report 2).
-+ It aggregates funding progress *per row* — and those totals are derived rather
-  than stored (Report 4).
-+ It orders and pages the result.
+#figure(
+  ```cs
+  public class VerifyEmailDto
+  {
+      [Required]
+      [EmailAddress]
+      public string Email { get; set; } = string.Empty;
 
-Three measures keep it fast. The composite index from Report 2 covers both
-filter columns and the sort in one seek. The query *projects* directly into the
-card shape rather than loading venture entities and mapping them in memory — the
-database returns the fields a card displays rather than the whole row and its
-relations. And the funding aggregate is computed as part of the same query
-rather than once per row, so the row count does not determine the query count.
-
-#shot(
-  "/assets/screenshots/projects-en-light.png",
-  [The venture listing. Counters across the top state the size of the
-   population; filters and sorting sit above the results; the first venture is
-   given prominence.],
+      [Required]
+      public string Token { get; set; } = string.Empty;
+  }
+  ```,
+  caption: [The verification request. The address is required alongside the
+    code.],
 )
 
-== Ranking is deterministic, and that is a requirement
+This is a smaller detail than it looks, and it decides a real property. Because
+the code is only ever checked *against the account that requested it*, a code
+observed in isolation — read over a shoulder, left in a screenshot, guessed —
+is not a credential. It is one half of a pair, and the other half is knowledge
+of which address it belongs to.
 
-Results are ordered by attributes the platform can name: recency, funding
-progress, and engagement signals derived from real interactions. There is no
-learned model and no hidden score.
+It also explains the interface: the verification screen asks for an email
+address and a code rather than being reached by clicking a link. A link carries
+its own proof and can be forwarded; a code that must be paired cannot.
 
-This was a decision rather than a limitation of effort. On a platform whose
-premise is that discovery should be fair, a founder is entitled to ask why their
-venture appears where it does — and a deterministic ordering can answer that
-question. An opaque score cannot, and would reintroduce exactly the kind of
-unexplainable advantage the platform exists to remove.
+Three columns on `Users` hold the state, and the first of them is the one worth
+naming.
 
-#delivered[
-  Sort fields arriving from a client are matched against a permitted set rather
-  than placed into a query. Ordering is a common injection surface, and an
-  allow-list closes it completely.
-]
+#figure(
+  table(
+    columns: (58mm, 1fr),
+    align: (left + top, left + top),
+    table.header([Column], [Why it is shaped this way]),
+    [`EmailVerificationTokenHash`],
+      [The code is stored *hashed*, exactly as a refresh token is. A database
+       disclosure yields no usable codes.],
+    [`EmailVerificationTokenExpiresAtUtc`],
+      [Expiry is a stored fact rather than an inference from when the row was
+       written.],
+    [`EmailVerificationLastSentAtUtc`],
+      [What the resend cooldown is measured against — the limit lives in the
+       data, not in a cache that a restart would clear.],
+  ),
+  caption: [Verification state on `Users`. Hashing a short numeric code is
+    cheap; not hashing it would make the column a list of live credentials.],
+)
 
-== Filters, saved searches and the watchlist
+= Sessions and Rotation
 
-A filter combination answers a question once. Most users have a *standing*
-question — a sector they follow, a stage they invest at — and rebuilding the
-filter on every visit turns a standing interest into a chore.
+Sign-in issues two tokens. A short-lived *access token* carries the user's
+identity and role and is presented with every request. A longer-lived *refresh
+token* exchanges for a new pair when the access token expires.
 
-#shot(
-  "/assets/screenshots/searches.png",
-  [Saved searches. A named, re-runnable filter combination, which is what turns
-   discovery from a one-off query into a returning habit.],
+The refresh token is the part carrying the real security weight, because it
+lives longest. Three properties protect it:
+
+- It is stored *hashed*. A database disclosure yields no usable tokens.
+- The hash column is unique, so two live tokens cannot collide.
+- It *rotates*: every refresh issues a new token and invalidates the old one.
+
+Rotation is what makes replay detectable. Presenting a token that has already
+been rotated means the token was captured, and the response is to invalidate the
+whole chain rather than to issue a new pair.
+
+#full-page-figure(
+  "/assets/diagrams/out/seq-login.svg",
+  landscape: false,
+  caption: [Sign-in and refresh. The rotation branch on the right is the replay
+    detection described above.],
+)
+
+== Configured, not compiled
+
+Every lifetime and threshold in this part is supplied by configuration. None of
+them is a literal in a method body.
+
+#figure(
+  table(
+    columns: (1fr, 22mm, 1fr),
+    align: (left + top, center + top, left + top),
+    table.header([Setting], [Value], [Reasoning]),
+    [`JwtSettings:ExpirationMinutes`], [60],
+      [Short enough that a leaked access token expires within a sitting; long
+       enough to avoid refresh churn.],
+    [`RefreshTokenDays`], [14],
+      [A fortnight of inactivity ends the session.],
+    [`EmailVerificationTokenMinutes`], [60],
+      [Single-use and time-boxed.],
+    [`EmailVerificationResendCooldownSeconds`], [60],
+      [Without it, the resend endpoint would deliver unlimited mail to any
+       address a caller names.],
+    [`RequireVerifiedEmailForLogin`], [`true`],
+      [A flag rather than a branch, so the rule is visible in configuration
+       instead of buried in the sign-in path.],
+    [`MaxFailedLoginAttempts`], [5],
+      [Blunts guessing without punishing a mistyped password.],
+    [`LockoutMinutes`], [15],
+      [Long enough to make automation expensive, short enough that a locked-out
+       user is not locked out for the day.],
+    [`PasswordResetTokenMinutes`], [10],
+      [Shorter on purpose: a live reset code is a higher-value target than a
+       verification code, because it changes a credential rather than confirming
+       one.],
+    [`PasswordResetResendCooldownSeconds`], [60],
+      [The same argument as the verification cooldown, applied to the more
+       sensitive of the two flows.],
+    [`PasswordResetMaxFailedAttempts`], [5],
+      [A separate counter from sign-in. Guessing a six-digit code and guessing a
+       password are different attacks and should not share a budget.],
+  ),
+  caption: [Every identity setting, with its shipped value. Ten settings, none
+    of them compiled in.],
+)
+
+= Interface
+
+The identity surfaces are the first thing a visitor meets, so both language and
+theme are evidenced here rather than asserted.
+
+#shots(
+  "/assets/screenshots/login-en-light.png",
+  "/assets/screenshots/login-ar-dark.png",
+  [Sign-in, in English on the light token set and Arabic on the dark one. The
+   direction flips, the layout mirrors, and the display face changes to the
+   Arabic pair. The form, its fields and its affordances are the same in both.],
 )
 
 #shot(
-  "/assets/screenshots/invest-watchlist.png",
-  [The watchlist. A shortlist an investor builds while deciding, from any
-   surface that shows a venture.],
+  "/assets/screenshots/register-en-light.png",
+  [Registration. The account created here cannot sign in yet — the next screen
+   is not optional.],
+)
+
+#shot(
+  "/assets/screenshots/verify-email-ar-dark.png",
+  [Verification. The screen asks for the address as well as the code, which is
+   the interface consequence of the pairing described above. The resend link is
+   present but the endpoint behind it enforces its own cooldown; the interface
+   is not the thing preventing abuse.],
 )
 
 #shots(
-  "/assets/screenshots/projects-en-light.png",
-  "/assets/screenshots/projects-ar-light.png",
-  [Discovery in both writing directions. Filters, sort controls, the result
-   count and the venture grid all mirror; the population and the figures are
-   identical.],
-)
-
-= Engagement
-
-#shot(
-  "/assets/screenshots/invest-activity.png",
-  [The investor's activity log. Every saved venture, follow and view is
-   recorded — both as a history the user can read, and as the signal that feeds
-   ranking.],
+  "/assets/screenshots/forgot-password-en-light.png",
+  "/assets/screenshots/reset-password-en-light.png",
+  [Requesting a reset, and completing one. The request screen responds the same
+   way for a registered and an unregistered address, for the same reason
+   registration does.],
 )
 
 #shot(
-  "/assets/screenshots/investors-directory.png",
-  [The investor directory, requested by an account not entitled to it. The
-   client redirects to a refusal rather than rendering an empty page — and the
-   API would refuse the underlying call regardless of what the client did.],
+  "/assets/screenshots/onboarding-en-light.png",
+  [Onboarding. It collects interests that shape discovery, and it is skippable —
+   the account is fully usable without it. Making it mandatory would gate the
+   platform on a preference rather than on an identity.],
 )
 
-That capture is included deliberately. Discovery runs in both directions: a
-founder looking for the right investor has the same problem as an investor
-looking for the right venture, and solving only one direction would have solved
-half the problem. The directory exists — and, like every other surface, its
-access is decided by the server.
-
-== Rules expressed as constraints
-
-Three engagement rules are enforced by the database rather than by application
-code.
-
-#figure(
-  table(
-    columns: (34mm, 1fr, 1fr),
-    align: (left + top, left + top, left + top),
-    table.header([Rule], [Enforced by], [Why not a code check]),
-    [Save a venture once], [`Bookmark (UserId, ProjectId)` unique],
-      [Two rapid taps can both pass a code check before either writes.],
-    [Follow a user once], [`Follow (FollowerId, FollowedId)` unique],
-      [Same race, same outcome — two edges where there should be one.],
-    [Review once per venture], [`Review (ProjectId, InvestorId)` unique],
-      [A business rule, not an optimisation. The database cannot be raced.],
-  ),
-  caption: [Three rules that read like policy and are implemented as unique
-    indexes.],
+#shots(
+  "/assets/screenshots/profile-public-en-light.png",
+  "/assets/screenshots/profile-public-ar-dark.png",
+  [The public profile — the outward face of an identity, readable without an
+   account. What appears here is what the account holder chose to publish, not
+   what the platform inferred.],
 )
 
-A fourth index exists for a different reason: `Follows` is additionally indexed
-on the *followed* identifier alone, because follower counts and follower lists
-are read far more often than follows are created. That index was chosen for a
-read pattern rather than for the write it constrains.
+#delivered[
+  Profile and account are deliberately separate surfaces. Changing a biography
+  is trivial; changing an email address invalidates a verified identity and must
+  re-verify. One combined form would either over-protect the trivial or
+  under-protect the consequential.
+]
 
 = Data
 
+This report owns three tables directly.
+
 #figure(
   table(
-    columns: (38mm, 1fr, 30mm),
+    columns: (32mm, 1fr, 1fr),
     align: (left + top, left + top, left + top),
-    table.header([Table], [Holds], [Delete behaviour]),
-    [`Bookmarks`], [Watchlist edges.], [Cascade from venture],
-    [`Follows`], [Directed follow edges between users.], [Cascade],
-    [`Reviews`], [Rated reviews, one per investor per venture.],
-      [Cascade from venture],
-    [`Comments`], [Public comments on a venture.], [Restrict],
-    [`Replies`], [One level of nesting under a comment.], [Restrict],
-    [`Reports`], [User reports raised against a venture.],
-      [Cascade from venture],
-    [`ProjectViews`], [Individual view events feeding ranking and analytics.],
-      [Cascade],
-    [`UserProjectInteractions`], [Interaction signals used in ranking.],
-      [Restrict],
+    table.header([Table], [Holds], [Rule enforced]),
+    [`Users`], [Credentials, verification state, lockout counters, last-seen],
+      [`Email` is unique — this *is* the account identity rule],
+    [`RefreshTokens`], [Hashed refresh tokens with expiry and rotation state],
+      [`TokenHash` is unique; two live tokens can never collide],
+    [`SecurityLogs`], [Authentication and security events],
+      [Indexed on user and time, because audit queries are always both],
   ),
-  caption: [Engagement tables and their delete behaviour.],
+  caption: [Identity tables. Two of the three carry a unique index that encodes
+    a rule rather than an optimisation.],
 )
 
-The split between *cascade* and *restrict* here follows one principle. A review
-of a deleted venture refers to nothing, so it cascades. A comment is part of a
-conversation other people took part in, so removing a user must not silently
-erase it — it is restricted. The rule is: content that is *owned* cascades;
-content that is a *record of something that happened* does not.
+`Investor` and `Innovator` are specialisations of `User`, persisted in one table
+with a discriminator column. They share almost every column and differ mainly in
+what they are related to, so a separate table per specialisation would add a
+join to every authentication call for no benefit.
 
 = Backend
 
-#figure(
-  ```cs
-  // The listing projects straight into the card shape. A venture entity has
-  // roughly forty columns; a card displays eight. Loading entities and mapping
-  // them in memory would allocate the other thirty-two for nothing.
-  var page = await _db.Projects
-      .Where(p => p.ModerationStatus == ModerationStatus.Approved)
-      .Where(p => p.LifecycleStatus  == LifecycleStatus.Active)
-      .Where(filter)
-      .OrderBy(sort)
-      .Select(p => new VentureCardDto
-      {
-          Id       = p.Id,
-          Name     = p.Name,
-          Sector   = p.Sector,
-          Stage    = p.Stage,
-          Goal     = p.FundingGoal,
-          Funded   = FundingMath.FundedOf.Compile()(p),   // derived, not stored
-          CoverUrl = p.Images.OrderBy(i => i.Order).Select(i => i.Url).FirstOrDefault(),
-      })
-      .ToPagedAsync(request.Page, request.PageSize, ct);
-  ```,
-  caption: [The listing query. Two state filters, a projection, and a derived
-    funding figure computed inside the same query rather than per row.],
-)
+Three excerpts show how the rules above are enforced rather than described.
 
 #figure(
   ```cs
-  // Sort fields are matched against a permitted set. A value that is not on
-  // the list falls back to the default rather than reaching the query.
-  private static readonly Dictionary<string, Expression<Func<Project, object>>> Sorts =
-      new(StringComparer.OrdinalIgnoreCase)
-      {
-          ["newest"]     = p => p.CreatedDate,
-          ["closing"]    = p => p.ClosesAtUtc,
-          ["momentum"]   = p => p.RecentInteractionCount,
-          ["largest"]    = p => p.FundingGoal,
-          ["backed"]     = p => p.FundedInvestorCount,
-          ["viewed"]     = p => p.ViewCount,
-      };
-
-  var order = Sorts.TryGetValue(request.Sort ?? "", out var expr) ? expr : Sorts["newest"];
-  ```,
-  caption: [Allow-listed ordering. Dynamic ordering built from client input is a
-    classic injection surface; a dictionary lookup removes it entirely.],
-)
-
-#figure(
-  ```cs
-  // Saving is idempotent by construction. The unique index does the work; the
-  // handler simply treats a duplicate as success rather than as an error,
-  // because from the user's point of view the venture is saved either way.
-  try
+  // Registration responds identically whether or not the address exists.
+  // A differing response would turn this endpoint into an oracle that reveals
+  // which addresses are registered.
+  if (await _db.Users.AnyAsync(u => u.Email == dto.Email, ct))
   {
-      _db.Bookmarks.Add(new Bookmark { UserId = userId, ProjectId = projectId });
-      await _db.SaveChangesAsync(ct);
+      await _email.SendAlreadyRegisteredNoticeAsync(dto.Email, ct);
+      return Created();          // same shape, same status, same timing class
   }
-  catch (DbUpdateException e) when (e.IsUniqueViolation())
+
+  user.PasswordHash = BCrypt.HashPassword(dto.Password);
+  user.IsEmailVerified = false;
+  ```,
+  caption: [Registration. The account-existence case is handled by notifying the
+    real owner, not by telling the caller.],
+)
+
+#figure(
+  ```cs
+  // Refresh tokens are matched by hash and rotated on every use. Presenting a
+  // token that has already been rotated means it was captured — so the whole
+  // chain is invalidated rather than a new pair issued.
+  var stored = await _db.RefreshTokens
+      .SingleOrDefaultAsync(t => t.TokenHash == Hash(presented), ct);
+
+  if (stored is null || stored.RevokedAtUtc is not null)
   {
-      return ServiceResult.Ok();          // already saved — nothing to do
+      await _auth.RevokeChainAsync(stored?.UserId, ct);
+      return Unauthorized();
   }
   ```,
-  caption: [Bookmarking. The constraint is the mechanism; the catch block only
-    decides how a collision is reported.],
+  caption: [Refresh with replay detection.],
 )
+
+#figure(
+  ```cs
+  [Required]
+  [DataType(DataType.Password)]
+  // Shares AccountRules with registration and reset, so changing a password can
+  // never land somewhere signup would have refused.
+  [PasswordPolicy]
+  public string NewPassword { get; set; } = string.Empty;
+  ```,
+  caption: [Password change. The policy is one attribute over one shared rule
+    set, which is why the three paths that can set a password cannot drift apart.],
+)
+
+The third excerpt is the smallest and the one most worth reading twice.
+Registration, reset and change are three different endpoints written at three
+different times, and each one sets a password. Expressing the policy as a shared
+attribute rather than as three validations is what stops a password being
+accepted at reset that registration would have rejected.
 
 = Key Endpoints
 
 #figure(
   table(
-    columns: (16mm, 46mm, 1fr),
+    columns: (16mm, 52mm, 1fr),
     align: (left + top, left + top, left + top),
     table.header([Method], [Path], [Purpose]),
-    [`GET`], [`api/projects`], [Public listing — paged, filtered, sorted.],
-    [`GET`], [`api/projects/{id}`], [A single venture, public when approved and
-      active.],
-    [`GET`], [`api/feed`], [Activity from followed founders and saved
-      ventures.],
-    [`POST`], [`api/bookmarks/{projectId}`], [Save a venture. Idempotent.],
-    [`DELETE`], [`api/bookmarks/{projectId}`], [Remove from the watchlist.],
-    [`POST`], [`api/follows/{userId}`], [Follow a user.],
-    [`GET`], [`api/follows/{userId}/followers`], [Follower list — served by the
-      dedicated index.],
-    [`GET`], [`api/signals/{projectId}`], [Engagement signals for a venture.],
-    [`POST`], [`api/projects/{id}/reviews`], [Leave a review; refused if one
-      already exists.],
-    [`POST`], [`api/projects/{id}/comments`], [Comment on a venture.],
-    [`POST`], [`api/reports`], [Report a venture.],
+    [`POST`], [`api/auth/register`], [Create an unverified account and issue a
+      verification code.],
+    [`POST`], [`api/auth/verify-email`], [Confirm the address; sign-in becomes
+      permitted.],
+    [`POST`], [`api/auth/resend-verification`], [Issue a new code, subject to the
+      cooldown.],
+    [`POST`], [`api/auth/login`], [Issue an access and refresh token pair.],
+    [`POST`], [`api/auth/refresh`], [Rotate the pair; detect replay.],
+    [`POST`], [`api/auth/forgot-password`], [Send a short-lived reset code.],
+    [`POST`], [`api/auth/reset-password`], [Complete a reset against a live code.],
+    [`POST`], [`api/auth/change-password`], [Change a password for a signed-in
+      user.],
+    [`POST`], [`api/auth/logout`], [Invalidate the refresh token.],
+    [`GET`], [`api/users/{id}`], [Read a public profile.],
+    [`PUT`], [`api/users/me`], [Update the signed-in user's profile.],
   ),
-  caption: [Principal endpoints in this part.],
+  caption: [Principal endpoints in this part. The complete listing is generated
+    from the code and served in development.],
 )
 
 = Libraries Used in This Part
 
 #figure(
   table(
-    columns: (40mm, 1fr),
+    columns: (44mm, 1fr),
     align: (left + top, left + top),
     table.header([Library], [Role here]),
-    [`Entity Framework Core`], [Builds the filtered, sorted, paged query and
-      projects it into the card shape without materialising entities.],
-    [`TanStack Query`], [On the client: caches listing results, keeps filter
-      state and pagination in sync, and avoids refetching a page the user has
-      already seen.],
-    [`nuqs`], [Keeps filter and sort state in the URL, so a filtered listing is
-      a shareable link and the back button behaves as expected.],
+    [`BCrypt.Net`], [Password hashing with a per-password salt and a tunable
+      work factor.],
+    [`Microsoft.AspNetCore.Authentication.JwtBearer`], [Validates the access
+      token on every request and populates the caller's identity and role.],
+    [`MailKit`], [Sends verification and reset messages over SMTP, behind an
+      interface so the transport can be replaced by configuration.],
+    [`FluentValidation`], [Structural validation at the request boundary, so a
+      service never receives a malformed request.],
   ),
-  caption: [Libraries introduced in this part.],
+  caption: [Libraries introduced in this part of the system.],
 )
 
 = Challenges
 
-#challenge("The listing query does the three most expensive things at once")[
-  Filtering on two state columns, aggregating funding per row, and ordering and
-  paging — on the platform's most-visited page.
+#challenge("Registration could reveal which addresses are registered")[
+  A registration endpoint that answers differently for a known address tells an
+  attacker which email addresses hold accounts.
 
-  *Solution, in the order a database problem should be addressed.* First the
-  query: project into the card shape instead of loading entities. Then the
-  index: one composite covering both filter columns and the sort. Then, and only
-  then, caching of the derived aggregate.
-
-  *Measured.* The listing page renders its first content in well under half a
-  second. The API response itself is dominated by a fixed cost that is not the
-  query — reported in Report 6 with the rest of the platform's measurements.
+  *Solution.* The endpoint returns the same status and shape in both cases. When
+  the address already exists, a notice is sent to the address itself rather than
+  reported to the caller — so the real owner is informed and the caller learns
+  nothing. The forgot-password endpoint answers the same way, for the same
+  reason.
 ]
 
-#challenge("Ordering built from client input is an injection surface")[
-  A sort field arriving as a string and placed into a query lets a caller
-  influence the query itself.
+#challenge("A resend endpoint is a mail cannon aimed at a stranger")[
+  Verification and reset both offer to send another code. An endpoint that
+  accepts an address and sends mail, with no limit, lets a caller deliver
+  unlimited mail to someone who never asked for it — from our domain, damaging
+  our sender reputation rather than theirs.
 
-  *Solution.* Sort fields are matched against a dictionary of permitted
-  expressions. An unrecognised value falls back to the default. Nothing supplied
-  by the caller reaches the query builder.
+  *Solution.* Both flows record when they last sent and refuse inside a
+  sixty-second window. The limit is stored on the row rather than held in
+  memory, so restarting the API does not reset it.
 ]
 
-#challenge("Two taps on 'save' produced two rows")[
-  A duplicate check in application code can be passed by two concurrent requests
-  before either one writes.
+#challenge("A long-lived refresh token is a standing risk")[
+  An access token expires in an hour. A refresh token lives for a fortnight, and
+  a captured one would be usable for that whole period.
 
-  *Solution.* A unique index on the pair. The second write fails, and the
-  failure is the correct outcome — the handler reports success because the
-  venture is saved either way. The same pattern was applied to following and to
-  reviews.
+  *Solution.* Tokens are stored hashed and rotated on every use. A rotated token
+  presented again is treated as evidence of capture, and the entire chain is
+  invalidated. During screenshot capture for this project the mechanism fired
+  under concurrent requests and ended the session — the defence working as
+  designed, and the reason the capture scripts clear storage between roles
+  rather than calling `logout`.
 ]
 
-#challenge("Ranking had to be improvable without becoming unexplainable")[
-  Better ordering is desirable. An opaque model would undermine the platform's
-  founding claim.
+#challenge("A stateless token cannot be revoked before it expires")[
+  Suspending an account does not invalidate an access token that has already
+  been issued.
 
-  *Solution.* Ranking inputs are recorded as explicit, nameable signals — views
-  and interactions — and combined deterministically. The system can be tuned,
-  and every position can still be explained to the founder who asks.
+  *Solution, and its limit.* State-changing and money-adjacent endpoints check
+  account state on each call rather than trusting the token alone. Read-only
+  endpoints largely do not, because the cost would be paid on every read. The
+  residual exposure is up to sixty minutes of read access for a suspended
+  account, and it is accepted rather than hidden.
 ]
 
 = How This Fits With the Rest of the System
 
-Discovery sits between the venture and the commitment. It reads a great deal and
-writes very little — which is what keeps it safe to expose publicly.
+Only the direct relationships are listed. Every later part reads identity; none
+re-implements it.
 
 #figure(
   table(
-    columns: (30mm, 1fr, 1fr),
+    columns: (34mm, 1fr, 1fr),
     align: (left + top, left + top, left + top),
     table.header([Report], [Relationship], [Boundary]),
-    [1 · Foundation & Identity],
-      [Browsing is open to anyone; saving, following and reviewing require an
-       identity.],
-      [Every write in this part is authorised server-side, including from the
-       public listing page.],
-    [2 · Ventures],
-      [The listing shows only ventures that are approved and active, using the
-       composite index defined there.],
-      [Discovery *reads* venture state and never writes it. A view is recorded
-       as an event, not as a counter on the venture.],
-    [4 · Investment],
-      [The venture page is where a commitment begins.],
-      [Funding figures shown on cards and pages are *derived* by the funding
-       service; this part displays them and computes none of them.],
-    [5 · Real-time],
-      [Following a founder is what makes their published update reach a
-       follower.],
-      [This part creates the follow edge. Delivery is not its concern.],
-    [6 · Insight & Administration],
-      [View and interaction events recorded here are the raw material for
-       venture analytics.],
-      [Aggregation happens there. This part only records the events.],
+    [2 · Foundation & Design System],
+      [*This part depends on it.* Every screen above is drawn from tokens
+       declared there, in either language and either theme.],
+      [No identity screen defines a colour or a typeface of its own.],
+    [4 · Ventures & Lifecycle],
+      [*Depends on this part.* A venture's owner is an identity established
+       here.],
+      [That part never decides identity or role; it reads the caller's role and
+       acts on it.],
+    [7 · Commitment & Pipeline],
+      [*Depends on this part.* The rule that a founder cannot back their own
+       venture is a comparison between two identities.],
+      [Money-adjacent endpoints re-check account state rather than trusting the
+       token alone.],
+    [12 · Administration & Evaluation],
+      [*Extends this part.* Suspension and the security log continue the account
+       lifecycle defined here.],
+      [Administrative power is itself recorded against the identity that used
+       it.],
   ),
-  caption: [Discovery's relationship to the other parts.],
+  caption: [Direct relationships only. Reports 5, 6, 8 to 11 reach identity
+    through one of the four above rather than directly.],
 )
 
 = Summary
 
 #delivered[
-  *Discovery.* Public browsing without an account, free-text search, filters on
-  four attributes, six sort orders, paged results, saved searches, a watchlist,
-  a following relationship and a personalised feed — with ordering that is
-  deterministic and explicable by design.
+  Registration with mandatory email verification by a code bound to the address
+  that requested it. Rate-limited resend on both the verification and reset
+  flows. Sign-in issuing a short-lived access token and a refresh token stored
+  hashed and rotated on every use, with replay detection that invalidates the
+  chain. Time-boxed password reset with its own attempt budget, and password
+  change under the same shared policy. Account lockout, server-side role checks,
+  skippable onboarding, public profiles separated from account settings, and
+  administrative suspension.
 
-  *Engagement.* Reviews limited to one per investor per venture, comments with
-  one level of replies, engagement signals recorded from real interactions, user
-  reporting into the moderation queue from Report 2, and an investor directory
-  completing the second direction of discovery.
-
-  *Integrity.* Three engagement rules enforced as unique database indexes rather
-  than as application checks, and ordering restricted to an allow-list.
+  *Ten settings, all supplied by configuration.* No lifetime, cooldown or
+  threshold in this part is compiled in.
 ]
 
-*Still open in this part.* Recommendations remain deliberately absent: ranking
-is deterministic, and any learned ordering would have to stay explicable before
-it could be introduced. Notification preferences are not implemented — a
-followed founder's update reaches every follower in-app, with no way to tune
-it.
+*Still open in this part.* Access tokens remain irrevocable before expiry, with
+the mitigation and its limit stated above. Identity verification against a
+government document, and anti-money-laundering onboarding, are outside the
+delivered scope — the platform proves an address is reachable, and claims
+nothing further about who owns it.
 
-*What this enables.* An investor can now find a venture, follow it, and decide
-they want to act. Report 4 covers what happens when they do — and the
-distinction the entire platform is built around.
+*What this enables.* Report 4 can now assume every actor is authenticated and
+carries a role, which is what allows a venture to have an owner and a review
+queue to have an administrator.

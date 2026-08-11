@@ -191,6 +191,31 @@ namespace MyAppApi.Controllers
         }
 
         /// <summary>
+        /// Record that the current user finished the first-run flow.
+        ///
+        /// Idempotent, and it keeps the first timestamp rather than the latest:
+        /// re-running the flow (or a duplicate request from a double click) must
+        /// not rewrite when this account was actually onboarded.
+        /// </summary>
+        [HttpPost("me/onboarded")]
+        public async Task<IActionResult> MarkOnboarded()
+        {
+            var user = await _context.Users.FindAsync(GetCurrentUserId());
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found." });
+            }
+
+            if (user.OnboardedAtUtc == null)
+            {
+                user.OnboardedAtUtc = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok(new { message = "Onboarding recorded.", onboardedAtUtc = user.OnboardedAtUtc });
+        }
+
+        /// <summary>
         /// Close your own account.
         ///
         /// Soft delete, matching what an admin delete already does: the row stays

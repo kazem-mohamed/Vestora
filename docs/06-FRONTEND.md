@@ -106,16 +106,18 @@
 
 ---
 
-## 3. المكوّنات (145 ملف)
+## 3. المكوّنات (147 ملف)
 
 ```
 components/
 ├── ui/           (22)  ← الـ primitives: button · input · dialog · select · tabs · form · …
-├── landing/      (10)  ← الصفحة الرئيسية: hero · stats · about · why · how · testimonials · nav
+├── landing/      (11)  ← الصفحة الرئيسية: hero · stats · about · why · how · testimonials · nav ·
+│                          card-ground · section-heading · section-surface
 ├── browse/       (11)  ← تجربة الاكتشاف: masthead · discovery-bar · facet-menu · venture-card ·
 │                          venture-spotlight · commitment-rail · signal-mark · states
-├── projects/     (21)  ← تفاصيل المشروع: gallery · updates · milestones · team · documents ·
-│                          reviews · comments · support-modal · close-round-dialog · form
+├── projects/     (25)  ← تفاصيل المشروع: gallery · updates · milestones · team · documents ·
+│                          reviews · comments · support-modal/panel · close-round-dialog · form ·
+│                          backers-list · bookmark · share · report · video-modal · next-ventures
 ├── dashboard/    (10)  ← لوحة المؤسّس: kpi-cards · charts · panels · widgets · interest-funnel
 ├── invest/        (2)  ← لوحة المستثمر: sidebar + invest-primitives
 ├── deals/         (4)  ← غرفة الصفقة: room · timeline · questions · documents
@@ -126,8 +128,8 @@ components/
 ├── profile/       (8)  ← الملف الشخصي: hero · menu · follow · mandate · ventures · memberships
 ├── admin/         (1)  · settings/ (3) · signals/ (2) · notifications/ (2) · portfolio/ (2)
 ├── auth/          (6)  ← الفورمات + require-auth + guilloche + password-requirements
-├── motion/        (8)  ← reveal · tilt · magnetic · cursor · depth-scene · masked-lines ·
-│                          animated-number · brand-loader
+├── motion/        (9)  ← reveal · tilt · magnetic · cursor · depth-scene · masked-lines ·
+│                          animated-number · brand-loader · lazy-video
 ├── brand/         (3)  ← logo · channel-marks · social-icons
 ├── how/ · legal/ · system/                (1 لكل واحد)
 └── providers.tsx · site-header.tsx · header-nav.tsx · mobile-nav.tsx · footer.tsx ·
@@ -276,7 +278,7 @@ lib/auth/tokens.ts   ← الـ refreshToken في localStorage تحت "vestora.r
 ## 8. الترجمة (i18n)
 
 ```
-lib/i18n/dictionaries.ts   ← 4259 سطر — قاموس EN/AR مسطّح
+lib/i18n/dictionaries.ts   ← 4317 سطر — قاموس EN/AR مسطّح
 lib/i18n/locale.tsx        ← LocaleProvider + useLocale() + useT()
 ```
 

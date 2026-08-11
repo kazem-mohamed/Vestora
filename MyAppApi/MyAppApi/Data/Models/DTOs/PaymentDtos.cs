@@ -34,6 +34,20 @@ namespace MyAppApi.Data.Models.DTOs
         public decimal EstimatedFee { get; set; }
         public decimal EstimatedNetProceeds { get; set; }
 
+        // ---- Counter-offer ----
+        public decimal? CounterAmount { get; set; }
+        public string? CounterNote { get; set; }
+        public DateTime? CounterAtUtc { get; set; }
+
+        /// <summary>Proposed | Accepted | Declined — null when nobody countered.</summary>
+        public string? CounterStatus { get; set; }
+
+        /// <summary>The ask this one replaced, when it was issued to accept a counter.</summary>
+        public int? SupersedesRequestId { get; set; }
+
+        /// <summary>The agreed terms this ask calls in, when the relationship has any.</summary>
+        public int? TermSheetId { get; set; }
+
         /// <summary>Every attempt made against this request, oldest first.</summary>
         public List<PaymentTransactionDto> Attempts { get; set; } = new();
     }
@@ -117,6 +131,76 @@ namespace MyAppApi.Data.Models.DTOs
     public class RefundInput
     {
         public string? Reason { get; set; }
+    }
+
+    public class CounterOfferInput
+    {
+        public decimal Amount { get; set; }
+        public string? Note { get; set; }
+    }
+
+    public class AnswerCounterInput
+    {
+        public bool Accept { get; set; }
+        public string? Note { get; set; }
+    }
+
+    // ==================================================================
+    //  Reconciliation — where the system and the provider disagreed
+    // ==================================================================
+
+    /// <summary>
+    /// One confirmation that changed nothing, with enough of its transaction attached
+    /// to be judged without opening another screen.
+    /// </summary>
+    public class ReconciliationEventDto
+    {
+        public int Id { get; set; }
+        public string Provider { get; set; } = string.Empty;
+        public string ProviderEventId { get; set; } = string.Empty;
+        public string EventType { get; set; } = string.Empty;
+
+        /// <summary>webhook | verify | sweep | admin — how the confirmation reached us.</summary>
+        public string Source { get; set; } = string.Empty;
+
+        public string? Outcome { get; set; }
+        public DateTime ReceivedAtUtc { get; set; }
+
+        /// <summary>
+        /// True when the provider reported a payment against an attempt Vestora had
+        /// already closed. Everything else in this list is bookkeeping; this is money.
+        /// </summary>
+        public bool IsConflict { get; set; }
+
+        public DateTime? ReviewedAtUtc { get; set; }
+        public string? ReviewNote { get; set; }
+
+        // ---- The transaction it belongs to ----
+        public int? TransactionId { get; set; }
+        public string? TransactionReference { get; set; }
+        public string? TransactionStatus { get; set; }
+        public decimal? Amount { get; set; }
+        public string? Currency { get; set; }
+        public int? InvestmentId { get; set; }
+        public string? ProjectName { get; set; }
+        public string? InvestorName { get; set; }
+    }
+
+    public class ReconciliationDto
+    {
+        public List<ReconciliationEventDto> Items { get; set; } = new();
+        public int TotalCount { get; set; }
+
+        /// <summary>Unreviewed conflicts across the whole queue, not just this page.</summary>
+        public int OpenConflicts { get; set; }
+
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+    }
+
+    public class ReviewEventInput
+    {
+        public string? Note { get; set; }
     }
 
     /// <summary>Drives the sandbox checkout surface: succeed, decline, or walk away.</summary>

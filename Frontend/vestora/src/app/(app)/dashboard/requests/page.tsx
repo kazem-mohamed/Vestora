@@ -19,7 +19,6 @@ import {
 } from "@/components/invest/invest-primitives";
 import { pipelineApi } from "@/lib/api/dashboard";
 import { useFounderDashboard } from "@/lib/hooks/use-dashboard";
-import { useNotifications } from "@/lib/hooks/use-notifications";
 import { useAuthStore } from "@/lib/auth/store";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
@@ -31,7 +30,6 @@ function RelationshipRow({ item, index }: { item: FounderPipelineItem; index: nu
   const { t } = useLocale();
   const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
-  const { approve, reject } = useNotifications();
 
   const [note, setNote] = useState(item.founderNote ?? "");
   const [openNote, setOpenNote] = useState(false);
@@ -39,7 +37,32 @@ function RelationshipRow({ item, index }: { item: FounderPipelineItem; index: nu
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["founder-dashboard", user?.id] });
     qc.invalidateQueries({ queryKey: ["notifications", user?.id] });
+    qc.invalidateQueries({ queryKey: ["action-center"] });
   };
+
+  // Addressed by the relationship, not by the notification that announced it.
+  // This board reads the pipeline, so a founder whose notification has been
+  // cleared or paged out can still decide — which the notification-keyed
+  // version could not, and silently disabled both buttons instead.
+  const approve = useMutation({
+    mutationFn: () => pipelineApi.approveSupport(item.investmentId),
+    onSuccess: () => {
+      toast.success(t("notif.approved.toast"));
+      refresh();
+      qc.invalidateQueries({ queryKey: ["project"] });
+      qc.invalidateQueries({ queryKey: ["my-projects"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const reject = useMutation({
+    mutationFn: () => pipelineApi.rejectSupport(item.investmentId),
+    onSuccess: () => {
+      toast.success(t("notif.rejected.toast"));
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const setStage = useMutation({
     mutationFn: (stage: PipelineStage) => pipelineApi.setStage(item.investmentId, stage),
@@ -159,8 +182,8 @@ function RelationshipRow({ item, index }: { item: FounderPipelineItem; index: nu
               <button
                 type="button"
                 data-cursor="hover"
-                disabled={busy || !item.notificationId}
-                onClick={() => approve.mutate(item.notificationId)}
+                disabled={busy}
+                onClick={() => approve.mutate()}
                 className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 <Check className="size-3.5" />
@@ -169,8 +192,8 @@ function RelationshipRow({ item, index }: { item: FounderPipelineItem; index: nu
               <button
                 type="button"
                 data-cursor="hover"
-                disabled={busy || !item.notificationId}
-                onClick={() => reject.mutate(item.notificationId)}
+                disabled={busy}
+                onClick={() => reject.mutate()}
                 className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-1.5 text-xs text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:opacity-50"
               >
                 <X className="size-3.5" />

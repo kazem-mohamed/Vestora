@@ -213,12 +213,12 @@ app/                    ← الـ routes (App Router)
 ├── projects/ · u/ · legal/ · about/ …  ← المسارات العامة
 └── layout.tsx          ← الخطوط + الـ metadata + <Providers>
 
-components/             ← 145 component مقسّمين بالمجال (ui/ = 22 primitive)
+components/             ← 147 component مقسّمين بالمجال (ui/ = 22 primitive)
 lib/
 ├── api/                ← 17 module — كل استدعاء HTTP في المشروع بيعدّي من هنا
 ├── auth/               ← zustand store + تخزين الـ refresh token
 ├── hooks/              ← 9 TanStack Query hooks
-├── i18n/               ← قاموس EN/AR (4259 سطر) + LocaleProvider
+├── i18n/               ← قاموس EN/AR (4317 سطر) + LocaleProvider
 ├── types/api.ts        ← 1318 سطر — عقد الأنواع المطابق للـ DTOs
 └── …                   ← browse · chat · deals · format · nav · notifications · validation
 ```

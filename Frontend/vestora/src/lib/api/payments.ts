@@ -9,6 +9,7 @@ import type {
   PaymentConfig,
   PaymentStatus,
   PaymentTransaction,
+  Reconciliation,
 } from "@/lib/types/api";
 
 /**
@@ -73,6 +74,22 @@ export const paymentsApi = {
     ),
 };
 
+/** The investor's half of the negotiation, and the founder's answer to it. */
+export const counterOfferApi = {
+  propose: (fundingRequestId: number, amount: number, note?: string) =>
+    api.post<FundingRequest>(`/api/payments/funding-requests/${fundingRequestId}/counter`, {
+      amount,
+      note,
+    }),
+
+  /** Accepting closes the ask and issues a new one at the agreed figure. */
+  answer: (fundingRequestId: number, accept: boolean, note?: string) =>
+    api.post<FundingRequest>(
+      `/api/payments/funding-requests/${fundingRequestId}/counter/answer`,
+      { accept, note }
+    ),
+};
+
 /** Vestora's own economics. Admin only. */
 export const revenueApi = {
   overview: () => api.get<AdminRevenue>("/api/admin/revenue"),
@@ -96,4 +113,25 @@ export const revenueApi = {
     api.post<PaymentTransaction>(`/api/admin/revenue/transactions/${transactionId}/refund`, {
       reason,
     }),
+
+  // ---- Reconciliation ----
+  //
+  // Confirmations the system recorded but could not act on. The interesting ones are
+  // conflicts: the provider says money moved against an attempt Vestora had closed.
+
+  reconciliation: (params: { includeReviewed?: boolean; page?: number; pageSize?: number }) => {
+    const qs = new URLSearchParams();
+    if (params.includeReviewed) qs.set("includeReviewed", "true");
+    qs.set("page", String(params.page ?? 1));
+    qs.set("pageSize", String(params.pageSize ?? 50));
+    return api.get<Reconciliation>(`/api/admin/revenue/reconciliation?${qs}`);
+  },
+
+  /** Asks the provider again, through the ordinary confirmation path. */
+  reverify: (eventId: number) =>
+    api.post<PaymentTransaction>(`/api/admin/revenue/reconciliation/${eventId}/reverify`, {}),
+
+  /** Records what a human found. Never rewrites what the system did at the time. */
+  reviewEvent: (eventId: number, note: string) =>
+    api.post<{ message: string }>(`/api/admin/revenue/reconciliation/${eventId}/review`, { note }),
 };

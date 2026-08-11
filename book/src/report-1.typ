@@ -3,488 +3,476 @@
 
 #report-cover(
   number: 1,
-  title: "Foundation & Identity",
-  subtitle: "System architecture, the design system, and how Vestora knows who you are",
+  title: "Idea & Requirements",
+  subtitle: "The problem, what already exists, what was asked for, and what was chosen to build it with",
   date: "September 2026",
 )
 
-#show: report.with(number: 1, name: "Foundation & Identity")
+#show: report.with(number: 1, name: "Idea & Requirements")
 
 = Introduction
 
-This is the first of six progress reports covering the Vestora platform. Each
-report takes one part of the system, states what it is for, and shows what was
-delivered.
+This is the first of twelve progress reports covering the Vestora platform. Each
+takes one part of the work, states what it is for, and shows what was delivered.
 
-This report covers two things. First, the *foundation* — the shape of the
-system, the technologies it is built on, the interface system every screen
-inherits, and the four things the platform stores. Second, *identity* — how a
-person becomes a user, proves who they are, stays signed in, and is limited to
-what their role permits.
+This report comes before any of the building. It answers three questions that
+every later report assumes have been settled: *what problem is this?*, *what was
+the system required to do?*, and *what was it built with, and at what cost?*
 
-They are together because everything in reports 2 to 6 sits on top of them. A
-venture cannot be submitted without an account. A commitment cannot be approved
-without a role. Every screen in every later report is drawn with the design
-system established here.
+Nothing here is a feature. Every table in this report is a commitment that
+reports 2 to 12 are measured against — and the last section of this report is
+the list of things the project agreed *not* to do, which matters just as much.
 
-= Objective
+= The Problem
 
-Two objectives, both prerequisites for everything that follows.
+The problem can be stated as four concrete failures of the current arrangement.
 
-*Build a foundation the rest of the system can be built on.* One deployable
-API that owns every rule, a web application that owns none, a relational store
-that enforces integrity, and an interface system consistent enough that a new
-screen looks like it belongs without being told to.
+/ Discovery is networked, not merit-based: A founder's access to investors is
+  determined largely by who they already know. There is no neutral surface on
+  which a venture can be found on the strength of what it is.
 
-*Make identity trustworthy.* An account must belong to a real, reachable
-address. A session must be revocable. A password must be resistant to guessing.
-And what a user is permitted to do must be decided by the server on every
-request, never by the interface.
+/ Evaluation is unsupported: An investor considering an early-stage venture
+  needs the team, the financial ask, supporting documents and a record of
+  progress. Where these exist at all they are scattered across decks, emails and
+  calls, and none of it is verifiable by the platform hosting the pitch.
 
-= System at a Glance
+/ Commitment is unmodelled: Existing consumer platforms model a purchase. An
+  equity or revenue commitment is a different object: it has an approval step, a
+  settlement step, and a status that must never be confused with either.
 
-The platform is four pieces, and this shape does not change in any later
-report.
+/ The relationship ends at payment: Once funds move, the platform stops. There
+  is no channel through which a founder reports progress and no view through
+  which an investor tracks it, so accountability depends entirely on the goodwill
+  of the founder.
 
-#figure(
-  image("/assets/diagrams/out/c4-container.svg", width: 88%),
-  caption: [The platform and the two services it depends on.],
-)
+Each of these is a software problem before it is a market problem. Each appears
+again in this series as a requirement, a design decision and a test.
 
-#figure(
-  table(
-    columns: (34mm, 1fr),
-    align: (left + top, left + top),
-    table.header([Piece], [Responsibility]),
-    [Web application], [Renders the interface. Holds no business rules. Calls
-      the API for every read and write.],
-    [REST API], [The only writer to the database. Owns every rule,
-      authorisation decision and validation.],
-    [Real-time hub], [Pushes live updates. Shares the API's authentication and
-      data access. Covered in Report 5.],
-    [Relational store], [Holds state and enforces integrity through
-      constraints, not only through code.],
-  ),
-  caption: [The four containers and what each is responsible for.],
-)
+= What Already Exists
 
-The property worth stating early: *the web application contains no business
-rules.* It does not compute funding totals and it does not decide permissions.
-It displays decisions the API has already made. Every later report depends on
-that separation holding.
-
-== Technology
+The field divides into two kinds of platform, and neither covers the problem
+above.
 
 #figure(
   table(
-    columns: (36mm, 1fr, 1fr),
-    align: (left + top, left + top, left + top),
-    table.header([Technology], [Role in the platform], [Why]),
-    [React with Next.js], [The entire user interface],
-      [Public pages render on the server, so a venture page arrives complete
-       rather than as a loading shell.],
-    [TypeScript], [Frontend language],
-      [Type errors surface at build time rather than in the browser.],
-    [Tailwind CSS with shadcn/ui], [Styling and components],
-      [Unstyled, accessible primitives styled with our own tokens — the visual
-       language is ours rather than a library's.],
-    [ASP.NET Core], [The API and every rule],
-      [Compile-time typing for money-related invariants; authorisation,
-       validation and configuration are first-party concerns.],
-    [Entity Framework Core], [Database access],
-      [Every schema change is a versioned migration, so the schema history is
-       replayable.],
-    [SQL Server], [Storage],
-      [The data and its invariants are relational; constraints are enforced by
-       the database itself.],
+    columns: (48mm, 20mm, 20mm, 20mm),
+    align: (left + top, center, center, center),
+    table.header([Capability], [Reward\ platforms], [Equity\ platforms], [Vestora]),
+    [Public discovery without an account], [Yes], [Often no], [Yes],
+    [Search and filter by attribute], [Yes], [Limited], [Yes],
+    [Models a holding rather than a purchase], [No], [Yes], [Yes],
+    [Administrative review before publication], [Varies], [Yes], [Yes],
+    [Document request and grant channel], [No], [Yes], [Yes],
+    [In-platform direct messaging], [Limited], [Varies], [Yes],
+    [Milestones and post-funding updates], [Partial], [Rare], [Yes],
+    [Approved and funded modelled separately], [No], [Varies], [Yes],
+    [Accessible to small individual amounts], [Yes], [No], [Yes],
+    [Legal execution of the instrument], [N/A], [Yes], [*No*],
+    [Identity and anti-money-laundering checks], [Partial], [Yes], [*No*],
   ),
-  caption: [The foundation stack. Technologies specific to one part of the
-    system are introduced in the report that covers it.],
+  caption: [Capability comparison. The final two rows are capabilities Vestora
+    does not have.],
 )
 
-= The Design System
+The last two rows are stated deliberately. Vestora records commitments; it does
+not execute share instruments and does not perform regulatory onboarding.
+*A comparison table in which the author's system wins every row is not a
+comparison.*
 
-Every screen in reports 2 to 6 is drawn from the tokens defined here. They are
-declared once and used everywhere; no screen chooses a colour or a typeface of
-its own.
+== Where the gaps are
 
-#figure(
-  table(
-    columns: (30mm, 26mm, 1fr),
-    align: (left, left, left),
-    table.header([Token], [Value], [Role]),
-    [Ink], [`#241C14`], [Body text — a warm near-black rather than pure black],
-    [Secondary], [`#71614C`], [Supporting text and labels],
-    [Bronze], [`#8B4F2A`], [Primary accent: structure, rules, emphasis],
-    [Gold], [`#B08A3F`], [Secondary accent, used sparingly],
-    [Ground], [`#F6F2E7`], [Page background],
-    [Surface], [`#FCFAF3`], [Raised surfaces — cards and panels],
-    [Border], [`#E3D9C4`], [Hairlines and dividers],
-  ),
-  caption: [Colour tokens. A dark set exists with the same role assignments.],
-)
+Three gaps emerge, and each becomes a requirement later in this report.
 
-Typography uses three families with fixed roles: a display face for page titles,
-a sans for interface text and labels, and a serif for figures and long-form
-reading.
++ *The small individual investor is unserved at the equity end.* Reward
+  platforms accept small amounts but do not model a holding; equity platforms
+  model a holding but exclude small amounts. Vestora occupies the intersection.
 
-== Two axes every screen supports
++ *The post-funding relationship is nobody's product.* Reward platforms end at
+  fulfilment; equity platforms end at close. Milestones, updates and a durable
+  portfolio view are the platform's answer, and they are the subject of reports 4
+  and 7.
 
-The platform works in *English and Arabic*, and in *light and dark*. These are
-not variants of a few screens — they apply everywhere.
++ *Commitment state is modelled loosely across the field.* Where a platform
+  displays a single funding figure, it is usually not distinguishing intention
+  from settlement. That separation — enforced structurally in the schema, not
+  merely in the interface — is this project's most transferable contribution. It
+  is not specific to crowdfunding.
 
-#shots(
-  "/assets/screenshots/projects-en-light.png",
-  "/assets/screenshots/projects-en-dark.png",
-  [The same surface under the light and dark token sets. Every colour resolves
-   through the same semantic role in both; nothing is re-chosen per theme.],
-)
+= Scope
 
-#shots(
-  "/assets/screenshots/projects-en-light.png",
-  "/assets/screenshots/projects-ar-light.png",
-  [English and Arabic. The writing direction flips and the entire layout
-   mirrors — navigation, filters, progress bars and the grid. The display face
-   changes to the Arabic pair. The information does not change.],
-)
+== In scope
 
-Three things change with language and one does not. The direction flips, so
-layout mirrors. The display typeface changes, because the Latin display face has
-no Arabic coverage. Numerals and Latin proper nouns remain left-to-right inside
-right-to-left text, which the layout tolerates rather than fights. What does not
-change is the information: both captures show the same ventures, the same
-filters, the same figures.
+- *Identity and access.* Registration, email verification, one-time password
+  confirmation, sign-in with JSON Web Tokens and rotating refresh tokens,
+  password reset, lockout after repeated failures, role-based authorisation, and
+  administrative suspension.
+- *Venture management.* Creation and editing of ventures with imagery,
+  documents, team members, funding targets, milestones and progress updates.
+- *Administrative review.* A moderation pipeline covering approval, rejection
+  with reason, reporting, and an audit trail of administrative actions.
+- *Discovery.* Listing, search, filtering, sorting, saved searches, bookmarks and
+  a following relationship between users.
+- *Investment.* Funding requests, an approval step, checkout against a payment
+  provider, settlement recorded from provider callbacks, and portfolio views for
+  the investor.
+- *Communication.* Direct messaging with presence, typing indicators, read
+  receipts and image attachments; a notification system with in-app delivery.
+- *Insight.* Founder and investor dashboards, and administrative analytics
+  covering activity, revenue and moderation load.
 
-#delivered[
-  Layout is expressed in logical properties — start and end rather than left and
-  right — so mirroring is a property of the direction rather than a second set
-  of rules maintained by hand.
+== Out of scope
+
+These are excluded deliberately, and Report 12 returns to each.
+
+- *Live money movement.* The platform integrates a payment provider behind an
+  abstraction and runs against a simulated provider by default. The
+  Stripe-compatible path, including signature-verified webhook handling, is
+  implemented and configurable, but the system has not been operated against a
+  live merchant account.
+- *Legal execution of equity.* The platform records commitments; it does not
+  generate, execute or register share instruments.
+- *Identity verification and anti-money-laundering checks.* Regulatory
+  onboarding is a constraint on deployment, not an implemented feature.
+- *Secondary trading.* There is no mechanism for transferring a commitment
+  between investors.
+- *Automated recommendation.* Ranking is deterministic and attribute-based. No
+  machine-learned recommendation is implemented.
+
+#note[
+  The out-of-scope list is not an apology. Each entry is a decision with a
+  reason, and each is repeated verbatim in the report that would otherwise be
+  expected to contain it — so that no reader reaches Report 8 expecting live
+  settlement and finds a simulator instead.
 ]
 
-= The Data Foundation
-
-The platform stores four kinds of thing. Later reports add tables around them,
-but these four are the spine.
+= Who It Is For
 
 #figure(
   table(
-    columns: (30mm, 1fr),
-    align: (left + top, left + top),
-    table.header([Entity], [What it represents]),
-    [`User`], [An account. May act as founder, investor, or both.],
-    [`Project`], [A venture seeking funding. Owned by exactly one founder.],
-    [`Investment`], [A commitment by an investor. An *intention*, not a
-      payment.],
-    [`PaymentTransaction`], [Evidence that money moved. A *fact*.],
+    columns: (26mm, 1fr, 1fr),
+    align: (left + top, left + top, left + top),
+    table.header([Persona], [Situation], [What they need from the platform]),
+    [The founder],
+      [Has a working product and no investor network. Time-poor; the platform
+       competes with building the product.],
+      [To be found on merit; to answer diligence questions once rather than
+       twenty times; to report progress without assembling a document.],
+    [The investor],
+      [Willing to place a modest amount early. Cannot access syndicates. Wary of
+       opacity.],
+      [To discover ventures by attribute; to see evidence rather than claims; to
+       know what state their money is in; to follow what happens next.],
+    [The administrator],
+      [Responsible for what appears on the platform and accountable for it.],
+      [A queue rather than a firehose; the ability to act decisively; a record of
+       what was done and by whom.],
   ),
-  caption: [The four core entities. Reports 2 and 4 develop the last three.],
+  caption: [The three personas the requirements serve.],
 )
 
-`Investor` and `Innovator` are specialisations of `User`, persisted in one table
-with a discriminator column. They share almost every column and differ mainly in
-what they are related to, so a separate table per specialisation would add a
-join to every authentication call for no benefit.
+= Requirements
 
-== Identity tables
+Requirements came from three sources, weighted differently because they are
+differently reliable.
 
-This report owns three tables directly.
+/ Domain analysis: The comparison above established what existing platforms do
+  and — more usefully — what they omit. The gaps are the origin of most
+  functional requirements.
+
+/ Structured interviews: Conversations with people on both sides of the problem:
+  individuals who had attempted to raise early-stage capital, and individuals who
+  had considered placing money into small ventures. These produced the
+  requirements around *evidence* — documents, milestones, progress — which no
+  amount of competitor analysis would have surfaced, because the competitors do
+  not have them.
+
+/ Supervisory review: Requirements were reviewed against the questions a domain
+  expert asks: what happens when a payment fails, who is allowed to do this, what
+  happens if two people do it at once. Several non-functional requirements exist
+  because of a question of that shape.
+
+Requirements are identified as `FR-nn` and `NFR-nn`, and the identifiers are
+*stable*: a requirement that is dropped leaves its number retired rather than
+reused, so a reference in an older document never silently means something else.
+
+== Functional requirements
+
+Forty-three functional requirements are recorded across six areas, each carrying
+a priority and a pointer to where it is satisfied.
+
+#figure(
+  table(
+    columns: (46mm, 16mm, 1fr),
+    align: (left + top, center + top, left + top),
+    table.header([Area], [Count], [Delivered in]),
+    [Identity and access], [7], [Report 3],
+    [Projects and ventures], [7], [Report 4],
+    [Discovery and engagement], [7], [Report 6],
+    [Investment and funding], [9], [Reports 7 and 8],
+    [Communication], [7], [Reports 9 and 10],
+    [Administration and moderation], [6], [Reports 5 and 11],
+  ),
+  caption: [Functional requirements by area, and the report that delivers each
+    group. The full enumeration with priorities is carried in the appendix.],
+)
+
+== Non-functional requirements
+
+Non-functional requirements are stated with a number wherever a number is
+meaningful. *"The system shall be fast" is not a requirement; it is a wish.*
+
+#figure(
+  table(
+    columns: (17mm, 1fr, 22mm),
+    align: (left + top, left + top, center + top),
+    table.header([ID], [Requirement], [Assessed in]),
+    [NFR-01], [Public venture pages shall be server-rendered so that primary
+      content is present in the first response.], [2],
+    [NFR-02], [The venture listing shall return within 300 ms at the 95th
+      percentile under expected load.], [12],
+    [NFR-03], [No collection endpoint shall return an unbounded result set.], [6],
+    [NFR-04], [Passwords shall be stored only as salted hashes.], [3],
+    [NFR-05], [Refresh tokens shall be stored only as hashes and rotated on
+      use.], [3],
+    [NFR-06], [All timestamps shall be stored and transmitted in UTC.], [2],
+    [NFR-07], [Monetary values shall use exact decimal representation.], [7],
+    [NFR-08], [Every state-changing endpoint shall enforce authorisation
+      server-side.], [3],
+    [NFR-09], [Error responses shall disclose no internal detail.], [2],
+    [NFR-10], [The application shall refuse to start when a required secret is
+      absent.], [12],
+    [NFR-11], [Uploads shall be limited by size and restricted to an allow-list
+      of verified content types.], [4],
+    [NFR-12], [Security-relevant events shall be persisted to queryable storage,
+      not only to logs.], [11],
+    [NFR-13], [The interface shall meet WCAG 2.1 AA.], [2],
+    [NFR-14], [The interface shall be usable from 360 px to 1920 px wide.], [2],
+    [NFR-15], [Schema changes shall be applied only through versioned
+      migrations.], [2],
+    [NFR-16], [Notification delivery shall not block the request that generated
+      it.], [9],
+  ),
+  caption: [Sixteen non-functional requirements, each with the report that
+    assesses it. None is assessed in this one.],
+)
+
+= The System in One Picture
+
+#full-page-figure(
+  "/assets/diagrams/out/use-case.svg",
+  caption: [Use case model. Fourteen cases across three human actors and one
+    external system — the payment provider, which is an actor because it
+    initiates the settlement callback rather than merely receiving a request.],
+)
+
+#full-page-figure(
+  "/assets/diagrams/out/dfd-level1.svg",
+  caption: [Level-1 data flow. Read alongside the use case model: the cases say
+    who may act, this says where the data goes when they do.],
+)
+
+= Technology Decisions
+
+A technology section that lists what was used explains nothing. The list is
+visible in the project file. What is not visible is *why each item is there
+rather than its alternative, and what was given up in choosing it.* This section
+records the second thing.
+
+== The decision framework
+
+Every decision below is evaluated against the same five criteria, weighted once
+and applied consistently. The weights derive from the requirements above, not
+from preference.
+
+#figure(
+  table(
+    columns: (34mm, 14mm, 1fr),
+    align: (left + top, center + top, left + top),
+    table.header([Criterion], [Weight], [Why it carries this weight]),
+    [Fit to requirement], [30%],
+      [A choice that does not serve a stated requirement is not a trade-off, it
+       is a mistake. Weighted highest by definition.],
+    [Team capability], [25%],
+      [A small undergraduate team on a fixed timetable. A technically superior
+       option the team cannot use well is not superior.],
+    [Ecosystem maturity], [20%],
+      [Documentation, community answers and library availability determine how
+       much of the schedule is spent on the problem rather than on the tool.],
+    [Operational cost], [15%],
+      [Hosting, licensing and the effort of running the thing after it is
+       written.],
+    [Exit cost], [10%],
+      [What it would take to replace this choice later. Low exit cost is worth
+       paying a little for.],
+  ),
+  caption: [Evaluation criteria applied to every technology decision.],
+)
+
+Scores are on a one-to-five scale. Where a score is close, the narrative explains
+the tie-break; where an option lost decisively, that is stated plainly rather
+than softened.
+
+== Worked example: the frontend
+
+*Requirement pressure.* The platform has public pages that must be indexable and
+fast on first load — the venture listing and the venture detail page are its shop
+window (`NFR-01`) — and authenticated application surfaces where first-load cost
+matters less than interaction quality. A framework that serves only one of those
+two well would force a compromise on the other.
+
+#figure(
+  table(
+    columns: (1fr, 17mm, 17mm, 17mm),
+    align: (left, center, center, center),
+    table.header([Criterion], [React\ + Next.js], [Angular], [Vue\ + Nuxt]),
+    [Fit to requirement (30%)], [5], [3], [4],
+    [Team capability (25%)], [4], [3], [2],
+    [Ecosystem maturity (20%)], [5], [4], [3],
+    [Operational cost (15%)], [3], [4], [4],
+    [Exit cost (10%)], [3], [2], [3],
+    [*Weighted total*], [*4.20*], [*3.25*], [*3.20*],
+  ),
+  caption: [Frontend framework evaluation, scored against the criteria above.],
+)
+
+Angular's lower total is not a statement about its quality. It is a coherent,
+opinionated framework with first-class dependency injection and a structural
+discipline that suits large teams. It scored lower on *fit to requirement*
+because its server-rendering story requires additional infrastructure, and
+because the component ecosystem available to us encodes visual opinions that run
+against the interface direction set out in Report 2.
+
+Vue with Nuxt scored well on fit but poorly on team capability: nobody on the
+team had used it, and that criterion carries a quarter of the decision.
+
+*What was given up.* React is a library, not a framework, so structural
+discipline is not enforced by the tool. The mitigation is an enforced module
+layout and lint rules that make the intended boundaries mechanical rather than
+cultural — described in Report 2.
+
+== Every decision, and what it cost
+
+#figure(
+  table(
+    columns: (24mm, 1fr, 1fr),
+    align: (left + top, left + top, left + top),
+    table.header([Layer], [Chosen], [Principal trade-off accepted]),
+    [Frontend], [React with Next.js],
+      [No framework-enforced structure; replaced by lint rules and an enforced
+       module layout.],
+    [Backend], [ASP.NET Core], [Narrower hosting market than Node.js.],
+    [Database], [SQL Server with EF Core],
+      [Higher hosting cost than PostgreSQL; generated queries need supervision.],
+    [Identity], [JWT with rotating refresh tokens],
+      [Access tokens cannot be revoked before expiry.],
+    [Payments], [Provider abstraction, simulated by default],
+      [An extra indirection and provider-neutral result types on both sides.],
+    [Real time], [SignalR], [Ties the real-time layer to the ASP.NET Core
+      runtime.],
+    [Email], [SMTP via MailKit], [No deliverability reporting or bounce
+      handling.],
+    [UI], [Tailwind with Radix primitives], [The project owns its component
+      code.],
+    [Hosting], [Managed ASP.NET Core and SQL Server],
+      [No autoscaling, no managed CI, limited observability.],
+  ),
+  caption: [Technology decisions and the cost accepted for each.],
+)
+
+*Every row of that table has a cost column, and none of them is empty. A decision
+with no stated cost has not been examined.*
+
+= What It Became
+
+#shot(
+  "/assets/screenshots/landing-en-light.png",
+  [The result of everything above, in one frame — the surface an unauthenticated
+   visitor arrives at. Reports 2 to 12 take it apart.],
+)
+
+= Challenges
+
+#challenge("Requirements written after the fact are not requirements")[
+  A graduation project is written up once it is largely built, which makes it
+  easy to reverse-engineer a requirements list from the delivered features. The
+  result reads perfectly and proves nothing.
+
+  *Solution.* Identifiers were fixed early and made *stable* — a dropped
+  requirement retires its number rather than freeing it for reuse. The visible
+  consequence is that the enumeration has gaps, and the gaps are the evidence
+  that the list was not written backwards from the product.
+]
+
+#challenge("A comparison written by the author is not evidence")[
+  The comparison table above was produced by the same person who built the
+  system being compared, which is exactly the condition under which such tables
+  are usually worthless.
+
+  *Solution.* The table carries two rows where the answer is *No* for this
+  platform and *Yes* for the incumbents, and both are capabilities a serious
+  deployment would require. They are repeated in the scope exclusions and again
+  in Report 12. The test of an honest comparison is whether it contains a row the
+  author would rather omit.
+]
+
+#challenge("A weighted score can be reverse-engineered to the answer you wanted")[
+  A scoring matrix looks objective and is trivially manipulated. Adjust one
+  weight by five points, or one score by a single step, and the winner changes —
+  after the winner has already been decided.
+
+  *Solution, and its limit.* The weights are fixed *once*, before any option is
+  scored, and derived from the requirement table rather than from preference. The
+  same five criteria and the same weights are applied to all nine decisions, so a
+  weight tuned to favour one outcome would distort the other eight. That
+  constrains the manipulation; it does not eliminate it, and the scores remain a
+  structured argument rather than a measurement.
+]
+
+= How This Fits With the Rest of the System
+
+This report contains no implementation, so its relationships run one way: every
+later report is accountable to something recorded here.
 
 #figure(
   table(
     columns: (34mm, 1fr, 1fr),
     align: (left + top, left + top, left + top),
-    table.header([Table], [Holds], [Rule enforced]),
-    [`Users`], [Credentials, verification state, lockout counters, last-seen],
-      [`Email` is unique — this *is* the account identity rule],
-    [`RefreshTokens`], [Hashed refresh tokens with expiry and rotation state],
-      [`TokenHash` is unique; two live tokens can never collide],
-    [`SecurityLogs`], [Authentication and security events],
-      [Indexed on user and time, because audit queries are always both],
+    table.header([Report], [Relationship], [Boundary]),
+    [2 · Foundation & Design System],
+      [*Implements the decisions above.* The stack, the container split and the
+       interface direction are all consequences of this report.],
+      [It builds structures; it does not add requirements.],
+    [3 to 11 · the delivered parts],
+      [*Each satisfies a requirement group.* The functional table above names
+       which report answers which area.],
+      [No report delivers a feature that is not traceable to an `FR`.],
+    [12 · Administration & Evaluation],
+      [*Assesses this report.* Every `NFR` above is measured or its measurement
+       is declared absent, and every scope exclusion is revisited.],
+      [It is the only report permitted to close a requirement.],
   ),
-  caption: [Identity tables. Two of the three carry a unique index that encodes
-    a rule rather than an optimisation.],
+  caption: [This report is the contract; the rest of the series is the
+    performance against it.],
 )
-
-= Features Delivered
-
-#figure(
-  table(
-    columns: (46mm, 1fr),
-    align: (left + top, left + top),
-    table.header([Feature], [What it does]),
-    [Registration], [Creates an unverified account and sends a single-use
-      verification link.],
-    [Email verification], [Sign-in is refused until the address is confirmed,
-      so an account cannot be created against an address the registrant does
-      not control.],
-    [One-time password], [A short-lived, single-use code bound to the account
-      that requested it.],
-    [Sign-in], [Issues a short-lived access token carrying identity and role.],
-    [Refresh with rotation], [Every refresh issues a new token and invalidates
-      the old one.],
-    [Password reset], [A time-boxed, single-use link — deliberately shorter
-      lived than the verification link.],
-    [Lockout], [Blunts repeated password guessing without permanently locking
-      out a user who mistypes.],
-    [Roles], [Decides what an account is permitted to do, checked on the
-      server for every request.],
-    [Profiles], [A public profile and separate account settings.],
-    [Suspension], [An administrator can disable an account without deleting
-      it.],
-  ),
-  caption: [Identity features delivered.],
-)
-
-= How It Works
-
-#full-page-figure(
-  "/assets/diagrams/out/seq-registration.svg",
-  caption: [Registration and email verification, end to end. The response at
-    the registration step is identical whether or not the address is already
-    registered — the endpoint is deliberately not an account-existence oracle.],
-)
-
-== Sessions and rotation
-
-Sign-in issues two tokens. A short-lived *access token* carries the user's
-identity and role and is presented with every request. A longer-lived *refresh
-token* exchanges for a new pair when the access token expires.
-
-The refresh token is the part carrying the real security weight, because it
-lives longest. Three properties protect it:
-
-- It is stored *hashed*. A database disclosure yields no usable tokens.
-- The hash column is unique, so two live tokens cannot collide.
-- It *rotates*: every refresh issues a new token and invalidates the old one.
-
-Rotation is what makes replay detectable. Presenting a token that has already
-been rotated means the token was captured, and the response is to invalidate the
-whole chain rather than to issue a new pair.
-
-#full-page-figure(
-  "/assets/diagrams/out/seq-login.svg",
-  landscape: false,
-  caption: [Sign-in and refresh. The rotation branch on the right is the replay
-    detection described above.],
-)
-
-== Configured, not compiled
-
-Every lifetime and threshold is configuration rather than a constant in code, so
-it can be tightened without a release.
-
-#figure(
-  table(
-    columns: (1fr, 28mm, 1fr),
-    align: (left + top, center + top, left + top),
-    table.header([Setting], [Value], [Reasoning]),
-    [Access token lifetime], [60 minutes],
-      [Short enough that a leaked token expires within a session; long enough to
-       avoid refresh churn.],
-    [Refresh token lifetime], [14 days],
-      [A fortnight of inactivity ends the session.],
-    [Email verification token], [60 minutes], [Single-use and time-boxed.],
-    [Password reset token], [10 minutes],
-      [Shorter on purpose: a reset link sitting in an inbox is a higher-value
-       target than a verification link.],
-    [Lockout], [5 attempts / 15 minutes],
-      [Blunts guessing without punishing a mistyped password.],
-  ),
-  caption: [Identity settings, all supplied by configuration.],
-)
-
-= Interface
-
-#shot(
-  "/assets/screenshots/landing-en-light.png",
-  [The landing page — where an unauthenticated visitor arrives.],
-)
-
-#shot(
-  "/assets/screenshots/settings-profile.png",
-  [Profile settings. Profile and account are deliberately separate surfaces:
-   changing a biography is trivial, changing an email address invalidates a
-   verified identity and must re-verify. One form would either over-protect the
-   trivial or under-protect the consequential.],
-)
-
-= Backend
-
-Two excerpts show how identity rules are enforced.
-
-#figure(
-  ```cs
-  // Registration responds identically whether or not the address exists.
-  // A differing response would turn this endpoint into an oracle that reveals
-  // which addresses are registered.
-  if (await _db.Users.AnyAsync(u => u.Email == dto.Email, ct))
-  {
-      await _email.SendAlreadyRegisteredNoticeAsync(dto.Email, ct);
-      return Created();          // same shape, same status, same timing class
-  }
-
-  user.PasswordHash = BCrypt.HashPassword(dto.Password);
-  user.IsEmailVerified = false;
-  ```,
-  caption: [Registration. The account-existence case is handled by notifying the
-    real owner, not by telling the caller.],
-)
-
-#figure(
-  ```cs
-  // Refresh tokens are matched by hash and rotated on every use. Presenting a
-  // token that has already been rotated means it was captured — so the whole
-  // chain is invalidated rather than a new pair issued.
-  var stored = await _db.RefreshTokens
-      .SingleOrDefaultAsync(t => t.TokenHash == Hash(presented), ct);
-
-  if (stored is null || stored.RevokedAtUtc is not null)
-  {
-      await _auth.RevokeChainAsync(stored?.UserId, ct);
-      return Unauthorized();
-  }
-  ```,
-  caption: [Refresh with replay detection.],
-)
-
-= Key Endpoints
-
-#figure(
-  table(
-    columns: (16mm, 46mm, 1fr),
-    align: (left + top, left + top, left + top),
-    table.header([Method], [Path], [Purpose]),
-    [`POST`], [`api/auth/register`], [Create an unverified account and send a
-      verification link.],
-    [`POST`], [`api/auth/verify-email`], [Confirm the address; sign-in becomes
-      permitted.],
-    [`POST`], [`api/auth/login`], [Issue an access and refresh token pair.],
-    [`POST`], [`api/auth/refresh`], [Rotate the pair; detect replay.],
-    [`POST`], [`api/auth/forgot-password`], [Send a short-lived reset link.],
-    [`POST`], [`api/auth/logout`], [Invalidate the refresh token.],
-    [`GET`], [`api/users/{id}`], [Read a public profile.],
-    [`PUT`], [`api/users/me`], [Update the signed-in user's profile.],
-  ),
-  caption: [Principal endpoints in this part. The complete listing is generated
-    from the code and served in development.],
-)
-
-= Libraries Used in This Part
-
-#figure(
-  table(
-    columns: (40mm, 1fr),
-    align: (left + top, left + top),
-    table.header([Library], [Role here]),
-    [`BCrypt.Net`], [Password hashing with a per-password salt and a tunable
-      work factor.],
-    [`Microsoft.AspNetCore.Authentication.JwtBearer`], [Validates the access
-      token on every request and populates the caller's identity and role.],
-    [`MailKit`], [Sends verification, one-time password and reset messages over
-      SMTP, behind an interface so the transport can be replaced.],
-    [`FluentValidation`], [Structural validation at the request boundary, so a
-      service never receives a malformed request.],
-  ),
-  caption: [Libraries introduced in this part of the system.],
-)
-
-= Challenges
-
-#challenge("Registration could reveal which addresses are registered")[
-  A registration endpoint that answers differently for a known address tells an
-  attacker which email addresses hold accounts.
-
-  *Solution.* The endpoint returns the same status and shape in both cases. When
-  the address already exists, a notice is sent to the address itself rather than
-  reported to the caller — so the real owner is informed and the caller learns
-  nothing.
-]
-
-#challenge("A long-lived refresh token is a standing risk")[
-  An access token expires in an hour. A refresh token lives for a fortnight, and
-  a captured one would be usable for that whole period.
-
-  *Solution.* Tokens are stored hashed and rotated on every use. A rotated token
-  presented again is treated as evidence of capture, and the entire chain is
-  invalidated. During screenshot capture for this project the mechanism fired
-  under concurrent requests and ended the session — the defence working as
-  designed.
-]
-
-#challenge("A stateless token cannot be revoked before it expires")[
-  Suspending an account does not invalidate an access token that has already
-  been issued.
-
-  *Solution, and its limit.* State-changing and money-adjacent endpoints check
-  account state on each call rather than trusting the token alone. Read-only
-  endpoints largely do not, because the cost would be paid on every read. The
-  residual exposure is up to sixty minutes of read access for a suspended
-  account, and it is accepted rather than hidden.
-]
-
-= How This Fits With the Rest of the System
-
-Every later report depends on this one, and none of them re-implements any part
-of it.
-
-#figure(
-  table(
-    columns: (30mm, 1fr, 1fr),
-    align: (left + top, left + top, left + top),
-    table.header([Report], [Depends on this part for], [Boundary]),
-    [2 · Ventures & Moderation],
-      [A venture's owner and the reviewing administrator are both identities
-       established here.],
-      [That part never decides identity or role; it reads the caller's role and
-       acts on it.],
-    [3 · Discovery],
-      [Public browsing needs no identity; saving and following do.],
-      [Authorisation is checked server-side even on surfaces that are otherwise
-       public.],
-    [4 · Investment],
-      [The rule that a founder cannot invest in their own venture is a
-       relationship between two identities.],
-      [Money-adjacent endpoints re-check account state rather than trusting the
-       token alone.],
-    [5 · Real-time],
-      [A hub connection authenticates with the same access token as a REST
-       call.],
-      [There is no second credential and no second identity mechanism.],
-    [6 · Insight & Administration],
-      [Suspension, the audit log and the security log all extend the account
-       lifecycle defined here.],
-      [Administrative power is itself recorded against the identity that used
-       it.],
-  ),
-  caption: [What each later report takes from the foundation.],
-)
-
-The design system is the second thing every later report inherits. No screen in
-reports 2 to 6 defines a colour or a typeface; each one is drawn from the tokens
-declared here, in either language and either theme.
 
 = Summary
 
 #delivered[
-  *Foundation.* A four-container architecture in which the API owns every rule
-  and the web application owns none. A design system of colour and typographic
-  tokens applied across every screen, in two languages and two themes. A
-  relational core of four entities with integrity enforced by constraints.
-
-  *Identity.* Registration with mandatory email verification, one-time password
-  confirmation, sign-in with short-lived access tokens, refresh tokens stored
-  hashed and rotated with replay detection, time-boxed password reset, lockout,
-  server-side role checks, public profiles, and administrative suspension.
-
-  *Verified.* Nine security cases specified against this part, of which the
-  account-lockout and replay-detection behaviours were observed firing in
-  practice.
+  *The problem*, stated as four failures of the current arrangement rather than
+  as an opportunity. *A comparison* against reward and equity platforms in which
+  two rows go against this project. *Three gaps* that became the shape of the
+  product. *Scope*, with five explicit exclusions. *Three personas.*
+  *Forty-three functional requirements* across six areas and *sixteen
+  non-functional requirements*, each with a stable identifier and a named place
+  where it is answered. *Nine technology decisions*, each scored against five
+  weighted criteria fixed in advance, and each with the cost accepted for it.
 ]
 
-*Still open in this part.* Access tokens remain irrevocable before expiry, with
-the mitigation and its limit stated above. Identity verification and
-anti-money-laundering onboarding are outside the delivered scope.
+*Still open in this part.* Requirements elicitation drew on domain analysis,
+interviews and supervisory review, but not on a controlled user study; the
+personas above are grounded rather than measured. No requirement in this report
+is assessed here — assessment is Report 12's work, and a requirement is not
+satisfied because the report that introduced it said so.
 
-*What this enables.* Report 2 can now assume every actor is authenticated and
-carries a role — which is what allows a venture to have an owner, and a review
-queue to have an administrator.
+*What this enables.* Report 2 can now build, because it knows what it is
+building, for whom, against which numbers, and with what.

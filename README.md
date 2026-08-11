@@ -5,6 +5,7 @@
 ```
 Vestora/
 ├── MyAppApi/            ← Backend  · .NET 8 Web API + EF Core + SQL Server + SignalR
+│   └── MyAppApi.Tests/  ← اختبارات وحدة (xUnit) على طبقة المجال
 ├── Frontend/vestora/    ← Frontend · Next.js 16 (App Router) + React 19 + TypeScript
 ├── docs/                ← التوثيق الكامل (ابدأ من هنا)
 ├── Vestora-Brand-Sheet.html  ← هوية البراند (quiet-luxury) — مصدر ألوان وخطوط الـ design system
@@ -56,6 +57,11 @@ cd MyAppApi/MyAppApi && dotnet run
 cd Frontend/vestora && npm install && npm run dev
 ```
 
+```bash
+# 4) اختبارات المجال (مش محتاجة أسرار ولا قاعدة بيانات)
+cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj
+```
+
 التطبيق **بيرفض يشتغل** لو أي سرّ مطلوب ناقص — ده مقصود، مش عطل. الرسالة نفسها بتقولك تعمل إيه.
 
 ---
@@ -65,14 +71,15 @@ cd Frontend/vestora && npm install && npm run dev
 | | |
 |---|---|
 | Backend | 22 controller · 150 endpoint · 32 DbSet · 22 migration · 1 SignalR hub · 2 background worker |
-| Frontend | 55 صفحة (route) · 145 component · 17 API module · دعم كامل EN/AR مع RTL |
+| Frontend | 55 صفحة (route) · 147 component · 17 API module · دعم كامل EN/AR مع RTL |
+| الاختبارات | 41 اختبار وحدة (xUnit) على طبقة المجال — `FundingMath` + `PipelineStages`. مفيش integration ولا E2E. |
 | المدفوعات | **Sandbox فقط** — simulator أوفلاين أو Stripe test-mode. التطبيق بيرفض يشتغل بمفتاح Stripe حقيقي. |
 
 ---
 
 ## تحذيرات مهمة قبل أي إطلاق
 
-1. 🔴 **المشروع مش تحت Git.** مفيش version control ولا استرجاع. أول أمر تعمله: `git init`.
+1. 🔴 **مفيش integration tests.** الموجود 41 اختبار وحدة على طبقة المجال بس (`FundingMath` + `PipelineStages`). مسار الدفع — التسوية والـ idempotency والـ refund — **مش مغطّى**، وهو أعلى مخاطرة في المشروع. ومفيش CI بيشغّل أي حاجة من دي تلقائيًا.
 2. 🟠 **حماية الأدوار في الـ frontend على العميل بس** (`RequireAuth`) — الحماية الحقيقية في الـ backend عبر `[Authorize]`. الصفحة بتتحمّل الأول وبعدين بتوجّه.
 3. 🟠 **الإيميل محتاج مزوّد شغّال** عشان التفعيل وإعادة تعيين كلمة السرّ — التفاصيل في [docs/07-SETUP.md](docs/07-SETUP.md).
 4. 🟢 الأسرار **نضيفة** في `appsettings.json` (placeholders فاضية) — متحطّش قيمة حقيقية فيه أبدًا.

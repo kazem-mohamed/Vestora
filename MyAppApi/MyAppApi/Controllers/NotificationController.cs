@@ -157,9 +157,15 @@ namespace MyAppApi.Controllers
                     return Forbid();
                 }
 
-                // Find the notification for the investor (the support notification)
+                // The investor's own "your request was submitted" row, which stops meaning
+                // anything once the request is decided. Matched by TYPE as well as by
+                // relationship: an investment collects several notifications over its
+                // life — the approval, a funding request — and an unfiltered
+                // FirstOrDefault was free to delete whichever one it happened to find.
                 var investorNotification = await _context.Notifications
-                    .FirstOrDefaultAsync(n => n.UserId == investment.InvestorId && n.InvestmentId == investment.Id);
+                    .FirstOrDefaultAsync(n => n.UserId == investment.InvestorId
+                                              && n.InvestmentId == investment.Id
+                                              && n.NotificationType == "ProjectSupportSubmitted");
 
                 // Money that arrived cannot be declined away; that is a refund.
                 var isFunded = await _context.PaymentTransactions
@@ -184,8 +190,7 @@ namespace MyAppApi.Controllers
                 // "Declined" matches neither the "Approved" funding filters nor the
                 // "Pending" duplicate-support guard, so the investor may re-apply.
                 investment.Status = PipelineStages.Declined;
-                investment.Stage = PipelineStages.Declined;
-                investment.StageUpdatedAt = DateTime.UtcNow;
+                await StageLog.MoveAsync(_context, investment, PipelineStages.Declined, currentUserId);
 
                 // Clear the actionable notifications (they no longer need a decision).
                 _context.Notifications.Remove(notification);
@@ -264,9 +269,24 @@ namespace MyAppApi.Controllers
                 return BadRequest(new { Message = "This support is already approved." });
             }
 
+            // Approving is what creates a commitment, so it is where the round's capacity
+            // has to hold. Checking only at submission time was not enough: several
+            // requests can each fit an empty round, and approving them all pushes
+            // Committed past the goal — after which every funding request is refused,
+            // because each one is measured against a total that already exceeds the
+            // target. A round could be argued into a state where nobody could be paid.
+            var headroom = await FundingMath.HeadroomForAsync(
+                _context, investment.ProjectId, investment.Project.InvestmentNeeded, investment.Id);
+            if (investment.Amount > headroom)
+            {
+                return BadRequest(new
+                {
+                    Message = $"Approving this would exceed the round. Only {headroom:N0} USD is still open — decline it, or raise the venture's target first."
+                });
+            }
+
             investment.Status = "Approved";
-            investment.Stage = PipelineStages.Approved;
-            investment.StageUpdatedAt = DateTime.UtcNow;
+            await StageLog.MoveAsync(_context, investment, PipelineStages.Approved, currentUserId);
             notification.IsRead = true;
 
             Notification? approvalNotification = null;

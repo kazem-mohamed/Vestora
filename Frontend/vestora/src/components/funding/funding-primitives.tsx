@@ -138,6 +138,9 @@ const FUNDING_STATE: Record<FundingState, { tone: Tone; icon: LucideIcon }> = {
   // The only state that is anyone's move. It wears the loudest tone in the set.
   PaymentDue: { tone: "gold", icon: Hourglass },
   Processing: { tone: "bronze", icon: RotateCcw },
+  // Part of the commitment has arrived. Positive in tone but not the full mark —
+  // money in hand, and money still owed, are both true at once.
+  PartiallyFunded: { tone: "bronze", icon: CheckCircle2 },
   Funded: { tone: "positive", icon: CheckCircle2 },
   Refunded: { tone: "muted", icon: Undo2 },
   Declined: { tone: "negative", icon: XCircle },

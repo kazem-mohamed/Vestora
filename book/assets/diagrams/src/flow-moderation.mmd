@@ -1,0 +1,24 @@
+flowchart TB
+    Q["Review queue<br/>ModerationStatus = Pending"] --> D{"Administrator<br/>decision"}
+    D -->|"approve"| A["Writes ModerationStatus = Approved<br/>ReviewedAtUtc · ReviewedByAdminId"]
+    D -->|"reject · reason required"| R["Writes ModerationStatus = Rejected<br/>RejectionReason"]
+    A --> L[["AdminAuditLog<br/>attributed · retained on delete"]]
+    R --> L
+    R --> B["Returned to founder<br/>with the stated reason"]
+    B -->|"corrected · resubmitted"| Q
+    A --> G{"LifecycleStatus<br/>= Active?"}
+    G -->|"yes"| P["Public · listed"]
+    G -->|"no · founder paused"| H["Approved · not listed"]
+
+    subgraph NT["Never written by a review"]
+        direction LR
+        NL["LifecycleStatus<br/>written by the founder"]
+        NS["Stage<br/>written by the funding pipeline"]
+    end
+
+    classDef gate fill:#F6F2E7,stroke:#B08A3F,color:#241C14
+    classDef pub fill:#FCFAF3,stroke:#8B4F2A,stroke-width:2px,color:#241C14
+    classDef untouched fill:#F6F2E7,stroke:#E3D9C4,color:#71614C
+    class D,G gate
+    class P pub
+    class NL,NS untouched

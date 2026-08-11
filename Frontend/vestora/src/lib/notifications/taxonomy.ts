@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   FileCheck2,
   FileQuestion,
+  FileSignature,
   FileX2,
   Flag,
   Gavel,
@@ -106,6 +107,37 @@ export const NOTIFICATION_KINDS: Record<string, NotificationKind> = {
     href: dealOrProject,
   },
 
+  /**
+   * The same debt, said again because the clock is running out. It belongs in the
+   * lane that does not clear itself for exactly the reason the original does — a
+   * reminder that a "mark all read" sweep could silence is not a reminder.
+   */
+  funding_request_reminder: {
+    lane: "needsYou",
+    icon: Hourglass,
+    titleKey: "notif.kind.fundingReminder",
+    tone: "bronze",
+    href: dealOrProject,
+  },
+
+  /** A number came back the other way. The founder owes an answer to it. */
+  funding_counter_offered: {
+    lane: "needsYou",
+    icon: Hourglass,
+    titleKey: "notif.kind.counterOffered",
+    tone: "bronze",
+    href: dealOrProject,
+  },
+
+  /** Terms on the table with the recipient's acceptance outstanding. */
+  terms_proposed: {
+    lane: "needsYou",
+    icon: FileSignature,
+    titleKey: "notif.kind.termsProposed",
+    tone: "primary",
+    href: dealOrProject,
+  },
+
   // ---- Outcomes -----------------------------------------------------------
   ProjectSupportApproved: {
     lane: "outcome",
@@ -180,6 +212,31 @@ export const NOTIFICATION_KINDS: Record<string, NotificationKind> = {
     icon: Undo2,
     titleKey: "notif.kind.refundCompleted",
     tone: "bronze",
+    href: dealOrProject,
+  },
+
+  funding_counter_answered: {
+    lane: "outcome",
+    icon: Hourglass,
+    titleKey: "notif.kind.counterAnswered",
+    tone: "primary",
+    href: dealOrProject,
+  },
+
+  /** Both sides accepted. The first moment "Committed" is backed by a document. */
+  terms_agreed: {
+    lane: "outcome",
+    icon: FileSignature,
+    titleKey: "notif.kind.termsAgreed",
+    tone: "positive",
+    href: dealOrProject,
+  },
+
+  terms_declined: {
+    lane: "outcome",
+    icon: FileX2,
+    titleKey: "notif.kind.termsDeclined",
+    tone: "neutral",
     href: dealOrProject,
   },
 

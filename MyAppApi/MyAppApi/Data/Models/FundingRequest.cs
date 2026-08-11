@@ -67,6 +67,48 @@ namespace MyAppApi.Data.Models
         [StringLength(500)]
         public string? Note { get; set; }
 
+        /// <summary>
+        /// The agreed terms this ask is calling in, when the relationship has any.
+        /// <para>
+        /// Optional because a relationship can be funded without one — that was the only
+        /// way to do it before term sheets existed, and existing rows must not become
+        /// invalid retroactively. When it is set, the amounts are checked against each
+        /// other: an ask that does not match what was agreed is not a call on the
+        /// agreement, it is a new proposal wearing its clothes.
+        /// </para>
+        /// </summary>
+        public int? TermSheetId { get; set; }
+        public TermSheet? TermSheet { get; set; }
+
+        // ---- Counter-offer ----
+        //
+        // The founder names the number and the investor's only two options were to pay it
+        // or to let it lapse in silence. Everything before this point in the product is
+        // built for a conversation, and then the last step — the one about money — was a
+        // take-it-or-leave-it. A counter is the investor's half of that sentence.
+        //
+        // It sits on the request rather than in its own table because it is a property of
+        // one ask: at most one counter is live at a time, and accepting it ends the ask
+        // it was made against.
+
+        public decimal? CounterAmount { get; set; }
+
+        [StringLength(500)]
+        public string? CounterNote { get; set; }
+
+        public DateTime? CounterAtUtc { get; set; }
+
+        /// <summary>Proposed · Accepted · Declined — null when no counter was made.</summary>
+        [StringLength(16)]
+        public string? CounterStatus { get; set; }
+
+        /// <summary>
+        /// The ask this one replaced, when it was issued to accept a counter-offer.
+        /// Amounts on a financial row are never rewritten, so accepting a counter closes
+        /// the old request and opens a new one; this is the thread between them.
+        /// </summary>
+        public int? SupersedesRequestId { get; set; }
+
         public DateTime CreatedAtUtc { get; set; }
 
         /// <summary>
@@ -74,6 +116,17 @@ namespace MyAppApi.Data.Models
         /// be filled. The sweeper closes it and releases the room.
         /// </summary>
         public DateTime ExpiresAtUtc { get; set; }
+
+        /// <summary>
+        /// How many expiry reminders have gone out, so the sweeper can send the next one
+        /// without sending the last one again.
+        /// <para>
+        /// A count rather than a pair of timestamps: the reminders are a fixed ladder
+        /// (three days out, then one), and what the sweeper needs to know is which rung
+        /// it is on. Storing when each was sent would record something nothing reads.
+        /// </para>
+        /// </summary>
+        public int RemindersSent { get; set; }
 
         public DateTime? ClosedAtUtc { get; set; }
 
@@ -101,5 +154,12 @@ namespace MyAppApi.Data.Models
 
         /// <summary>Statuses that still hold a claim on the round's remaining capacity.</summary>
         public static bool IsLive(string status) => status == Open;
+    }
+
+    public static class CounterOfferStatus
+    {
+        public const string Proposed = "Proposed";
+        public const string Accepted = "Accepted";
+        public const string Declined = "Declined";
     }
 }

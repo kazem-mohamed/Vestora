@@ -5,7 +5,7 @@ import { BrowseSkeleton } from "@/components/browse/browse-states";
 export const metadata = {
   title: "Ventures seeking capital · Vestora",
   description:
-    "Explore vetted ventures raising their next round. Filter by stage, sector and location, and follow the ones worth your conviction.",
+    "Explore reviewed ventures raising their next round. Filter by stage, sector and location, and follow the ones worth your conviction.",
 };
 
 /**

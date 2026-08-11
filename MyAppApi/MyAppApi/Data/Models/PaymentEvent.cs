@@ -53,5 +53,24 @@ namespace MyAppApi.Data.Models
 
         [StringLength(300)]
         public string? Outcome { get; set; }
+
+        // ---- Reconciliation ----
+        //
+        // Some events record a disagreement rather than a confirmation: the provider says
+        // a payment was taken and Vestora had already closed the attempt. That case wrote
+        // an ERROR to the log and an Outcome beginning "CONFLICT", and then waited for
+        // somebody to happen to read the log. These three columns are what turns that
+        // into a queue somebody can actually work: an admin opens the row, checks the
+        // provider, and records what they found.
+        //
+        // Reviewing never rewrites Applied or Outcome. Those describe what the system did
+        // at the time and stay true regardless of what a human concludes afterwards.
+
+        public DateTime? ReviewedAtUtc { get; set; }
+
+        public int? ReviewedByAdminId { get; set; }
+
+        [StringLength(500)]
+        public string? ReviewNote { get; set; }
     }
 }

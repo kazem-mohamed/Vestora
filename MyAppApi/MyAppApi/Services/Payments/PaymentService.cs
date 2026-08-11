@@ -63,7 +63,8 @@ namespace MyAppApi.Services.Payments
         /// </para>
         /// </summary>
         public async Task<ServiceResult<FundingRequestDto>> CreateFundingRequestAsync(
-            int investmentId, int founderUserId, decimal amount, string? note, CancellationToken ct = default)
+            int investmentId, int founderUserId, decimal amount, string? note,
+            CancellationToken ct = default, int? supersedesRequestId = null)
         {
             var investment = await _db.Investments
                 .Include(i => i.Project)
@@ -106,7 +107,7 @@ namespace MyAppApi.Services.Payments
                 return ServiceResult<FundingRequestDto>.BadRequest(
                     "A funding request is already open for this investment.");
 
-            // Already funded — tested against a payment that is STILL settled, not
+            // Already funded — tested against payments that are STILL settled, not
             // against the request's status.
             //
             // A refunded request keeps its "Paid" status on purpose: it was paid, and
@@ -114,25 +115,46 @@ namespace MyAppApi.Services.Payments
             // that. But the money is gone, so the relationship is not funded any more and
             // the founder must be able to ask again. Reading the request's status here
             // instead of the transaction's would freeze every refunded deal forever.
-            var stillFunded = await _db.PaymentTransactions
-                .AnyAsync(t => t.InvestmentId == investmentId && t.Status == PaymentStatus.Succeeded, ct);
+            //
+            // Summed rather than tested for existence, because a commitment may be called
+            // in over several tranches. "Has one payment succeeded" would have declared
+            // the relationship complete on its first instalment and made the rest of the
+            // money uncollectable — with the balance still counted as committed.
+            var settled = await FundingMath.SettledForInvestmentAsync(_db, investmentId, ct);
+            var target = await FundingMath.CommitmentTargetAsync(_db, investmentId, investment.Amount, ct);
 
-            if (stillFunded)
-                return ServiceResult<FundingRequestDto>.BadRequest("This investment has already been funded.");
+            if (FundingMath.IsFullySettled(settled, target))
+                return ServiceResult<FundingRequestDto>.BadRequest("This investment has already been funded in full.");
 
             // Capacity is measured against commitments, but this relationship's own
             // commitment is already inside that total — so it is excluded before the
             // comparison, otherwise a founder could never call in the last deal.
-            var committedElsewhere = await _db.Investments
-                .Where(i => i.ProjectId == investment.ProjectId
-                            && i.Status == "Approved"
-                            && i.Id != investmentId)
-                .SumAsync(i => (decimal?)i.Amount, ct) ?? 0m;
+            var headroom = await FundingMath.HeadroomForAsync(
+                _db, investment.ProjectId, investment.Project.InvestmentNeeded, investmentId, ct);
 
-            var headroom = FundingMath.RemainingCapacity(investment.Project.InvestmentNeeded, committedElsewhere);
+            // Tranches already paid have left the round's headroom via the settled total,
+            // but they have not left this relationship's commitment, which is still
+            // counted whole. Subtracting them here is what stops a founder calling in
+            // 100% of a commitment twice by splitting it.
+            headroom = Math.Max(0m, headroom - settled);
+
             if (amount > headroom)
                 return ServiceResult<FundingRequestDto>.BadRequest(
                     $"Amount exceeds what is left in this round ({headroom:N0} {_settings.Currency}).");
+
+            // When terms were agreed, the ask calls them in and may not quietly exceed
+            // them. A bigger number is a renegotiation, and renegotiation has its own
+            // door — proposing a new version of the sheet that both sides accept.
+            var agreedSheet = await _db.TermSheets
+                .Where(s => s.InvestmentId == investmentId && s.Status == TermSheetStatus.Accepted)
+                .OrderByDescending(s => s.Version)
+                .FirstOrDefaultAsync(ct);
+
+            if (agreedSheet != null && amount > FundingMath.UnsettledCommitment(agreedSheet.Amount, settled))
+                return ServiceResult<FundingRequestDto>.BadRequest(
+                    $"The agreed terms are {agreedSheet.Amount:N0} {agreedSheet.Currency} and " +
+                    $"{settled:N0} has settled. Ask for at most {FundingMath.UnsettledCommitment(agreedSheet.Amount, settled):N0}, " +
+                    "or propose new terms.");
 
             var now = DateTime.UtcNow;
             var request = new FundingRequest
@@ -146,6 +168,8 @@ namespace MyAppApi.Services.Payments
                 Currency = _settings.Currency,
                 Status = FundingRequestStatus.Open,
                 Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+                TermSheetId = agreedSheet?.Id,
+                SupersedesRequestId = supersedesRequestId,
                 CreatedAtUtc = now,
                 ExpiresAtUtc = now.AddDays(_settings.FundingRequestTtlDays),
             };
@@ -158,8 +182,8 @@ namespace MyAppApi.Services.Payments
                 investment.Stage != PipelineStages.Committed &&
                 investment.Stage != PipelineStages.Closed)
             {
-                investment.Stage = PipelineStages.Committed;
-                investment.StageUpdatedAt = now;
+                await StageLog.MoveAsync(_db, investment, PipelineStages.Committed, founderUserId,
+                    $"Funds requested · {request.Reference}", ct);
             }
 
             await _db.SaveChangesAsync(ct);
@@ -225,6 +249,172 @@ namespace MyAppApi.Services.Payments
         }
 
         // ==================================================================
+        //  Counter-offers — the investor's half of the sentence
+        // ==================================================================
+
+        /// <summary>
+        /// The investor proposes a different number against an open ask.
+        /// <para>
+        /// Everything before this step in the product is built for a conversation, and
+        /// then the step about money was take-it-or-leave-it: pay the founder's figure,
+        /// or let it lapse without saying why. Most deals that die at this point die of
+        /// that, and the platform recorded it as an expiry.
+        /// </para>
+        /// <para>
+        /// The counter does not alter the ask. Amounts on a financial row are never
+        /// rewritten, so it sits beside the request as a proposal the founder answers.
+        /// </para>
+        /// </summary>
+        public async Task<ServiceResult<FundingRequestDto>> CounterOfferAsync(
+            int fundingRequestId, int investorUserId, decimal amount, string? note, CancellationToken ct = default)
+        {
+            var request = await _db.FundingRequests
+                .Include(f => f.Investment).ThenInclude(i => i.Project)
+                .FirstOrDefaultAsync(f => f.Id == fundingRequestId, ct);
+
+            if (request == null)
+                return ServiceResult<FundingRequestDto>.NotFound("Funding request not found.");
+
+            if (request.InvestorId != investorUserId)
+                return ServiceResult<FundingRequestDto>.Forbidden();
+
+            if (request.Status != FundingRequestStatus.Open)
+                return ServiceResult<FundingRequestDto>.BadRequest("This funding request is no longer open.");
+
+            if (request.CounterStatus == CounterOfferStatus.Proposed)
+                return ServiceResult<FundingRequestDto>.BadRequest(
+                    "You already have a counter-offer on this request. Wait for the founder to answer it.");
+
+            if (amount <= 0m || amount > 100_000_000m)
+                return ServiceResult<FundingRequestDto>.BadRequest("Amount is out of range.");
+
+            if (amount == request.Amount)
+                return ServiceResult<FundingRequestDto>.BadRequest(
+                    "That is the amount already being asked for. Complete the payment instead.");
+
+            // An attempt in flight is stopped: paying the original figure while proposing
+            // a different one is two contradictory answers to the same question.
+            var live = await _db.PaymentTransactions
+                .Where(t => t.FundingRequestId == request.Id && PaymentStatus.Active.Contains(t.Status))
+                .ToListAsync(ct);
+
+            var now = DateTime.UtcNow;
+            foreach (var t in live)
+            {
+                t.Status = PaymentStatus.Cancelled;
+                t.CancelReason = PaymentCancelReason.UserCancelled;
+                t.CancelledAtUtc = now;
+                t.CheckoutUrl = null;
+            }
+
+            request.CounterAmount = amount;
+            request.CounterNote = Trim(note, 500);
+            request.CounterAtUtc = now;
+            request.CounterStatus = CounterOfferStatus.Proposed;
+
+            await _db.SaveChangesAsync(ct);
+
+            await AuditAsync(investorUserId, "funding_request.countered", "FundingRequest", request.Id,
+                $"{request.Reference} · asked {request.Amount:N2} · countered {amount:N2} {request.Currency}", ct);
+
+            await NotifyAsync(
+                userId: request.Investment.Project.OwnerId,
+                actorId: investorUserId,
+                type: PaymentNotificationTypes.CounterOffered,
+                content: $"{request.Investment.Project.Name}: the investor proposed {amount:N0} {request.Currency} instead of the {request.Amount:N0} you asked for.",
+                projectId: request.ProjectId,
+                investmentId: request.InvestmentId,
+                ct: ct);
+
+            return ServiceResult<FundingRequestDto>.Ok(await MapRequestAsync(request, ct));
+        }
+
+        /// <summary>
+        /// The founder answers a counter-offer.
+        /// <para>
+        /// Accepting closes the original ask and issues a new one at the countered
+        /// figure, rather than editing the amount in place — the two numbers, and the
+        /// fact that one replaced the other, are the record of the negotiation. Every
+        /// guard the ordinary path applies is applied to the replacement, because it is
+        /// the ordinary path.
+        /// </para>
+        /// </summary>
+        public async Task<ServiceResult<FundingRequestDto>> AnswerCounterOfferAsync(
+            int fundingRequestId, int founderUserId, bool accept, string? note, CancellationToken ct = default)
+        {
+            var request = await _db.FundingRequests
+                .Include(f => f.Investment).ThenInclude(i => i.Project)
+                .FirstOrDefaultAsync(f => f.Id == fundingRequestId, ct);
+
+            if (request == null)
+                return ServiceResult<FundingRequestDto>.NotFound("Funding request not found.");
+
+            if (request.Investment.Project.OwnerId != founderUserId)
+                return ServiceResult<FundingRequestDto>.Forbidden();
+
+            if (request.CounterStatus != CounterOfferStatus.Proposed || request.CounterAmount == null)
+                return ServiceResult<FundingRequestDto>.BadRequest("There is no counter-offer to answer.");
+
+            if (request.Status != FundingRequestStatus.Open)
+                return ServiceResult<FundingRequestDto>.BadRequest("This funding request is no longer open.");
+
+            var counterAmount = request.CounterAmount.Value;
+            var now = DateTime.UtcNow;
+
+            if (!accept)
+            {
+                request.CounterStatus = CounterOfferStatus.Declined;
+                await _db.SaveChangesAsync(ct);
+
+                await AuditAsync(founderUserId, "funding_request.counter_declined", "FundingRequest", request.Id,
+                    $"{request.Reference} · declined {counterAmount:N2} {request.Currency}", ct);
+
+                await NotifyAsync(
+                    userId: request.InvestorId,
+                    actorId: founderUserId,
+                    type: PaymentNotificationTypes.CounterAnswered,
+                    content: $"{request.Investment.Project.Name}: the founder declined your {counterAmount:N0} {request.Currency} proposal. The original request for {request.Amount:N0} is still open.",
+                    projectId: request.ProjectId,
+                    investmentId: request.InvestmentId,
+                    ct: ct);
+
+                return ServiceResult<FundingRequestDto>.Ok(await MapRequestAsync(request, ct));
+            }
+
+            // Accepted. Close the old ask FIRST — the one-open-request index would
+            // otherwise refuse the replacement, and the replacement is the point.
+            request.CounterStatus = CounterOfferStatus.Accepted;
+            request.Status = FundingRequestStatus.Cancelled;
+            request.ClosedAtUtc = now;
+            request.ClosedReason = $"Superseded by the agreed {counterAmount:N0} {request.Currency}.";
+            await _db.SaveChangesAsync(ct);
+
+            var replacement = await CreateFundingRequestAsync(
+                request.InvestmentId, founderUserId, counterAmount,
+                note ?? $"Agreed at {counterAmount:N0} {request.Currency}.", ct,
+                supersedesRequestId: request.Id);
+
+            if (replacement.Status is not (ServiceResultStatus.Ok or ServiceResultStatus.Created))
+            {
+                // The replacement was refused — capacity, a closed round, agreed terms.
+                // Putting the original back is the only honest outcome: the investor was
+                // told nothing, and leaving the relationship with no live ask at all
+                // would silently end a negotiation the founder was trying to conclude.
+                request.Status = FundingRequestStatus.Open;
+                request.ClosedAtUtc = null;
+                request.ClosedReason = null;
+                request.CounterStatus = CounterOfferStatus.Proposed;
+                await _db.SaveChangesAsync(ct);
+                return replacement;
+            }
+
+            await AuditAsync(founderUserId, "funding_request.counter_accepted", "FundingRequest", request.Id,
+                $"{request.Reference} · accepted {counterAmount:N2} {request.Currency}", ct);
+
+            return replacement;
+        }
+
+        // ==================================================================
         //  Payment attempts
         // ==================================================================
 
@@ -256,6 +446,21 @@ namespace MyAppApi.Services.Payments
 
             if (request.ExpiresAtUtc <= DateTime.UtcNow)
                 return ServiceResult<CheckoutSessionDto>.BadRequest("This funding request has expired.");
+
+            // A relationship that is over cannot be paid into. Every path that ends one
+            // now withdraws its open ask, so this should be unreachable — which is the
+            // point of putting it here rather than trusting that to stay true. This is
+            // the last gate before money moves, and it costs one comparison.
+            //
+            // Deliberately silent about the round's own lifecycle: a round that closes
+            // with an ask still outstanding leaves that ask payable on purpose, because
+            // pulling it out from under an investor mid-checkout is worse than closing
+            // slightly late. Ending the RELATIONSHIP is a different statement.
+            if (request.Investment.Stage == PipelineStages.Declined ||
+                request.Investment.Stage == PipelineStages.Closed ||
+                request.Investment.Status == PipelineStages.Declined)
+                return ServiceResult<CheckoutSessionDto>.BadRequest(
+                    "This relationship is closed and can no longer be funded.");
 
             // A live attempt is reused rather than duplicated. Two open checkouts for one
             // request is the shortest path to funding something twice.
@@ -456,12 +661,22 @@ namespace MyAppApi.Services.Payments
         // ==================================================================
 
         /// <summary>
-        /// Records the provider's event, then applies it exactly once.
+        /// Records the provider's event, then applies it exactly once — both or neither.
         /// <para>
         /// The record is written first and the unique index on (provider, event id) is
         /// what makes this idempotent. A duplicate webhook, a double-clicked return page
         /// and a webhook racing that return page all collide here — before any figure
         /// has moved — and the loser exits quietly.
+        /// </para>
+        /// <para>
+        /// The whole thing runs inside one database transaction, and that is not
+        /// decoration. Claiming the idempotency key is itself a durable write: once it is
+        /// committed, every later delivery of the same event is refused. If the process
+        /// died between claiming the key and applying the effect — a deploy, a dropped
+        /// connection, a timeout — the key would survive and the settlement would not,
+        /// and no retry could ever recover it because the retry is exactly what the key
+        /// now blocks. A payment would be silently lost. Committing the claim together
+        /// with its effect is what makes "exactly once" true rather than aspirational.
         /// </para>
         /// </summary>
         public async Task<bool> ApplyProviderResultAsync(
@@ -472,6 +687,8 @@ namespace MyAppApi.Services.Payments
             string? payload,
             CancellationToken ct = default)
         {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
             var evt = new PaymentEvent
             {
                 Provider = _provider.Name,
@@ -492,57 +709,101 @@ namespace MyAppApi.Services.Payments
             catch (DbUpdateException ex) when (IsUniqueViolation(ex))
             {
                 _db.Entry(evt).State = EntityState.Detached;
+                await tx.RollbackAsync(ct);
                 _logger.LogInformation("Duplicate provider event {EventId} ignored for transaction {Id}.",
                     providerEventId, transaction.Id);
                 return false;
             }
 
-            // Terminal rows are never rewritten. The single exception, Succeeded →
-            // Refunded, is an admin action and does not travel this path.
-            if (PaymentStatus.IsTerminal(transaction.Status))
+            bool applied;
+            try
             {
-                // One shape of this is not routine: the provider says money was taken,
-                // but Vestora had already written the attempt off. That means the two
-                // sides disagree about a real payment, and it must be loud rather than
-                // logged as another duplicate. The event row survives either way, so the
-                // reconciliation can be done by hand from the audit trail.
-                if (result.State == ProviderPaymentState.Succeeded &&
-                    transaction.Status != PaymentStatus.Succeeded &&
-                    transaction.Status != PaymentStatus.Refunded)
+                // Terminal rows are never rewritten. The single exception, Succeeded →
+                // Refunded, is an admin action and does not travel this path.
+                if (PaymentStatus.IsTerminal(transaction.Status))
                 {
-                    _logger.LogError(
-                        "RECONCILIATION: provider reports transaction {Reference} (id {Id}) as paid, but Vestora " +
-                        "already closed it as {Status}. Funding was NOT recorded. Provider payment id {PaymentId}.",
-                        transaction.Reference, transaction.Id, transaction.Status, result.PaymentId);
+                    // One shape of this is not routine: the provider says money was taken,
+                    // but Vestora had already written the attempt off. That means the two
+                    // sides disagree about a real payment, and it must be loud rather than
+                    // logged as another duplicate. The event row survives either way, so the
+                    // reconciliation can be done by hand from the audit trail.
+                    if (result.State == ProviderPaymentState.Succeeded &&
+                        transaction.Status != PaymentStatus.Succeeded &&
+                        transaction.Status != PaymentStatus.Refunded)
+                    {
+                        _logger.LogError(
+                            "RECONCILIATION: provider reports transaction {Reference} (id {Id}) as paid, but Vestora " +
+                            "already closed it as {Status}. Funding was NOT recorded. Provider payment id {PaymentId}.",
+                            transaction.Reference, transaction.Id, transaction.Status, result.PaymentId);
 
-                    evt.Outcome = $"CONFLICT · provider paid, local status {transaction.Status}";
+                        evt.Outcome = $"CONFLICT · provider paid, local status {transaction.Status}";
+                    }
+                    else
+                    {
+                        evt.Outcome = $"ignored · already {transaction.Status}";
+                    }
+
                     await _db.SaveChangesAsync(ct);
+                    await tx.CommitAsync(ct);
                     return false;
                 }
 
-                evt.Outcome = $"ignored · already {transaction.Status}";
+                applied = result.State switch
+                {
+                    ProviderPaymentState.Succeeded => await SettleAsync(transaction, result, ct),
+                    ProviderPaymentState.Failed => await FailAsync(transaction, result, ct),
+                    ProviderPaymentState.Cancelled => await CancelBecauseProviderSaidSoAsync(transaction, ct),
+                    ProviderPaymentState.Processing => await MarkProcessingAsync(transaction, result, ct),
+                    _ => false,
+                };
+
+                evt.Applied = applied;
+                evt.Outcome = applied ? $"applied · {transaction.Status}" : $"no-op · {transaction.Status}";
                 await _db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Somebody else moved this row between the read and the write — the
+                // desired outcome reached by another path, not an error. The claim rolls
+                // back with the effect, so the winner's event is the only one on record.
+                await tx.RollbackAsync(ct);
+                await ForgetLocalChangesAsync(transaction, ct);
+                _logger.LogInformation("Transaction {Id} changed concurrently; standing down.", transaction.Id);
                 return false;
             }
-
-            var applied = result.State switch
+            catch
             {
-                ProviderPaymentState.Succeeded => await SettleAsync(transaction, result, ct),
-                ProviderPaymentState.Failed => await FailAsync(transaction, result, ct),
-                ProviderPaymentState.Cancelled => await CancelBecauseProviderSaidSoAsync(transaction, ct),
-                ProviderPaymentState.Processing => await MarkProcessingAsync(transaction, result, ct),
-                _ => false,
-            };
+                // Anything else — a dropped connection, a timeout — takes the idempotency
+                // claim down with it so the provider's retry can still be applied.
+                await tx.RollbackAsync(ct);
+                await ForgetLocalChangesAsync(transaction, ct);
+                throw;
+            }
 
-            evt.Applied = applied;
-            evt.Outcome = applied ? $"applied · {transaction.Status}" : $"no-op · {transaction.Status}";
-            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
             return applied;
         }
 
         /// <summary>
-        /// Settlement. The one transition that creates funded capital, so it is the one
-        /// transition wrapped in a database transaction and guarded by a row version.
+        /// Drops uncommitted edits from the change tracker after a rollback, so the
+        /// context does not carry writes the database has already refused.
+        /// </summary>
+        private async Task ForgetLocalChangesAsync(PaymentTransaction transaction, CancellationToken ct)
+        {
+            try
+            {
+                foreach (var entry in _db.ChangeTracker.Entries().Where(e => e.State == EntityState.Modified).ToList())
+                    await entry.ReloadAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not reset tracked state after rolling back transaction {Id}.", transaction.Id);
+            }
+        }
+
+        /// <summary>
+        /// Settlement. The one transition that creates funded capital, so it runs inside
+        /// the caller's database transaction and is guarded by a row version.
         /// </summary>
         private async Task<bool> SettleAsync(PaymentTransaction transaction, ProviderPaymentResult result, CancellationToken ct)
         {
@@ -552,9 +813,12 @@ namespace MyAppApi.Services.Payments
 
             var now = DateTime.UtcNow;
 
-            // Economics are frozen here, from configuration, onto the row. Nothing
-            // downstream ever recomputes a historical fee from live settings.
-            var feeRateBps = _settings.FeeRateBps;
+            // The rate that was quoted when this attempt opened, not the one configured
+            // now. Reading live settings here would let a rate change between checkout
+            // and settlement alter the founder's proceeds after they had been shown a
+            // figure — a small window, but the founder's number, and the row already
+            // carries the answer.
+            var feeRateBps = transaction.FeeRateBps > 0 ? transaction.FeeRateBps : _settings.FeeRateBps;
             var fee = Math.Round(transaction.Amount * feeRateBps / 10000m, 2, MidpointRounding.AwayFromZero);
             var net = transaction.Amount - fee;
 
@@ -571,10 +835,13 @@ namespace MyAppApi.Services.Payments
             request.ClosedAtUtc = now;
 
             var investment = request.Investment;
-            investment.StageUpdatedAt = now;
             if (investment.Stage != PipelineStages.Closed)
             {
-                investment.Stage = PipelineStages.Committed;
+                // The investor is the actor: they are the one who did this, and a history
+                // that credited the founder for the moment the money arrived would be
+                // describing the wrong person's action.
+                await StageLog.MoveAsync(_db, investment, PipelineStages.Committed,
+                    transaction.InvestorId, $"Payment settled · {transaction.Reference}", ct);
             }
 
             try
@@ -694,6 +961,39 @@ namespace MyAppApi.Services.Payments
             if (transaction.Status != PaymentStatus.Succeeded)
                 return ServiceResult<PaymentTransactionDto>.BadRequest("Only a settled transaction can be refunded.");
 
+            // The event is recorded before the provider is asked, and the unique index on
+            // (provider, event id) is what makes a reversal happen once.
+            //
+            // The status check above is a read followed by a write, and two admins on the
+            // same receipt both pass it before either writes. The row version would catch
+            // the second one — but only at save time, long after the provider had been
+            // told to send the money back twice. Claiming the key first moves that
+            // collision to before the irreversible call, which is the whole reason
+            // settlements claim one too.
+            var claim = new PaymentEvent
+            {
+                Provider = _provider.Name,
+                ProviderEventId = $"refund:{transaction.Id}",
+                EventType = "refund",
+                Source = "admin",
+                PaymentTransactionId = transaction.Id,
+                ReceivedAtUtc = DateTime.UtcNow,
+                Applied = false,
+            };
+
+            _db.PaymentEvents.Add(claim);
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+            {
+                _db.Entry(claim).State = EntityState.Detached;
+                _logger.LogInformation("Refund for transaction {Id} is already in progress.", transaction.Id);
+                return ServiceResult<PaymentTransactionDto>.BadRequest(
+                    "A refund for this transaction is already being processed.");
+            }
+
             ProviderRefundResult refund;
             try
             {
@@ -703,13 +1003,27 @@ namespace MyAppApi.Services.Payments
             }
             catch (PaymentProviderUnavailableException ex)
             {
+                // The provider was never reached, so nothing was reversed and the claim
+                // must not stand in the way of trying again.
+                _db.PaymentEvents.Remove(claim);
+                await _db.SaveChangesAsync(ct);
                 return ServiceResult<PaymentTransactionDto>.BadRequest(
                     $"The payment provider is unavailable: {ex.Message}");
             }
 
             if (!refund.Succeeded)
+            {
+                // Refused, not reversed. The claim is released so a corrected attempt is
+                // possible, but the refusal itself is worth keeping — so it is recorded
+                // under a key of its own rather than thrown away with the claim.
+                claim.ProviderEventId = $"refund-refused:{transaction.Id}:{DateTime.UtcNow.Ticks}";
+                claim.EventType = "refund_refused";
+                claim.Outcome = Trim(refund.FailureMessage, 200) ?? "The provider refused the refund.";
+                await _db.SaveChangesAsync(ct);
+
                 return ServiceResult<PaymentTransactionDto>.BadRequest(
                     refund.FailureMessage ?? "The provider refused the refund.");
+            }
 
             var now = DateTime.UtcNow;
             transaction.Status = PaymentStatus.Refunded;
@@ -717,6 +1031,9 @@ namespace MyAppApi.Services.Payments
             transaction.RefundedByAdminId = adminUserId;
             transaction.ProviderRefundId = refund.RefundId;
             transaction.RefundReason = Trim(reason, 300);
+
+            claim.Applied = true;
+            claim.Outcome = $"applied · {refund.RefundId}";
 
             // Leaving the funding request Paid is the honest record: it was paid, and
             // then it was reversed. Reopening it would erase that. Funded totals fall on
@@ -794,6 +1111,12 @@ namespace MyAppApi.Services.Payments
                 FeeRateBps = feeRate,
                 EstimatedFee = fee,
                 EstimatedNetProceeds = request.Amount - fee,
+                CounterAmount = request.CounterAmount,
+                CounterNote = request.CounterNote,
+                CounterAtUtc = request.CounterAtUtc,
+                CounterStatus = request.CounterStatus,
+                SupersedesRequestId = request.SupersedesRequestId,
+                TermSheetId = request.TermSheetId,
                 Attempts = attempts.Select(ToAttemptDto).ToList(),
             };
         }
@@ -930,5 +1253,11 @@ namespace MyAppApi.Services.Payments
         public const string PaymentFailed = "payment_failed";
         public const string RefundCompleted = "refund_completed";
         public const string FundingRequestExpired = "funding_request_expired";
+        public const string FundingRequestReminder = "funding_request_reminder";
+        public const string CounterOffered = "funding_counter_offered";
+        public const string CounterAnswered = "funding_counter_answered";
+        public const string TermsProposed = "terms_proposed";
+        public const string TermsAgreed = "terms_agreed";
+        public const string TermsDeclined = "terms_declined";
     }
 }

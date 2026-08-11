@@ -8,6 +8,7 @@ import {
   Flag,
   LayoutDashboard,
   Rocket,
+  Scale,
   ScrollText,
   ShieldAlert,
   ShieldCheck,
@@ -57,6 +58,7 @@ const GROUPS: { titleKey: string | null; items: AdminSection[] }[] = [
     // The record: what already happened.
     titleKey: "admin.group.oversight",
     items: [
+      { href: "/admin/reconciliation", labelKey: "adm.recon.nav", icon: Scale },
       { href: "/admin/audit", labelKey: "admin.nav.audit", icon: ScrollText },
       { href: "/admin/security", labelKey: "admin.nav.security", icon: ShieldAlert },
       { href: "/admin/activity", labelKey: "admin.nav.activity", icon: Activity },

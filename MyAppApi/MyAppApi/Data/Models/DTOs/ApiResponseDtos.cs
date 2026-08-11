@@ -43,6 +43,11 @@ namespace MyAppApi.Data.Models.DTOs
         public string UserName { get; set; } = string.Empty;
 
         public string UserEmail { get; set; } = string.Empty;
+
+        // Whether this account has already been through the first-run flow. Sent
+        // with the login response so the client can route to onboarding without a
+        // second round trip on the one request where latency is most visible.
+        public bool HasOnboarded { get; set; }
     }
 
     public class MessageResponseDto

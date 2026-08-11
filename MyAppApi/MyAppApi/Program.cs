@@ -152,6 +152,7 @@ namespace MyAppApi
             }
 
             builder.Services.AddScoped<PaymentService>();
+            builder.Services.AddScoped<TermSheetService>();
             builder.Services.AddHostedService<PaymentExpirySweeper>();
 
             // Configure CORS

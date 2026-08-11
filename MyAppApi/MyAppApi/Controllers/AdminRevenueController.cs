@@ -263,5 +263,172 @@ namespace MyAppApi.Controllers
             var result = await _payments.RefundAsync(id, Me(), input?.Reason, ct);
             return this.ToActionResult(result);
         }
+
+        // ==================================================================
+        //  Reconciliation
+        // ==================================================================
+
+        /// <summary>
+        /// Confirmations the system could not act on, and the ones where it disagreed
+        /// with the provider.
+        /// <para>
+        /// Three code paths already knew this state could exist and each of them wrote a
+        /// log line: an event whose effect was refused because the row had gone terminal,
+        /// a provider reporting a payment against an attempt Vestora had written off, an
+        /// attempt abandoned because the provider could not be reached. Logs are where
+        /// facts go to be forgotten. Every one of those rows survives in PaymentEvents,
+        /// so the queue was always there — it simply had no door.
+        /// </para>
+        /// <para>
+        /// Ordered conflicts first, because a conflict means the two sides disagree about
+        /// real money and everything else here is bookkeeping.
+        /// </para>
+        /// </summary>
+        [HttpGet("reconciliation")]
+        public async Task<IActionResult> Reconciliation(
+            [FromQuery] bool includeReviewed = false,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            CancellationToken ct = default)
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 200);
+
+            var query = _db.PaymentEvents
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(e => !e.Applied);
+
+            if (!includeReviewed)
+                query = query.Where(e => e.ReviewedAtUtc == null);
+
+            var totalCount = await query.CountAsync(ct);
+            var openConflicts = await query
+                .CountAsync(e => e.Outcome != null && e.Outcome.StartsWith("CONFLICT"), ct);
+
+            var rows = await query
+                .OrderByDescending(e => e.Outcome != null && e.Outcome.StartsWith("CONFLICT"))
+                .ThenByDescending(e => e.ReceivedAtUtc)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(e => new ReconciliationEventDto
+                {
+                    Id = e.Id,
+                    Provider = e.Provider,
+                    ProviderEventId = e.ProviderEventId,
+                    EventType = e.EventType,
+                    Source = e.Source,
+                    Outcome = e.Outcome,
+                    ReceivedAtUtc = e.ReceivedAtUtc,
+                    IsConflict = e.Outcome != null && e.Outcome.StartsWith("CONFLICT"),
+                    ReviewedAtUtc = e.ReviewedAtUtc,
+                    ReviewNote = e.ReviewNote,
+                    TransactionId = e.PaymentTransactionId,
+                })
+                .ToListAsync(ct);
+
+            // The transactions these events point at, so the admin does not have to look
+            // each one up to know which venture and which person is involved.
+            var transactionIds = rows.Where(r => r.TransactionId != null)
+                .Select(r => r.TransactionId!.Value).Distinct().ToList();
+
+            var context = await _db.PaymentTransactions
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(t => transactionIds.Contains(t.Id))
+                .Select(t => new
+                {
+                    t.Id,
+                    t.Reference,
+                    t.Status,
+                    t.Amount,
+                    t.Currency,
+                    t.InvestmentId,
+                    ProjectName = t.FundingRequest.Investment.Project.Name,
+                    InvestorName = t.FundingRequest.Investment.Investor!.UserName,
+                })
+                .ToListAsync(ct);
+
+            foreach (var r in rows)
+            {
+                var t = context.FirstOrDefault(c => c.Id == r.TransactionId);
+                if (t == null) continue;
+                r.TransactionReference = t.Reference;
+                r.TransactionStatus = t.Status;
+                r.Amount = t.Amount;
+                r.Currency = t.Currency;
+                r.InvestmentId = t.InvestmentId;
+                r.ProjectName = t.ProjectName;
+                r.InvestorName = t.InvestorName;
+            }
+
+            return Ok(new ReconciliationDto
+            {
+                Items = rows,
+                TotalCount = totalCount,
+                OpenConflicts = openConflicts,
+                Page = page,
+                PageSize = pageSize,
+            });
+        }
+
+        /// <summary>
+        /// Asks the provider again about the transaction behind an event.
+        /// <para>
+        /// The first thing anybody would do by hand, so it is the first thing offered.
+        /// It travels the ordinary confirmation path, which means a payment the provider
+        /// still considers settled gets recorded properly rather than patched in — and a
+        /// transaction that is already terminal stays terminal, because re-verifying is
+        /// not a licence to rewrite a closed row.
+        /// </para>
+        /// </summary>
+        [HttpPost("reconciliation/{id:int}/reverify")]
+        public async Task<IActionResult> Reverify(int id, CancellationToken ct)
+        {
+            var evt = await _db.PaymentEvents.FirstOrDefaultAsync(e => e.Id == id, ct);
+            if (evt == null) return NotFound(new { message = "Event not found." });
+            if (evt.PaymentTransactionId == null)
+                return BadRequest(new { message = "This event is not attached to a transaction." });
+
+            var result = await _payments.VerifyAsync(evt.PaymentTransactionId.Value, Me(), isAdmin: true, ct);
+            return this.ToActionResult(result);
+        }
+
+        /// <summary>
+        /// Records that a human looked at this and what they concluded.
+        /// <para>
+        /// Deliberately does not touch <c>Applied</c> or <c>Outcome</c>: those say what
+        /// the system did at the time, and an admin's later finding is a separate fact
+        /// that must not be able to overwrite it. Clearing the queue is the point —
+        /// changing history is not.
+        /// </para>
+        /// </summary>
+        [HttpPost("reconciliation/{id:int}/review")]
+        public async Task<IActionResult> Review(int id, [FromBody] ReviewEventInput input, CancellationToken ct)
+        {
+            var note = input.Note?.Trim();
+            if (string.IsNullOrWhiteSpace(note))
+                return BadRequest(new { message = "Say what you found — an empty resolution resolves nothing." });
+
+            var evt = await _db.PaymentEvents.FirstOrDefaultAsync(e => e.Id == id, ct);
+            if (evt == null) return NotFound(new { message = "Event not found." });
+
+            evt.ReviewedAtUtc = DateTime.UtcNow;
+            evt.ReviewedByAdminId = Me();
+            evt.ReviewNote = note.Length > 500 ? note[..500] : note;
+
+            _db.AdminAuditLogs.Add(new AdminAuditLog
+            {
+                AdminUserId = Me(),
+                Action = "payment_event.reviewed",
+                TargetType = "PaymentEvent",
+                TargetId = evt.Id,
+                Details = $"{evt.ProviderEventId} · {evt.ReviewNote}",
+                CreatedAtUtc = DateTime.UtcNow,
+            });
+
+            await _db.SaveChangesAsync(ct);
+            return Ok(new { message = "Recorded." });
+        }
     }
 }

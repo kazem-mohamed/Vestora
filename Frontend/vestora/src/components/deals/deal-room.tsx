@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
 import {
+  Activity,
   ArrowLeft,
   ArrowRight,
   Ban,
@@ -16,7 +17,9 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { DealTimeline } from "@/components/deals/deal-timeline";
+import { DealTimeline, StageDurations } from "@/components/deals/deal-timeline";
+import { DealTerms } from "@/components/deals/deal-terms";
+import { DealChat } from "@/components/deals/deal-chat";
 import { DealQuestions } from "@/components/deals/deal-questions";
 import { DealDocuments } from "@/components/deals/deal-documents";
 import { DealFundingPanel } from "@/components/funding/deal-funding-panel";
@@ -28,7 +31,7 @@ import { projectImageUrl } from "@/lib/api/projects";
 import { compactUsd } from "@/lib/format/money";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
-import type { DealNextStep, PipelineStage } from "@/lib/types/api";
+import type { DealHealth, DealNextStep, PipelineStage } from "@/lib/types/api";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -225,6 +228,9 @@ export function DealRoom({ investmentId }: { investmentId: number }) {
                 {/* The relationship's stage and its money are two different axes, so
                     they are stated as two marks rather than one blended status. */}
                 <FundingStatePill state={deal.fundingState} pulse />
+                {/* And a third: whether it is moving at all. Nobody maintains this —
+                    it is read off silence, unanswered questions and unpaid asks. */}
+                <HealthPill health={deal.health} />
               </div>
             </div>
 
@@ -363,6 +369,10 @@ export function DealRoom({ investmentId }: { investmentId: number }) {
           {/* Funding sits above the diligence work on purpose: once there is money
               on the table it is the most consequential thing on the page, and when
               there isn't, the panel is a quiet one-line prompt. */}
+          {/* Terms come before the money on purpose: the ask is a call on the
+              agreement, so the agreement is the thing to read first. */}
+          <DealTerms deal={deal} />
+
           {deal.viewerRole !== "admin" && <DealFundingPanel deal={deal} />}
 
           <DealQuestions
@@ -375,8 +385,16 @@ export function DealRoom({ investmentId }: { investmentId: number }) {
             investmentId={investmentId}
             documents={deal.documents}
             requests={deal.documentRequests}
-            canRequest={!isFounder && deal.status === "Approved" && !terminal}
+            canRequest={
+              deal.viewerRole !== "admin" && deal.status === "Approved" && !terminal
+            }
+            viewerRole={deal.viewerRole}
           />
+
+          {/* The conversation, in the room it belongs to. The masthead counted these
+              messages and then sent you elsewhere to read them — which is why every
+              clarification ended up in chat and the structured record stayed empty. */}
+          {deal.viewerRole !== "admin" && <DealChat deal={deal} />}
         </div>
 
         {/* ---- Aside: the chronology + the private note ---- */}
@@ -392,6 +410,13 @@ export function DealRoom({ investmentId }: { investmentId: number }) {
               <DealTimeline events={deal.timeline} />
             </div>
           </section>
+
+          {/* How the time was spent, next to what happened. Only shown once the
+              relationship has moved at least once — a brand-new request has no
+              shape to compare. */}
+          {deal.stageDurations.length > 1 && (
+            <StageDurations durations={deal.stageDurations} />
+          )}
 
           {deal.viewerRole !== "admin" && (
             <section>
@@ -424,6 +449,44 @@ export function DealRoom({ investmentId }: { investmentId: number }) {
         </aside>
       </div>
     </div>
+  );
+}
+
+/**
+ * Whether the relationship is moving.
+ *
+ * A third axis beside stage and money, and the only one nobody maintains — it is read
+ * off silence, unanswered questions and unpaid asks. That is precisely why it can be
+ * trusted: a health field somebody has to keep current is permanently green.
+ *
+ * The reasons are listed rather than summarised. "Stalled" tells you nothing you can
+ * act on; "unanswered questions, silent 2 weeks" tells you what to do next.
+ */
+function HealthPill({ health }: { health: DealHealth }) {
+  const { t } = useLocale();
+
+  if (health.status === "Concluded" || health.status === "Healthy") return null;
+
+  const stalled = health.status === "Stalled";
+
+  return (
+    <span
+      title={health.reasons.map((r) => t(`deal.health.reason.${r}`)).join(" · ")}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px]",
+        stalled
+          ? "border-destructive/45 bg-destructive/[0.06] text-destructive"
+          : "border-bronze/45 bg-bronze/[0.06] text-bronze"
+      )}
+    >
+      <Activity className="size-3" strokeWidth={2} />
+      {t(`deal.health.${health.status}`)}
+      {health.daysSinceActivity > 0 && (
+        <span className="font-numeric opacity-70">
+          {t("deal.health.idle").replace("{n}", String(health.daysSinceActivity))}
+        </span>
+      )}
+    </span>
   );
 }
 

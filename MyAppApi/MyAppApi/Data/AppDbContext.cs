@@ -18,6 +18,13 @@ namespace MyAppApi.Data
         public DbSet<DealQuestion> DealQuestions { get; set; }
         public DbSet<DocumentRequest> DocumentRequests { get; set; }
 
+        // Every movement along the pipeline, appended. The Stage column says where a
+        // relationship is; this says how it got there and how long each step took.
+        public DbSet<InvestmentStageEvent> InvestmentStageEvents { get; set; }
+
+        // What the two sides say they agreed to, in writing, each having accepted it.
+        public DbSet<TermSheet> TermSheets { get; set; }
+
         // Kept discovery queries, used to surface new matches in-app.
         public DbSet<SavedSearch> SavedSearches { get; set; }
         public DbSet<Notification> Notifications { get; set; }
@@ -350,6 +357,40 @@ namespace MyAppApi.Data
             modelBuilder.Entity<Investment>()
                 .HasIndex(i => new { i.InvestorId, i.Stage });
 
+            // One live relationship per investor per venture, enforced by the database
+            // rather than by a check that runs before the insert.
+            //
+            // The controller already refuses a second request while one is Pending or
+            // Approved, but that is a read followed by a write: two submissions arriving
+            // together both find nothing and both insert. The result is one person
+            // holding two commitments on the same round — which the funding sums add up
+            // without complaint, because from their side it is simply two backers.
+            //
+            // Declined rows are outside the filter on purpose: a decline must leave the
+            // investor free to approach the venture again later.
+            modelBuilder.Entity<Investment>()
+                .HasIndex(i => new { i.ProjectId, i.InvestorId }, "UX_Investments_OneLivePerInvestor")
+                .IsUnique()
+                .HasFilter("[InvestorId] IS NOT NULL AND [Status] IN ('Pending', 'Approved')");
+
+            // ---- Pipeline history ----
+
+            // Cascade from the relationship, because a stage event has no meaning without
+            // it — unlike the questions below, which are things two people said.
+            modelBuilder.Entity<InvestmentStageEvent>()
+                .HasOne(e => e.Investment)
+                .WithMany()
+                .HasForeignKey(e => e.InvestmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // One relationship's history loads in order, every time; the analytics read
+            // the same index from the other end.
+            modelBuilder.Entity<InvestmentStageEvent>()
+                .HasIndex(e => new { e.InvestmentId, e.AtUtc });
+
+            modelBuilder.Entity<InvestmentStageEvent>()
+                .HasIndex(e => new { e.ToStage, e.AtUtc });
+
             // ---- Relationship workspace ----
 
             // A deal's questions load as one list ordered by age, every time.
@@ -372,6 +413,16 @@ namespace MyAppApi.Data
                 .WithMany()
                 .HasForeignKey(q => q.AnsweredByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // A follow-up hangs off the question it clarifies. NoAction rather than
+            // Cascade: the question already cascades from the investment, and SQL Server
+            // refuses a second path to the same rows. Withdrawing a parent is a status
+            // change anyway — nothing here is ever deleted.
+            modelBuilder.Entity<DealQuestion>()
+                .HasOne(q => q.ParentQuestion)
+                .WithMany()
+                .HasForeignKey(q => q.ParentQuestionId)
+                .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<DealQuestion>()
                 .HasIndex(q => new { q.InvestmentId, q.CreatedAtUtc });
@@ -449,7 +500,55 @@ namespace MyAppApi.Data
         /// </summary>
         private static void ConfigureFunding(ModelBuilder modelBuilder)
         {
+            // ---- Term sheets ----
+
+            modelBuilder.Entity<TermSheet>()
+                .HasOne(s => s.Investment)
+                .WithMany()
+                .HasForeignKey(s => s.InvestmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<TermSheet>()
+                .Property(s => s.Amount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            modelBuilder.Entity<TermSheet>()
+                .Property(s => s.Valuation)
+                .HasPrecision(18, 2);
+
+            // Equity is a percentage, so it needs its own scale: 18,2 would round
+            // 12.375% to 12.38 and quietly move somebody's stake.
+            modelBuilder.Entity<TermSheet>()
+                .Property(s => s.EquityPct)
+                .HasPrecision(7, 4);
+
+            modelBuilder.Entity<TermSheet>()
+                .HasIndex(s => new { s.InvestmentId, s.Version })
+                .IsUnique();
+
+            // At most one sheet on the table at a time. Two live proposals for one
+            // relationship is two different agreements both claiming to be the deal.
+            modelBuilder.Entity<TermSheet>()
+                .HasIndex(s => s.InvestmentId, "UX_TermSheets_OneLivePerInvestment")
+                .IsUnique()
+                .HasFilter($"[Status] = '{TermSheetStatus.Proposed}'");
+
             // ---- Funding requests ----
+
+            // The agreed terms an ask calls in. Restrict, not Cascade: a funding request
+            // is a financial record and must not disappear because the terms behind it
+            // were removed — and there is no path in the product that removes them.
+            modelBuilder.Entity<FundingRequest>()
+                .HasOne(f => f.TermSheet)
+                .WithMany()
+                .HasForeignKey(f => f.TermSheetId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<FundingRequest>()
+                .Property(f => f.CounterAmount)
+                .HasPrecision(18, 2);
+
 
             modelBuilder.Entity<FundingRequest>()
                 .HasOne(f => f.Investment)

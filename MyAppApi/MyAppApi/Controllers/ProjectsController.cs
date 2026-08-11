@@ -691,15 +691,26 @@ namespace MyAppApi.Controllers
             });
         }
 
-        // Founder-controlled lifecycle: pause a listing (hidden from browse) or
-        // close the round (visible, but no new support requests accepted).
+        // Founder-controlled lifecycle: pause a listing (hidden from browse) or bring a
+        // paused one back. Closing a round is NOT here — see CloseRound below.
         [Authorize(Roles = "Innovator")]
         [HttpPatch("{projectId}/lifecycle")]
         public async Task<IActionResult> SetLifecycle(int projectId, [FromBody] LifecycleDto dto)
         {
-            var allowed = new[] { "Active", "Paused", "Closed" };
+            var allowed = new[] { "Active", "Paused" };
             if (!allowed.Contains(dto.Status))
                 return BadRequest(new { message = "Unknown lifecycle status." });
+
+            // "Closed" used to be accepted here, and it wrote one column and nothing else:
+            // no outcome, no relationships concluded, and — the part that mattered — no
+            // withdrawal of the funding requests still outstanding against the round. A
+            // venture could read as closed while an investor was still being asked to pay
+            // into it. There is one way to close a round, and it is the one that cleans up.
+            if (dto.Status == "Closed")
+                return BadRequest(new
+                {
+                    message = "Use close-round to end a round — it records the outcome and withdraws any unpaid funding requests."
+                });
 
             var project = await _dbContext.Projects.FirstOrDefaultAsync(p => p.Id == projectId);
             if (project == null) return NotFound(new { message = "Project not found." });
@@ -806,8 +817,8 @@ namespace MyAppApi.Controllers
                 {
                     // An approved backer's commitment keeps counting; the relationship
                     // simply reaches its end.
-                    inv.Stage = PipelineStages.Closed;
-                    inv.StageUpdatedAt = DateTime.UtcNow;
+                    await StageLog.MoveAsync(_dbContext, inv, PipelineStages.Closed, project.OwnerId,
+                        $"The round closed · {project.RoundOutcome}");
                     concluded++;
                 }
                 else
@@ -817,9 +828,9 @@ namespace MyAppApi.Controllers
                     // no longer exists, and the founder can no longer act on it either.
                     // Declining with a stated reason is the only honest resolution.
                     inv.Status = PipelineStages.Declined;
-                    inv.Stage = PipelineStages.Declined;
-                    inv.StageUpdatedAt = DateTime.UtcNow;
                     inv.DeclinedReason ??= "The round closed before this request was reviewed.";
+                    await StageLog.MoveAsync(_dbContext, inv, PipelineStages.Declined, project.OwnerId,
+                        inv.DeclinedReason);
                     declined++;
                 }
 

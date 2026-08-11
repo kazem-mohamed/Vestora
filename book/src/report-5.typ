@@ -3,45 +3,41 @@
 
 #report-cover(
   number: 5,
-  title: "Real-Time Communication",
-  subtitle: "The conversation that happens before a commitment is made",
+  title: "Review & Approval",
+  subtitle: "The gate between a draft and the public, and the record of who opened it",
   date: "September 2026",
 )
 
-#show: report.with(number: 5, name: "Real-Time Communication")
+#show: report.with(number: 5, name: "Review & Approval")
 
 = Introduction
 
-Report 4 covered the moment money moves. This report covers everything that
-happens *before* it — the questions, the answers, the document that gets
-requested, and the notifications that keep both sides informed afterwards.
+Report 4 left a venture complete, private, and submitted. This report is about
+what happens next, and it is short by design: *one decision, made by a person,
+recorded permanently.*
 
-Messaging on this platform is not a chat feature attached to a marketplace. It
-is where diligence happens. An investor reads a pitch, has three questions, and
-the quality of that exchange determines whether a commitment is ever made. That
-is why presence, typing indication and read state are treated as requirements
-rather than decoration: an investor who cannot tell whether their question has
-been seen assumes it has been ignored.
+The review step is not an administrative add-on. It is the gate between a draft
+and something the public can see, and it is the only thing standing between an
+open submission form and a platform whose credibility depends on nobody abusing
+it. A venture's life cannot be described without it.
 
-The report also covers notifications, because they are the other half of the
-same problem — telling someone what happened while they were not looking.
+Two queues are covered here. The *review queue* handles ventures awaiting a
+first decision. The *reports queue* handles complaints about content that is
+already public. They look similar and are worked differently, and the reason
+they are separate is the subject of one of this report's sections.
 
 = Objective
 
-*Make the exchange feel live.* A message must arrive without a refresh, and a
-sender must be able to tell whether it was delivered and whether it was read.
+*Make sure nothing reaches the public without a human decision.* Every venture
+passes a review, and there is no configuration that turns this off.
 
-*Never lose a message.* Liveness must not come at the cost of durability. A
-message that appeared on screen and then vanished on reconnect is worse than one
-that took a second to arrive.
+*Make every decision attributable.* An administrative action is an exercise of
+power over someone else's work. The record of who did it, to what, and when
+outlives the object it was done to.
 
-*Report state truthfully.* Presence, typing and read receipts must reflect what
-is actually true, decided by the server. A client must not be able to assert
-that it read something it did not.
-
-*Keep side effects off the request path.* Publishing a venture update notifies
-every follower. That fan-out must not make publishing slow, and a failure in
-delivery must not fail the publication.
+*Write one column.* The review step touches `ModerationStatus` and nothing else.
+This is stated as an objective rather than as an implementation detail because
+the previous design did otherwise, and Report 4 describes what that cost.
 
 = Features Delivered
 
@@ -50,450 +46,297 @@ delivery must not fail the publication.
     columns: (42mm, 1fr),
     align: (left + top, left + top),
     table.header([Feature], [What it does]),
-    [Direct messaging], [One-to-one conversations between an investor and a
-      founder.],
-    [Live delivery], [Messages arrive without a refresh, over a persistent
-      connection.],
-    [Presence], [Whether the other participant is currently connected.],
-    [Durable last-seen], [When they were last connected, surviving a restart.],
-    [Typing indication], [Transient, never stored.],
-    [Read receipts], [Delivered and read shown separately, decided
-      server-side.],
-    [Image attachments], [Validated by the same upload controls as any other
-      image.],
-    [Conversation list], [All threads with unread counts and search.],
-    [Deal room], [Conversation, documents and the commitment under discussion
-      in one place.],
-    [Document requests], [An investor requests a restricted document; the
-      founder grants or refuses.],
-    [Download logging], [Every access to a granted document is recorded.],
-    [Notifications], [In-app notification of domain events, with unread
-      state.],
-    [Background fan-out], [Notification delivery runs off the request path.],
+    [Review queue], [Every venture awaiting a first decision, oldest first.],
+    [Approval], [Makes a venture eligible to be public — eligible, not
+      necessarily visible.],
+    [Rejection with reason], [A stated cause is required. The reason returns to
+      the founder.],
+    [Resubmission], [A corrected venture re-enters the queue without losing
+      anything it holds.],
+    [Venture registry], [Every venture in every state, for investigation rather
+      than for decision.],
+    [Reporting], [Any user can report a published venture for attention.],
+    [Reports queue], [Reports filtered by status, worked separately from the
+      review queue.],
+    [Audit log], [Every administrative decision, attributed to the administrator
+      who made it and retained beyond the object.],
   ),
-  caption: [Features delivered in this part of the system.],
+  caption: [Features delivered in this part.],
 )
 
-= How It Works
+= The Gate
 
 #full-page-figure(
-  "/assets/diagrams/out/seq-realtime.svg",
-  caption: [A conversation end to end. Presence is derived from the set of a
-    user's connections; messages are persisted before they are pushed; read
-    state is written by the server when a participant opens the thread.],
+  "/assets/diagrams/out/flow-moderation.svg",
+  caption: [The review decision. Both branches write one status column and one
+    audit row. The detached panel lists the two columns a review can never reach
+    — it is drawn apart from the flow because nothing in the flow connects to it,
+    and that disconnection is what makes re-approval after an edit safe.],
 )
 
-== A user is not a connection
+Approval is the more interesting of the two branches, because it does *less*
+than it appears to.
 
-The subtlety that shapes the whole design: one person may have three tabs open.
+Approving a venture does not publish it. It writes `ModerationStatus = Approved`
+and stops. Whether the venture is then listed depends on a second column the
+administrator did not touch: `LifecycleStatus`, which belongs to the founder. A
+founder who paused a venture before it was reviewed gets an approved venture that
+is not listed, and that is correct — approval answers *"may this be public?"*,
+not *"is this public?"*
 
-Presence is a property of the *user*, derived from the set of their live
-connections. A user is online when that set is non-empty. Treating a single
-disconnect as "the user left" would produce a status that flickers every time a
-tab is closed.
+#delivered[
+  *Rejection carries a reason.* A rejected venture returns to its founder with a
+  stated cause, not a bare status change. A rejection with no reason is
+  indistinguishable from a fault, and produces a support request rather than a
+  corrected submission.
+]
+
+== Two queues, two rhythms
+
+The review queue and the reports queue look like the same surface and are
+deliberately not merged.
 
 #figure(
   table(
-    columns: (34mm, 1fr, 1fr),
+    columns: (30mm, 1fr, 1fr),
     align: (left + top, left + top, left + top),
-    table.header([State], [Where it lives], [Why there]),
-    [Presence], [In memory, keyed by user, holding a set of connection
-      identifiers.],
-      [It is only true for the lifetime of the process holding those
-       connections. Persisting it would create a value that outlives its
-       truth.],
-    [Last-seen], [Persisted on the user row.],
-      [It must survive a restart — "last seen three hours ago" is precisely the
-       information a user needs when the other party is offline.],
+    table.header([], [Review queue], [Reports queue]),
+    [Concerns], [Content that is *not yet* public], [Content that is *already*
+      public],
+    [Arrives], [When a founder submits — predictable], [When a user complains —
+      bursty],
+    [Cost of delay], [A founder waits], [Something objectionable stays up],
+    [Decision], [Approve, or reject with a reason], [Act on the content, or
+      dismiss the report],
+    [Worked], [Oldest first, to completion], [By severity, and not necessarily to
+      completion],
   ),
-  caption: [Presence and last-seen look like the same fact and have opposite
-    lifetimes.],
+  caption: [Why the two queues are separate. They differ in every column that
+    matters to how they are worked.],
 )
 
-== Persist first, push second
-
-Messages are written to the database *before* they are pushed to the recipient.
-
-The ordering is deliberate. A message that was pushed but not stored is lost on
-reconnect, and the user who saw it appear has no way to know it is gone.
-Persist-then-push gives the property that matters: the database is the record,
-and the push is an optimisation over polling for it. A client that missed a push
-because it was disconnected recovers by loading the conversation, with no
-special reconciliation path.
-
-The achievable guarantee is therefore *at-least-once from the store*, not
-exactly-once over the wire. Claiming stronger would be false.
-
-== Transient and durable are different
-
-#figure(
-  table(
-    columns: (30mm, 1fr),
-    align: (left + top, left + top),
-    table.header([Signal], [Treatment]),
-    [Typing], [Broadcast and forgotten. Never stored. Persisting a typing
-      indicator would mean writing to the database on every keystroke to record
-      something true for two seconds.],
-    [Read state], [A durable property of the message. Written by the server
-      when a participant opens the conversation, then pushed to the sender — so
-      both parties see the same truth and a client cannot claim to have read
-      what it did not.],
-  ),
-  caption: [Two live signals with opposite storage requirements.],
-)
+Merging them would produce one list in which the urgent and the routine are
+interleaved by arrival time, which is the arrangement most likely to bury the
+urgent.
 
 = Interface
 
-#shot(
-  "/assets/screenshots/conversation-investor-en-light.png",
-  [A diligence conversation, seen by the investor. Three mechanisms are visible
-   at once: durable last-seen in the header, read state on each outgoing
-   message, and the unread divider.],
-)
-
-That capture repays a close look at the tick marks. Every outgoing message
-carries two, except the last, which carries one. The single tick is the server
-saying *stored and delivered*; the double tick is the server saying *the other
-participant opened the conversation*. Neither is a client claim.
-
 #shots(
-  "/assets/screenshots/conversation-founder-en-light.png",
-  "/assets/screenshots/conversation-investor-ar-dark.png",
-  [The same thread from the founder's side, and from the investor's side in
-   Arabic under the dark token set. Bubbles swap alignment with the sender, and
-   again with the writing direction.],
+  "/assets/screenshots/review-queue-en-light.png",
+  "/assets/screenshots/review-queue-ar-dark.png",
+  [The review queue — the primary administrative surface, in both languages and
+   both themes. Every venture waiting for a decision appears here, and nothing
+   reaches the public without passing through it. The administrative area is
+   fully bilingual: moderation is not an English-only back office.],
 )
 
 #shots(
-  "/assets/screenshots/messages-en-light.png",
-  "/assets/screenshots/messages-ar-dark.png",
-  [The conversation list in both writing directions, with unread counts and
-   search. The thread pane opens beside it; on a narrow screen the two become
-   one column and the list steps back.],
+  "/assets/screenshots/review-ventures-en-light.png",
+  "/assets/screenshots/review-ventures-ar-dark.png",
+  [The venture registry: every venture in every state. The review queue is for
+   *acting*; this is for *looking*. Separating them stops an investigative search
+   from being mistaken for a work queue.],
 )
 
 #shots(
-  "/assets/screenshots/notifications-en-light.png",
-  "/assets/screenshots/notifications-ar-dark.png",
-  [Notifications in both directions and both themes. Unread state is live: it
-   arrives over the same connection as messages.],
-)
-
-= The Deal Room
-
-A conversation about a specific venture is not a general chat. It refers to
-three things at once: the thread itself, the documents under discussion, and the
-commitment being considered. The deal room puts those three in one place, so a
-diligence conversation is not conducted across three tabs.
-
-#full-page-figure(
-  "/assets/diagrams/out/flow-dealroom.svg",
-  caption: [The diligence path. Open documents are readable by anyone who can
-    see the venture; restricted ones require a request the founder grants or
-    refuses. Every download re-checks entitlement and is logged.],
-)
-
-== Documents are controlled at download, not by obscurity
-
-A founder attaches documents with a visibility rule. Open documents are
-available to anyone who can see the venture. Restricted documents require a
-request.
-
-The important property: *entitlement is re-checked every time a file is
-downloaded.* A URL that is hard to guess is not an access control — it is a
-secret that spreads on the first forward. The check happens at the download
-endpoint, on every call, regardless of how the caller arrived at it.
-
-== Downloads are logged
-
-Every access to a granted document writes a row. This is not surveillance. It
-serves two purposes: a founder can see that a document was actually read rather
-than merely requested, and if material later leaves the platform, the record of
-who had access exists.
-
-#figure(
-  table(
-    columns: (34mm, 1fr),
-    align: (left + top, left + top),
-    table.header([Step], [What is recorded]),
-    [Request], [Who asked, for which document, and when.],
-    [Decision], [Granted or refused, by the founder, with a timestamp.],
-    [Download], [Each access to a granted document, separately from the
-      grant.],
-  ),
-  caption: [The document trail. A grant and a download are separate events,
-    because one is permission and the other is use.],
+  "/assets/screenshots/review-reports-en-light.png",
+  "/assets/screenshots/review-reports-ar-dark.png",
+  [The reports queue, filtered by status. Reports concern published content, so
+   they arrive at a different rhythm and are worked differently — which is why
+   they are not folded into the review queue.],
 )
 
 = Data
 
+This report owns two tables, and neither of them cascades.
+
 #figure(
   table(
-    columns: (40mm, 1fr, 1fr),
+    columns: (34mm, 1fr, 26mm),
     align: (left + top, left + top, left + top),
-    table.header([Table], [Holds], [Delete behaviour]),
-    [`Messages`], [Content, sender, receiver, sent time and read state.],
-      [Restrict on both participants — a conversation is a record of something
-       that happened.],
-    [`MessageAttachments`], [One image attachment per message.],
-      [Cascade from the message.],
-    [`Notifications`], [Domain-event notifications, referencing the object they
-      concern.], [Restrict on the referenced rows.],
-    [`Users.LastSeenUtc`], [Durable last-seen, written on final disconnect.],
-      [—],
+    table.header([Table], [Holds], [On owner delete]),
+    [`Reports`], [User reports raised against a venture, with a status.],
+      [Cascade],
+    [`AdminAuditLog`], [Administrative decisions, attributed to an
+      administrator.], [*Retained*],
   ),
-  caption: [Communication tables.],
+  caption: [Moderation tables. The audit log is the exception to the cascade rule
+    that governs every other table in Report 4.],
 )
 
-*Notifications reference domain objects rather than storing rendered text.* A
-notification points at the venture, the commitment or the acting user, and the
-reference is resolved at read time. Storing the rendered sentence would freeze
-it — a venture renamed after a notification was generated would appear under its
-old name forever.
+*The audit record does not cascade, and this is the point.* Everything a venture
+owns describes the venture, so deleting the venture removes it. An audit entry is
+different in kind: it records *something that happened*, and something that
+happened does not stop having happened because its subject was deleted.
 
-That reference carries a cost: the delete behaviour on those references must be
-restrictive, because a notification pointing at a deleted row is a broken
-notification. The trade is accepted — a notification that stays accurate, in
-exchange for references that constrain deletion.
+An audit log that disappears with the object it describes is not an audit log.
+It is a status field with extra steps — useful right up to the moment it is
+needed.
+
+#figure(
+  table(
+    columns: (46mm, 1fr),
+    align: (left + top, left + top),
+    table.header([Index], [Why it exists]),
+    [`(ProjectId, Status)` on `Reports`],
+      [The moderation queue filters on exactly this pair.],
+  ),
+  caption: [The index this part adds.],
+)
 
 = Backend
 
 #figure(
   ```cs
-  // Presence is a property of the user, derived from their live connections.
-  // Closing one tab of three must not take them offline.
-  public bool Connect(int userId, string connectionId)
-  {
-      var set = _connections.GetOrAdd(userId, _ => new HashSet<string>());
-      lock (set) { set.Add(connectionId); return set.Count == 1; }  // just came online
-  }
+  // Moderation writes ModerationStatus and nothing else. LifecycleStatus and
+  // Stage belong to other writers and are not touched here — which is what
+  // makes re-approval after an edit safe.
+  project.ModerationStatus  = ModerationStatus.Approved;
+  project.ReviewedAtUtc     = DateTime.UtcNow;
+  project.ReviewedByAdminId = adminId;
 
-  public bool Disconnect(int userId, string connectionId)
-  {
-      if (!_connections.TryGetValue(userId, out var set)) return false;
-      lock (set)
-      {
-          set.Remove(connectionId);
-          if (set.Count > 0) return false;                 // other tabs remain
-      }
-      _connections.TryRemove(userId, out _);
-      return true;                                          // last connection closed
-  }
+  await _audit.RecordAsync(adminId, AdminAction.ApproveProject, project.Id, ct);
   ```,
-  caption: [Presence tracking. The boolean return is what tells the hub whether
-    a presence change is worth broadcasting.],
+  caption: [Approval. Three fields written, one audit record, and no other state
+    column referenced.],
 )
 
-#figure(
-  ```cs
-  // Persist first, push second. A message that was pushed but not stored is
-  // lost on reconnect — and the user who saw it has no way to know.
-  var message = new Message { SenderId = senderId, ReceiverId = receiverId,
-                              Content = dto.Content, SentAt = DateTime.UtcNow };
-  _db.Messages.Add(message);
-  await _db.SaveChangesAsync(ct);
+The excerpt is worth reading for what is *absent* from it. There is no
+assignment to `LifecycleStatus`, none to `Stage`, and no read of either. The
+handler that caused the defect described in Report 4 looked almost identical and
+touched one more field.
 
-  await _hub.Clients.User(receiverId.ToString())
-            .SendAsync("MessageReceived", message.ToDto(), ct);
-  ```,
-  caption: [Message delivery. The database is the record; the push is an
-    optimisation over polling for it.],
-)
+Two further properties hold across every endpoint in this part:
 
-#figure(
-  ```cs
-  // Read state is a server decision, not a client claim. Opening a conversation
-  // marks the counterpart's messages read and pushes that to the sender, so
-  // both sides see the same truth.
-  var unread = await _db.Messages
-      .Where(m => m.SenderId == otherId && m.ReceiverId == userId && !m.IsRead)
-      .ToListAsync(ct);
-
-  foreach (var m in unread) m.IsRead = true;
-  await _db.SaveChangesAsync(ct);
-
-  await _hub.Clients.User(otherId.ToString())
-            .SendAsync("MessagesRead", unread.Select(m => m.Id), ct);
-  ```,
-  caption: [Read receipts.],
-)
-
-#figure(
-  ```cs
-  // Notification fan-out leaves the request path. A venture update that also
-  // notified five hundred followers synchronously would make publishing as slow
-  // as delivering — and a delivery failure would fail the publication.
-  _fanOut.Enqueue(new NotificationJob(NotificationKind.ProjectUpdate,
-                                      projectId, actorId));
-  return ServiceResult.Ok();          // returns immediately
-  ```,
-  caption: [Publishing an update. The queue is in-process; the trade is stated
-    in the challenges below.],
-)
+- *The audit record is written in the same operation as the decision*, so a
+  decision cannot exist without its record.
+- *A rejection without a reason is rejected at the boundary*, not stored with an
+  empty string. The requirement is structural rather than a convention the
+  interface happens to follow.
 
 = Key Endpoints
 
 #figure(
   table(
-    columns: (16mm, 46mm, 1fr),
+    columns: (16mm, 56mm, 1fr),
     align: (left + top, left + top, left + top),
     table.header([Method], [Path], [Purpose]),
-    [`GET`], [`api/messages/conversations`], [Threads with unread counts.],
-    [`GET`], [`api/messages/{userId}`], [Conversation history, paged.],
-    [`POST`], [`api/messages`], [Send a message; persisted then pushed.],
-    [`POST`], [`api/messages/{id}/attachment`], [Attach an image, validated on
-      content.],
-    [`POST`], [`api/messages/{userId}/read`], [Mark a conversation read;
-      server-side.],
-    [`GET`], [`api/notification`], [The user's notifications.],
-    [`GET`], [`api/notification/unread-count`], [Unread badge count.],
-    [`POST`], [`api/notification/{id}/read`], [Mark one notification read.],
-    [`GET`], [`api/deals/{projectId}`], [The deal room for a venture.],
-    [`POST`], [`api/deals/{projectId}/documents/{docId}/request`], [Request a
-      restricted document.],
-    [`POST`], [`api/deals/requests/{id}/grant`], [Founder grants access.],
-    [`GET`], [`api/deals/documents/{id}/download`], [Download; entitlement
-      re-checked and logged.],
+    [`GET`], [`api/admin/projects/pending`], [The review queue.],
+    [`POST`], [`api/admin/projects/{id}/approve`], [Approve; writes the audit
+      log.],
+    [`POST`], [`api/admin/projects/{id}/reject`], [Reject; a reason is
+      required.],
+    [`GET`], [`api/admin/projects`], [The full venture registry, every state.],
+    [`POST`], [`api/reports`], [Report a venture for attention.],
+    [`GET`], [`api/admin/reports`], [The reports queue, filtered by status.],
+    [`GET`], [`api/admin/audit`], [Read the audit log.],
   ),
-  caption: [Principal endpoints in this part.],
+  caption: [Principal endpoints in this part. Every one is role-gated to an
+    administrator on the server, and none of them is reachable by knowing the
+    URL.],
 )
-
-The last row is worth naming. *Access is re-checked at download, not granted by
-a hard-to-guess link.* A URL that is difficult to guess is not an access
-control; it is a secret that spreads on the first forward.
 
 = Libraries Used in This Part
 
 #figure(
   table(
-    columns: (40mm, 1fr),
+    columns: (44mm, 1fr),
     align: (left + top, left + top),
     table.header([Library], [Role here]),
-    [`Microsoft.AspNetCore.SignalR`], [The persistent connection, transport
-      negotiation, reconnection with backoff, and group management. Shares the
-      API's authentication pipeline, so a hub connection authenticates with the
-      same token as a REST call.],
-    [`@microsoft/signalr`], [The browser client: connection lifecycle,
-      automatic reconnect, and typed handlers for the hub's events.],
-    [`Hosted service (built-in)`], [Runs the notification fan-out worker
-      outside the request path.],
-    [`Entity Framework Core`], [Persists messages, attachments and
-      notifications, and writes durable last-seen.],
+    [`Entity Framework Core`], [Queries the two queues and writes the audit
+      record in the same unit of work as the decision.],
+    [`FluentValidation`], [Enforces that a rejection carries a reason before a
+      service sees the request.],
   ),
-  caption: [Libraries introduced in this part.],
+  caption: [No library is introduced for moderation. The gate is policy, not
+    tooling.],
 )
 
 = Challenges
 
-#challenge("Presence flickered every time a tab was closed")[
-  Treating a disconnect as "the user went offline" produced a status that
-  changed constantly for anyone with more than one tab open.
+#challenge("A submitted venture felt like it had disappeared")[
+  A founder who submitted a venture had no way to see what had happened to it,
+  and a rejection arrived as a bare status with no explanation.
 
-  *Solution.* Presence is tracked per *user*, holding a set of connection
-  identifiers. A user goes offline only when the set becomes empty — and that is
-  also the moment last-seen is written.
+  *Solution.* The founder's venture list shows the moderation state of every
+  venture at all times, and rejection requires the administrator to state a
+  reason, which is returned to the founder. A correction can then be made and
+  resubmitted rather than guessed at. The queue and the founder's list are two
+  views of one column, so they cannot disagree.
 ]
 
-#challenge("Presence and last-seen look like one fact")[
-  Both answer "where is this person". Storing them the same way is wrong in one
-  direction or the other: persisting presence creates a value that outlives its
-  truth, and keeping last-seen in memory loses it on restart.
+#challenge("An audit log that cascades is not an audit log")[
+  The natural schema makes every row about a venture a child of that venture, so
+  deleting the venture cleans up after itself. Applied to the audit log, this
+  deletes the record of the decisions made about a venture at exactly the moment
+  someone might want to review them.
 
-  *Solution.* Opposite treatments. Presence in memory, last-seen on the user
-  row. The cost is that presence does not survive scale-out beyond one
-  instance — stated below.
+  *Solution.* The audit log is deliberately excluded from the cascade. It
+  survives its subject. The cost is that audit rows can outlive the object they
+  reference and must be readable without it — so the log stores what was decided
+  rather than only a foreign key to it.
 ]
 
-#challenge("A pushed message could be lost")[
-  Pushing before persisting is faster and briefly appears to work. A client that
-  reconnects has no record of the message, and the user who saw it has no way to
-  know it is gone.
+#challenge("A role check is not an ownership check")[
+  An administrative endpoint that verifies only that the caller is an
+  administrator is correct for this part and wrong almost everywhere else — and
+  the two look identical in code.
 
-  *Solution.* Persist first, push second. Recovery needs no special path — a
-  reconnecting client simply reloads the conversation.
-]
-
-#challenge("Notification fan-out tied a business action to its side effects")[
-  A venture update that notified every follower synchronously would make
-  publishing as slow as the slowest delivery, and a failure in fan-out would
-  fail the publication itself.
-
-  *Solution.* The domain enqueues the work in-process and returns; a background
-  worker performs delivery.
-
-  *The cost, stated.* The queue is process-local, so work enqueued and not yet
-  delivered is lost on restart. Acceptable for notifications, and the boundary
-  is named rather than assumed away.
-]
-
-#challenge("A hard-to-guess document link is not an access control")[
-  The convenient way to release a restricted file is to hand out a URL that is
-  difficult to guess. It is also wrong: the URL is a secret, and a secret that
-  is forwarded once is public.
-
-  *Solution.* Entitlement is evaluated at the download endpoint on every call,
-  independently of how the caller reached it. A revoked grant takes effect
-  immediately, and a forwarded link gives the recipient nothing.
+  *Solution, and the limit.* Moderation endpoints are genuinely role-only,
+  because an administrator's authority is not scoped to a particular venture.
+  That makes this part the exception rather than the pattern, and it is stated
+  here so that the pattern is not copied into a part where ownership does matter.
+  Reports 4, 7 and 8 all check both.
 ]
 
 = How This Fits With the Rest of the System
 
 #figure(
   table(
-    columns: (30mm, 1fr, 1fr),
+    columns: (32mm, 1fr, 1fr),
     align: (left + top, left + top, left + top),
     table.header([Report], [Relationship], [Boundary]),
-    [1 · Identity],
-      [A hub connection authenticates with the same access token as a REST
-       call.],
-      [No second credential and no second identity mechanism exists.],
-    [2 · Ventures],
-      [Publishing an update or a milestone generates notifications; document
-       requests concern venture documents.],
-      [This part delivers; it does not decide what a venture contains or
-       whether it is public.],
-    [3 · Discovery],
-      [Following a founder is what makes their update reach a follower.],
-      [Discovery creates the follow edge; this part uses it as a recipient
-       list.],
-    [4 · Investment],
-      [Approval and settlement both generate notifications; the deal room shows
-       the commitment under discussion.],
-      [This part never changes a commitment's state. It reports it.],
-    [6 · Insight],
-      [Message and notification volume appear in platform activity.],
-      [Administrators cannot read private conversations — moderation covers
-       reported content only.],
+    [3 · Identity & Sessions],
+      [*Depends on it.* The reviewing administrator is an identity established
+       there, and every decision is recorded against it.],
+      [This part never grants a role; it reads one.],
+    [4 · Ventures & Lifecycle],
+      [*The object this report decides about.* Submission puts a venture in the
+       queue.],
+      [Review writes `ModerationStatus` only. The founder's lifecycle column and
+       the pipeline's stage column are unreachable from here.],
+    [6 · Discovery & Engagement],
+      [*Consumes this report's output.* Only approved ventures are eligible to
+       be listed.],
+      [Discovery reads the decision; it cannot make or change one.],
+    [11 · Dashboards & Analytics],
+      [*Reports on this part.* Moderation load and administrative activity are
+       derived from the tables here.],
+      [Analytics read the audit rows. No counter is maintained on the venture.],
   ),
-  caption: [How real-time communication relates to the rest of the platform.],
+  caption: [Direct relationships only.],
 )
 
 = Summary
 
 #delivered[
-  *Messaging.* One-to-one conversations delivered over a persistent connection
-  that shares the API's authentication, with presence derived from live
-  connections, durable last-seen, transient typing indication, and read receipts
-  decided by the server.
-
-  *Durability.* Messages are persisted before they are pushed, so a missed push
-  costs nothing and recovery requires no special path.
-
-  *Diligence.* A deal room combining conversation, documents and the commitment
-  under discussion, with restricted documents released by request and every
-  download re-checked and logged.
-
-  *Notifications.* Domain events delivered in-app, referencing objects rather
-  than storing rendered text, with fan-out moved off the request path.
+  A review queue in which every submitted venture waits for a human decision, and
+  no configuration that bypasses it. Approval that makes a venture *eligible* to
+  be public rather than publishing it, leaving the founder's lifecycle column
+  untouched. Rejection that requires a stated reason, returned to the founder so
+  a correction can be made rather than guessed. A separate reports queue for
+  content that is already public, kept apart because it arrives at a different
+  rhythm and is worked by severity. A full venture registry for investigation.
+  And an audit log, attributed and deliberately retained beyond the object it
+  describes.
 ]
 
-*Still open in this part.* Attachments are limited to images; other file types
-are not supported. Notification preferences do not exist — every eligible
-recipient receives every notification in-app, with no way to tune it, and no
-email digest. Presence and the notification queue are both process-local, so the
-real-time layer does not survive scale-out beyond a single instance without a
-shared backplane and a durable queue.
+*Still open in this part.* There is one administrator role rather than a graded
+set of moderation permissions — an administrator who can approve can also
+suspend an account. Review is entirely manual: nothing is pre-screened, ranked or
+flagged automatically, so queue throughput is bounded by attention. Report 11
+reports what that load actually looks like.
 
-*What this enables.* Both sides can now talk, decide, and be kept informed.
-Report 6 covers what all of this activity looks like when it is aggregated —
-for the founder, the investor, and the administrator.
+*What this enables.* Report 6 can now assume a population of *approved, active*
+ventures — which is what makes discovery a real problem worth solving rather than
+a filter over an empty set.

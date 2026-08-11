@@ -69,8 +69,8 @@ docs/                  the documentation set
 - **The doc comments in this codebase explain *why*.** Read them; they are the design rationale, not noise. Keep that density when you add code near them.
 - **Next.js 16 has breaking changes** vs. most training data. See `Frontend/vestora/AGENTS.md`. Check `node_modules/next/dist/docs/` before relying on an API.
 - **The database is remote and shared.** Never run `dotnet ef database update` without saying so.
-- **There are no automated tests.** State how you verified a change; do not claim it works if you did not run it.
-- **The project is not under git.** Deletions are irreversible. Back up before removing anything.
+- **The test suite covers the domain layer only** — 41 xUnit tests over `FundingMath` and `PipelineStages` (`cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj`). There are **no** integration, authorisation, payment or end-to-end tests. A green run proves the arithmetic and the stage vocabulary, nothing else. State how you verified a change; do not claim it works if you did not run it.
+- **The project is under git**, on a single initial commit. Branch or commit before a large deletion — `git` is the only undo there is.
 
 ---
 
@@ -83,4 +83,5 @@ docs/                  the documentation set
 - [ ] Any DTO changed without updating `lib/types/api.ts`?
 - [ ] Any new visible string missing from both `en` and `ar` dictionaries?
 - [ ] Any physical CSS direction (`ml-`, `left-`) that breaks RTL?
-- [ ] Did `dotnet build` and `npm run build` both pass?
+- [ ] Did `dotnet build`, `dotnet test` and `npm run build` all pass?
+- [ ] Did you change a funding figure or a pipeline stage without adding the case to `MyAppApi.Tests`?

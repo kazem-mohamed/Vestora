@@ -2,27 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "vestora-web",
+      "name": "vestora-frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        "Frontend/vestora",
-        "run",
-        "dev"
-      ],
-      "port": 3000,
-      "autoPort": true
+      "runtimeArgs": ["run", "dev", "--prefix", "Frontend/vestora"],
+      "port": 3000
     },
     {
-      "name": "vestora-api",
+      "name": "vestora-backend",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": [
-        "run",
-        "--project",
-        "MyAppApi/MyAppApi",
-        "--launch-profile",
-        "http"
-      ],
+      "runtimeArgs": ["run", "--project", "MyAppApi/MyAppApi/MyAppApi.csproj", "--launch-profile", "http"],
       "port": 5078
     }
   ]

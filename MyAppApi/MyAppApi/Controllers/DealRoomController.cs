@@ -40,12 +40,21 @@ namespace MyAppApi.Controllers
         private readonly AppDbContext _db;
         private readonly IHubContext<ChatHub> _hub;
         private readonly PaymentService _payments;
+        private readonly TermSheetService _terms;
+        private readonly IFileUploadSecurityService _uploads;
 
-        public DealRoomController(AppDbContext db, IHubContext<ChatHub> hub, PaymentService payments)
+        public DealRoomController(
+            AppDbContext db,
+            IHubContext<ChatHub> hub,
+            PaymentService payments,
+            TermSheetService terms,
+            IFileUploadSecurityService uploads)
         {
             _db = db;
             _hub = hub;
             _payments = payments;
+            _terms = terms;
+            _uploads = uploads;
         }
 
         private int Me() =>
@@ -97,6 +106,7 @@ namespace MyAppApi.Controllers
             var me = Me();
             var role = RoleIn(deal, me);
             var isFounder = role == "founder";
+            var isAdmin = role == "admin";
             var investorId = deal.InvestorId ?? 0;
 
             // The venture's money, from the one definition, so the room agrees with the
@@ -123,11 +133,31 @@ namespace MyAppApi.Controllers
                     CreatedAtUtc = q.CreatedAtUtc,
                     AnsweredAtUtc = q.AnsweredAtUtc,
                     IsWithdrawn = q.IsWithdrawn,
+                    ParentQuestionId = q.ParentQuestionId,
                     // Whoever did not ask it is the one who can answer it.
                     CanAnswer = q.AskedByUserId != me && q.Answer == null && !q.IsWithdrawn,
                     CanWithdraw = q.AskedByUserId == me && q.Answer == null && !q.IsWithdrawn,
                 })
                 .ToListAsync();
+
+            // Follow-ups fold under the question they clarify. Flat, they read as a
+            // second unrelated question asked minutes after the first — which is exactly
+            // how the answers used to get lost.
+            var followUps = questions.Where(q => q.ParentQuestionId != null).ToList();
+            questions = questions.Where(q => q.ParentQuestionId == null).ToList();
+
+            foreach (var root in questions)
+            {
+                root.FollowUps = followUps.Where(f => f.ParentQuestionId == root.Id).ToList();
+
+                // One push-back per question, by the person who asked it, once they have
+                // an answer to push back on.
+                root.CanFollowUp =
+                    root.AskedByUserId == me &&
+                    root.Answer != null &&
+                    !root.IsWithdrawn &&
+                    root.FollowUps.Count == 0;
+            }
 
             var docRequests = await _db.DocumentRequests
                 .AsNoTracking()
@@ -146,9 +176,15 @@ namespace MyAppApi.Controllers
                     RequestedByName = r.RequestedByUser.UserName,
                     CreatedAtUtc = r.CreatedAtUtc,
                     ResolvedAtUtc = r.ResolvedAtUtc,
-                    // Only the venture's owner can satisfy a request for its documents.
-                    CanResolve = isFounder && r.Status == "Open",
+                    // Whoever did NOT ask is the one who answers. The old rule named the
+                    // founder outright, which is why only the investor could ever ask.
+                    CanResolve = r.RequestedByUserId != me && r.Status == "Open" && !isAdmin,
                     CanWithdraw = r.RequestedByUserId == me && r.Status == "Open",
+                    Direction = r.RequestedByUserId == deal.Project.OwnerId ? "ToInvestor" : "ToFounder",
+                    ResponseFileName = r.ResponseFileName,
+                    ResponseSizeBytes = r.ResponseSizeBytes,
+                    HasResponseFile = r.ResponseData != null,
+                    ResponseNote = r.ResponseNote,
                 })
                 .ToListAsync();
 
@@ -227,7 +263,12 @@ namespace MyAppApi.Controllers
 
             await AttachFundingAsync(dto, deal, venture);
 
+            dto.TermSheets = await _terms.HistoryAsync(deal, me);
+            dto.AgreedTerms = dto.TermSheets.FirstOrDefault(s => s.Status == TermSheetStatus.Accepted);
+
             dto.Timeline = await BuildTimelineAsync(deal, questions, docRequests);
+            dto.StageDurations = await BuildStageDurationsAsync(deal);
+            dto.Health = BuildHealth(dto, questions, docRequests);
             dto.NextSteps = DeriveNextSteps(dto, questions, docRequests);
 
             return Ok(dto);
@@ -251,18 +292,31 @@ namespace MyAppApi.Controllers
                 .Select(t => new { t.Status, t.Amount, t.SucceededAtUtc })
                 .ToListAsync();
 
-            var settled = payments.FirstOrDefault(t => t.Status == PaymentStatus.Succeeded);
+            // Summed, not "the first one". A commitment can be called in over several
+            // tranches, and reading only the earliest settlement would report a
+            // part-paid relationship as fully funded for the amount of its first
+            // instalment — understating the money and closing the door on the rest.
+            var settledRows = payments.Where(t => t.Status == PaymentStatus.Succeeded).ToList();
+            var settledTotal = settledRows.Sum(t => t.Amount);
+            var hasSettled = settledRows.Count > 0;
             var hasOpen = request != null && request.Status == FundingRequestStatus.Open;
 
+            var target = await FundingMath.CommitmentTargetAsync(_db, deal.Id, deal.Amount);
+            var fullySettled = FundingMath.IsFullySettled(settledTotal, target);
+
+            dto.SettledTotal = settledTotal;
+            dto.CommitmentTarget = target;
+
             dto.FundingRequest = request == null ? null : await _payments.MapRequestAsync(request);
-            dto.FundedThisDeal = settled?.Amount;
-            dto.FundedAtUtc = settled?.SucceededAtUtc;
+            dto.FundedThisDeal = hasSettled ? settledTotal : null;
+            dto.FundedAtUtc = settledRows.Max(t => t.SucceededAtUtc);
             dto.FundingState = FundingMath.StateOf(
                 deal.Status,
-                settled != null,
+                hasSettled,
                 payments.Any(t => t.Status == PaymentStatus.Refunded),
                 hasOpen,
-                payments.Any(t => t.Status == PaymentStatus.Processing));
+                payments.Any(t => t.Status == PaymentStatus.Processing),
+                fullySettled);
 
             // What is left of the round once every OTHER commitment is counted. This
             // relationship's own commitment is excluded, or a founder could never call in
@@ -271,8 +325,18 @@ namespace MyAppApi.Controllers
                 .Where(i => i.ProjectId == deal.ProjectId && i.Status == "Approved" && i.Id != deal.Id)
                 .SumAsync(i => (decimal?)i.Amount) ?? 0m;
 
-            dto.MaxRequestableAmount = FundingMath.RemainingCapacity(
-                deal.Project.InvestmentNeeded, committedElsewhere);
+            // Tranches already settled have left the round's headroom, but this
+            // relationship's commitment is still counted whole — so they come off here
+            // too, or the founder could call in the same commitment twice by splitting it.
+            var headroom = Math.Max(0m,
+                FundingMath.RemainingCapacity(deal.Project.InvestmentNeeded, committedElsewhere) - settledTotal);
+
+            // Agreed terms are the tighter ceiling when they exist: an ask may call the
+            // agreement in, never quietly exceed it.
+            if (dto.AgreedTerms != null)
+                headroom = Math.Min(headroom, FundingMath.UnsettledCommitment(dto.AgreedTerms.Amount, settledTotal));
+
+            dto.MaxRequestableAmount = headroom;
 
             var roundOpen = deal.Project.LifecycleStatus != "Closed";
             var relationshipLive = deal.Stage != PipelineStages.Declined && deal.Stage != PipelineStages.Closed;
@@ -282,7 +346,8 @@ namespace MyAppApi.Controllers
                 deal.Status == "Approved" &&
                 relationshipLive &&
                 roundOpen &&
-                settled == null &&
+                !fullySettled &&
+                headroom > 0m &&
                 !hasOpen;
 
             // A closed round still lets an existing ask be paid — pulling the rug from
@@ -290,8 +355,134 @@ namespace MyAppApi.Controllers
             dto.CanCompletePayment =
                 dto.ViewerRole == "investor" &&
                 hasOpen &&
-                settled == null &&
-                request!.ExpiresAtUtc > DateTime.UtcNow;
+                request!.Status != FundingRequestStatus.Paid &&
+                request.CounterStatus != CounterOfferStatus.Proposed &&
+                request.ExpiresAtUtc > DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Whether the relationship is moving, and what is holding it up.
+        /// <para>
+        /// Every input is a fact the room already had. Nothing is maintained by hand,
+        /// which is the only reason the answer can be trusted — a health field somebody
+        /// has to keep current is a health field that is permanently green.
+        /// </para>
+        /// <para>
+        /// The score starts at full marks and is spent down. That direction matters: a
+        /// relationship is healthy until something specific is wrong with it, and every
+        /// deduction here can be named. A model that accumulated points for activity
+        /// would penalise a deal that is simply waiting for a scheduled call.
+        /// </para>
+        /// </summary>
+        private static DealHealthDto BuildHealth(
+            DealRoomDto dto,
+            List<DealQuestionDto> questions,
+            List<DocumentRequestDto> requests)
+        {
+            var now = DateTime.UtcNow;
+
+            if (dto.Stage is PipelineStages.Closed or PipelineStages.Declined)
+                return new DealHealthDto { Status = "Concluded", Score = 100, DaysSinceActivity = 0 };
+
+            // The most recent thing that happened, from anywhere. Falls back to the
+            // opening date, so a request nobody has touched still has an age.
+            var lastActivity = new[]
+            {
+                dto.StageUpdatedAt,
+                dto.Timeline.Count > 0 ? dto.Timeline.Max(e => e.AtUtc) : (DateTime?)null,
+                dto.OpenedAt,
+            }.Where(d => d.HasValue).Max()!.Value;
+
+            var idleDays = (int)Math.Max(0, (now - lastActivity).TotalDays);
+
+            var score = 100;
+            var reasons = new List<string>();
+
+            // Silence, weighted by how long. Two weeks without a word is the shape of a
+            // deal that has quietly ended without either side saying so.
+            if (idleDays >= 21) { score -= 45; reasons.Add("silent_3w"); }
+            else if (idleDays >= 14) { score -= 30; reasons.Add("silent_2w"); }
+            else if (idleDays >= 7) { score -= 15; reasons.Add("silent_1w"); }
+
+            // Obligations one side is sitting on. Counted once each, however many there
+            // are — the fact that something is owed is the signal, not the quantity.
+            var openQuestions = questions.Count(q => q.Answer == null && !q.IsWithdrawn) +
+                                questions.Sum(q => q.FollowUps.Count(f => f.Answer == null && !f.IsWithdrawn));
+            if (openQuestions > 0) { score -= 15; reasons.Add("unanswered_questions"); }
+
+            if (requests.Any(r => r.Status == "Open")) { score -= 15; reasons.Add("open_document_requests"); }
+
+            // Money asked for and not paid. The heaviest single deduction, because it is
+            // the only obligation with a deadline attached.
+            if (dto.FundingState == FundingMath.StatePaymentDue) { score -= 20; reasons.Add("payment_outstanding"); }
+
+            // Terms on the table that nobody has answered.
+            if (dto.TermSheets.Any(s => s.Status == TermSheetStatus.Proposed && !s.AcceptedByThem))
+            {
+                score -= 10;
+                reasons.Add("terms_awaiting_acceptance");
+            }
+
+            // The stall this pipeline was built to catch: accepted, then never contacted.
+            if (dto.Stage == PipelineStages.Approved && idleDays >= 3)
+            {
+                score -= 15;
+                reasons.Add("approved_never_contacted");
+            }
+
+            score = Math.Clamp(score, 0, 100);
+
+            return new DealHealthDto
+            {
+                Score = score,
+                DaysSinceActivity = idleDays,
+                Reasons = reasons,
+                Status = score >= 75 ? "Healthy" : score >= 45 ? "Slowing" : "Stalled",
+            };
+        }
+
+        /// <summary>
+        /// How long this relationship has spent in each stage it has passed through,
+        /// with the current one still counting.
+        /// <para>
+        /// Each completed stage's duration was measured when the relationship left it,
+        /// so it is a recorded fact rather than a subtraction performed now. Only the
+        /// open-ended one is computed live, because it has not finished happening.
+        /// </para>
+        /// <para>
+        /// Stages appear in the order they were entered, and a stage entered twice
+        /// appears twice. Summing them would read better and describe a different
+        /// relationship than the one that occurred.
+        /// </para>
+        /// </summary>
+        private async Task<List<StageDurationDto>> BuildStageDurationsAsync(Investment deal)
+        {
+            var history = await _db.InvestmentStageEvents
+                .AsNoTracking()
+                .Where(e => e.InvestmentId == deal.Id)
+                .OrderBy(e => e.AtUtc)
+                .Select(e => new { e.FromStage, e.AtUtc, e.MinutesInPreviousStage })
+                .ToListAsync();
+
+            if (history.Count == 0) return new List<StageDurationDto>();
+
+            var rows = history
+                .Where(e => e.FromStage != null)
+                .Select(e => new StageDurationDto
+                {
+                    Stage = e.FromStage!,
+                    Minutes = e.MinutesInPreviousStage ?? 0,
+                })
+                .ToList();
+
+            rows.Add(new StageDurationDto
+            {
+                Stage = deal.Stage,
+                Minutes = (int)Math.Max(0, Math.Round((DateTime.UtcNow - history[^1].AtUtc).TotalMinutes)),
+                IsCurrent = true,
+            });
+
+            return rows;
         }
 
         /// <summary>
@@ -317,10 +508,39 @@ namespace MyAppApi.Controllers
                 },
             };
 
-            // The stage's current value with its timestamp. Full stage history would
-            // need an audit table; recording only what is provably known is honest,
-            // and the events below already show what moved the relationship.
-            if (deal.StageUpdatedAt.HasValue && deal.Stage != PipelineStages.New)
+            // Every movement, in order, with the time each stage took.
+            //
+            // This used to be one line: the current stage and the timestamp of the last
+            // move. A relationship that had passed through five stages showed one, and
+            // the four decisions before it — along with the weeks between them — had
+            // been overwritten. The history table exists so the room can say what
+            // actually happened rather than only what is currently true.
+            var moves = await _db.InvestmentStageEvents
+                .AsNoTracking()
+                .Where(e => e.InvestmentId == deal.Id && e.FromStage != null)
+                .OrderBy(e => e.AtUtc)
+                .Select(e => new { e.ToStage, e.AtUtc, e.ActorUserId, e.Reason, e.MinutesInPreviousStage })
+                .ToListAsync();
+
+            foreach (var m in moves)
+            {
+                events.Add(new DealEventDto
+                {
+                    Type = m.ToStage == PipelineStages.Declined ? "declined" : "stage",
+                    AtUtc = m.AtUtc,
+                    ActorUserId = m.ActorUserId,
+                    // Detail stays the bare stage name: the client translates it through
+                    // the same map the pills use, and anything appended to it would miss.
+                    Detail = m.ToStage,
+                    Note = m.Reason,
+                    DurationMinutes = m.MinutesInPreviousStage,
+                });
+            }
+
+            // Relationships that predate the history table have no rows, and showing them
+            // nothing at all would be a regression from the single line they had. The
+            // column is still the truth about where they are — it just cannot say more.
+            if (moves.Count == 0 && deal.StageUpdatedAt.HasValue && deal.Stage != PipelineStages.New)
             {
                 events.Add(new DealEventDto
                 {
@@ -581,8 +801,13 @@ namespace MyAppApi.Controllers
                         dq.InvestmentId == i.Id && dq.Answer == null && !dq.IsWithdrawn && dq.AskedByUserId != me),
                     OpenDocRequests = _db.DocumentRequests.Count(dr =>
                         dr.InvestmentId == i.Id && dr.Status == "Open"),
+                    // Scoped to the counterpart, not just the venture. A founder with five
+                    // investors on one project shares a ProjectId with all five, so an
+                    // unscoped count put the same number on every row and lit "needs you"
+                    // on relationships where nobody had said anything.
                     Unread = _db.Messages.Count(m =>
-                        m.ProjectId == i.ProjectId && m.ReceiverId == me && !m.IsRead),
+                        m.ProjectId == i.ProjectId && m.ReceiverId == me && !m.IsRead &&
+                        m.SenderId == (i.Project.OwnerId == me ? i.InvestorId : i.Project.OwnerId)),
                     OpenRequestAmount = _db.FundingRequests
                         .Where(f => f.InvestmentId == i.Id && f.Status == FundingRequestStatus.Open)
                         .Select(f => (decimal?)f.Amount)
@@ -651,9 +876,31 @@ namespace MyAppApi.Controllers
             if (deal.Stage == PipelineStages.Declined || deal.Stage == PipelineStages.Closed)
                 return BadRequest(new { message = "This relationship is closed." });
 
+            // A follow-up has to attach to a question in THIS relationship that the
+            // caller asked and that has actually been answered — otherwise it is a new
+            // question wearing a thread, or a way to reach into somebody else's deal.
+            if (input.ParentQuestionId is int parentId)
+            {
+                var parent = await _db.DealQuestions
+                    .FirstOrDefaultAsync(x => x.Id == parentId && x.InvestmentId == investmentId);
+
+                if (parent == null) return NotFound(new { message = "That question is not part of this deal." });
+                if (parent.AskedByUserId != me) return Forbid();
+                if (parent.Answer == null)
+                    return BadRequest(new { message = "Wait for an answer before following up on it." });
+                if (parent.ParentQuestionId != null)
+                    return BadRequest(new { message = "A follow-up cannot be followed up on. Ask a new question." });
+
+                var alreadyFollowed = await _db.DealQuestions
+                    .AnyAsync(x => x.ParentQuestionId == parentId);
+                if (alreadyFollowed)
+                    return BadRequest(new { message = "You have already followed up on this one." });
+            }
+
             var q = new DealQuestion
             {
                 InvestmentId = investmentId,
+                ParentQuestionId = input.ParentQuestionId,
                 AskedByUserId = me,
                 Question = text,
                 CreatedAtUtc = DateTime.UtcNow,
@@ -734,8 +981,10 @@ namespace MyAppApi.Controllers
 
             var me = Me();
             var role = RoleIn(deal, me);
-            // Only the investor asks for documents; the founder supplies them.
-            if (role != "investor") return Forbid();
+            // Either party may ask. It ran one way for a long time — an investor could
+            // ask for a cap table and a founder could not ask who was funding them —
+            // and that asymmetry was never argued for. Admins read, they do not ask.
+            if (role == "admin") return Forbid();
 
             var title = input.Title?.Trim();
             if (string.IsNullOrWhiteSpace(title))
@@ -746,8 +995,10 @@ namespace MyAppApi.Controllers
             if (deal.Status != "Approved")
                 return BadRequest(new { message = "Available once the founder has approved the request." });
 
+            // The cap is per asker, not per relationship: one side filling the quota must
+            // not silence the other.
             var open = await _db.DocumentRequests
-                .CountAsync(r => r.InvestmentId == investmentId && r.Status == "Open");
+                .CountAsync(r => r.InvestmentId == investmentId && r.Status == "Open" && r.RequestedByUserId == me);
             if (open >= 10)
                 return BadRequest(new { message = "Too many open requests. Resolve some first." });
 
@@ -762,8 +1013,9 @@ namespace MyAppApi.Controllers
             };
             _db.DocumentRequests.Add(req);
 
-            await NotifyAsync(deal.Project.OwnerId, me, deal,
-                "doc_request", $"A document was requested for {deal.Project.Name}.");
+            var counterpart = role == "founder" ? (deal.InvestorId ?? 0) : deal.Project.OwnerId;
+            await NotifyAsync(counterpart, me, deal,
+                "doc_request", $"A document was requested for {deal.Project.Name}: {title}");
 
             await _db.SaveChangesAsync();
             return Ok(new { message = "Request sent.", id = req.Id });
@@ -780,22 +1032,48 @@ namespace MyAppApi.Controllers
             if (deal == null) return NotFound(new { message = "Deal not found." });
 
             var me = Me();
-            if (RoleIn(deal, me) != "founder") return Forbid();
+            var role = RoleIn(deal, me);
+            if (role == "admin") return Forbid();
+
+            // Whoever did not ask is the one who answers. The old rule named the founder
+            // outright, which is the reason only the investor could ever ask.
+            if (req.RequestedByUserId == me)
+                return BadRequest(new { message = "You asked for this. The other side answers it." });
+
             if (req.Status != "Open") return BadRequest(new { message = "Already resolved." });
 
             if (input.Status == "Fulfilled")
             {
-                if (input.DocumentId == null)
-                    return BadRequest(new { message = "Pick the document that answers this." });
+                // The two sides answer differently because they hold documents
+                // differently. A founder has a data room and links something in it; an
+                // investor has no such store and answers with a file attached to the
+                // request, uploaded separately, or with a note saying how they sent it.
+                if (role == "founder")
+                {
+                    if (input.DocumentId == null)
+                        return BadRequest(new { message = "Pick the document that answers this." });
 
-                // The document must belong to this venture — an id from the client is
-                // not permission to link anything.
-                var owns = await _db.ProjectDocuments.AnyAsync(d =>
-                    d.Id == input.DocumentId && d.ProjectId == deal.ProjectId);
-                if (!owns) return BadRequest(new { message = "That document is not part of this venture." });
+                    // The document must belong to this venture — an id from the client is
+                    // not permission to link anything.
+                    var owns = await _db.ProjectDocuments.AnyAsync(d =>
+                        d.Id == input.DocumentId && d.ProjectId == deal.ProjectId);
+                    if (!owns) return BadRequest(new { message = "That document is not part of this venture." });
+
+                    req.FulfilledByDocumentId = input.DocumentId;
+                }
+                else
+                {
+                    var note = input.ResponseNote?.Trim();
+                    if (req.ResponseData == null && string.IsNullOrWhiteSpace(note))
+                        return BadRequest(new
+                        {
+                            message = "Attach the document, or say how you have provided it."
+                        });
+
+                    req.ResponseNote = note is { Length: > 600 } ? note[..600] : note;
+                }
 
                 req.Status = "Fulfilled";
-                req.FulfilledByDocumentId = input.DocumentId;
             }
             else if (input.Status == "Declined")
             {
@@ -838,6 +1116,115 @@ namespace MyAppApi.Controllers
             req.ResolvedAtUtc = DateTime.UtcNow;
             await _db.SaveChangesAsync();
             return Ok(new { message = "Request withdrawn." });
+        }
+
+        /// <summary>
+        /// The investor attaches the document they were asked for.
+        /// <para>
+        /// Stored on the request rather than promoted to a venture document. A project's
+        /// data room is scoped to the project, so an investor's bank letter filed there
+        /// would be readable by every other approved backer — the precise opposite of
+        /// what was asked for. It belongs to this one conversation.
+        /// </para>
+        /// <para>
+        /// The bytes go through the same validation the deal attachments use: extension,
+        /// declared type and magic-number signature all have to agree. A file is not
+        /// what its name says it is.
+        /// </para>
+        /// </summary>
+        [HttpPost("document-requests/{requestId:int}/upload")]
+        [RequestSizeLimit(20 * 1024 * 1024)]
+        public async Task<IActionResult> UploadDocumentResponse(int requestId, IFormFile file)
+        {
+            var req = await _db.DocumentRequests.FirstOrDefaultAsync(r => r.Id == requestId);
+            if (req == null) return NotFound(new { message = "Request not found." });
+
+            var deal = await LoadParticipantDealAsync(req.InvestmentId);
+            if (deal == null) return NotFound(new { message = "Deal not found." });
+
+            var me = Me();
+            if (RoleIn(deal, me) == "admin") return Forbid();
+            if (req.RequestedByUserId == me)
+                return BadRequest(new { message = "You asked for this. The other side answers it." });
+            if (req.Status != "Open") return BadRequest(new { message = "Already resolved." });
+
+            var read = await _uploads.ReadValidatedAttachmentAsync(file);
+            if (read.Status != ServiceResultStatus.Ok) return this.ToActionResult(read);
+
+            req.ResponseData = read.Value;
+            req.ResponseFileName = Path.GetFileName(file.FileName);
+            req.ResponseContentType = file.ContentType;
+            req.ResponseSizeBytes = read.Value!.Length;
+
+            await _db.SaveChangesAsync();
+            return Ok(new { message = "Attached.", fileName = req.ResponseFileName, sizeBytes = req.ResponseSizeBytes });
+        }
+
+        /// <summary>
+        /// Downloads what the investor attached. Participants only — the same rule that
+        /// governs everything else in this controller, applied to the one artefact here
+        /// that does not belong to the venture.
+        /// </summary>
+        [HttpGet("document-requests/{requestId:int}/file")]
+        public async Task<IActionResult> DownloadDocumentResponse(int requestId)
+        {
+            var req = await _db.DocumentRequests.FirstOrDefaultAsync(r => r.Id == requestId);
+            if (req == null) return NotFound(new { message = "Request not found." });
+
+            var deal = await LoadParticipantDealAsync(req.InvestmentId);
+            if (deal == null) return NotFound(new { message = "Deal not found." });
+
+            if (req.ResponseData == null) return NotFound(new { message = "Nothing was attached." });
+
+            return File(req.ResponseData, req.ResponseContentType ?? "application/octet-stream",
+                req.ResponseFileName ?? "document");
+        }
+
+        // ==================================================================
+        //  TERM SHEET — what the two sides say they agreed
+        // ==================================================================
+
+        /// <summary>
+        /// Puts terms on the table. Either side may propose; the other side's acceptance
+        /// is what decides anything.
+        /// </summary>
+        [HttpPost("{investmentId:int}/terms")]
+        public async Task<IActionResult> ProposeTerms(int investmentId, [FromBody] TermSheetInput input, CancellationToken ct)
+        {
+            var deal = await LoadParticipantDealAsync(investmentId);
+            if (deal == null) return NotFound(new { message = "Deal not found." });
+            if (RoleIn(deal, Me()) == "admin") return Forbid();
+
+            var result = await _terms.ProposeAsync(deal, Me(), input, ct);
+            return this.ToActionResult(result);
+        }
+
+        [HttpPost("terms/{sheetId:int}/accept")]
+        public async Task<IActionResult> AcceptTerms(int sheetId, CancellationToken ct)
+        {
+            var sheet = await _db.TermSheets.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sheetId, ct);
+            if (sheet == null) return NotFound(new { message = "Terms not found." });
+
+            var deal = await LoadParticipantDealAsync(sheet.InvestmentId);
+            if (deal == null) return NotFound(new { message = "Deal not found." });
+            if (RoleIn(deal, Me()) == "admin") return Forbid();
+
+            var result = await _terms.AcceptAsync(deal, sheetId, Me(), ct);
+            return this.ToActionResult(result);
+        }
+
+        [HttpPost("terms/{sheetId:int}/decline")]
+        public async Task<IActionResult> DeclineTerms(int sheetId, [FromBody] DeclineTermsInput input, CancellationToken ct)
+        {
+            var sheet = await _db.TermSheets.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sheetId, ct);
+            if (sheet == null) return NotFound(new { message = "Terms not found." });
+
+            var deal = await LoadParticipantDealAsync(sheet.InvestmentId);
+            if (deal == null) return NotFound(new { message = "Deal not found." });
+            if (RoleIn(deal, Me()) == "admin") return Forbid();
+
+            var result = await _terms.DeclineAsync(deal, sheetId, Me(), input.Reason, ct);
+            return this.ToActionResult(result);
         }
 
         // ==================================================================

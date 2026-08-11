@@ -3,450 +3,577 @@
 
 #report-cover(
   number: 2,
-  title: "Ventures & Moderation",
-  subtitle: "How a venture is created, reviewed, published and kept current",
+  title: "Foundation & Design System",
+  subtitle: "The shape of the system, and the visual language every screen inherits",
   date: "September 2026",
 )
 
-#show: report.with(number: 2, name: "Ventures & Moderation")
+#show: report.with(number: 2, name: "Foundation & Design System")
 
 = Introduction
 
-Report 1 established the foundation and made every actor identifiable. This
-report covers the object those actors exist around: the *venture*.
+Report 1 established what the platform is for and what it was required to do.
+This report is about the structures those requirements were built on, and it
+covers two of them.
 
-A venture is the unit that is submitted, reviewed, published, discovered and
-eventually funded. It carries everything an investor needs in order to decide —
-the pitch, the people behind it, the money being asked for, supporting
-documents, the milestones promised, and the progress reported afterwards.
+The first is *shape*: how the system is divided into parts, what each part is
+responsible for, and — more usefully — what each part is forbidden from doing.
+The second is *appearance*: the tokens, typefaces and rules from which every
+screen in reports 3 to 12 is drawn.
 
-This report covers the whole life of that object, from an empty form to a
-published page that keeps being updated. It also covers *moderation*, because
-the review step is not an administrative add-on: it is the gate between a draft
-and something the public can see, and a venture's life cannot be described
-without it.
+They belong in one report because both are decisions made once and then obeyed
+everywhere. Neither is revisited by a later part. A screen in Report 10 does not
+choose a colour; a controller in Report 8 does not invent a way to return an
+error.
 
 = Objective
 
-*Give a founder a complete way to present a venture.* Not a title and a number,
-but the material an investor would otherwise ask for over several emails —
-imagery, team, documents, targets, milestones. Presented once, kept in one
-place.
+*Build a foundation the rest of the system can be built on without amending it.*
 
-*Make sure nothing reaches the public without a human decision.* An open
-platform that publishes automatically is a platform whose credibility depends on
-nobody abusing it. Every venture passes a review, and every review is
-attributable to the administrator who made it.
+One deployable API that owns every rule. A web application that owns none. A
+relational store that enforces integrity through constraints rather than only
+through code. And an interface system consistent enough that a new screen looks
+like it belongs without being told to.
 
-*Keep the venture's state honest.* A venture is simultaneously an
-administrative object, an operational one, and a commercial one. Those three
-things move independently and must never overwrite each other — which turned out
-to be the hardest requirement in this part of the system.
+The measure of success is negative rather than positive: after this part, no
+later part should need to change anything here in order to do its work.
 
-= Features Delivered
+= System at a Glance
+
+The platform is four pieces, and this shape does not change in any later report.
+
+#figure(
+  image("/assets/diagrams/out/c4-container.svg", width: 88%),
+  caption: [The platform and the two services it depends on.],
+)
 
 #figure(
   table(
-    columns: (44mm, 1fr),
+    columns: (34mm, 1fr),
     align: (left + top, left + top),
-    table.header([Feature], [What it does]),
-    [Venture creation], [Title, description, sector, location, stage and
-      funding target.],
-    [Imagery], [A cover image and a gallery, size-capped and content-type
-      verified.],
-    [Team members], [The people behind the venture, with roles.],
-    [Documents], [Attached files with a visibility rule — open, or released
-      only on request.],
-    [Milestones], [What the founder intends to achieve, with dates.],
-    [Progress updates], [Published reports, with imagery, after funding
-      begins.],
-    [Draft and submit], [A venture is private until deliberately submitted.],
-    [Administrative review], [Approve, or reject with a stated reason.],
-    [Resubmission], [A rejected or edited venture returns to review without
-      losing anything else.],
-    [Lifecycle control], [The founder can pause or close a venture
-      independently of its review state.],
-    [Reporting], [Any user can report a published venture for attention.],
-    [Moderation queues], [Separate queues for ventures awaiting review and for
-      user reports.],
+    table.header([Piece], [Responsibility]),
+    [Web application], [Renders the interface. Holds no business rules. Calls
+      the API for every read and write.],
+    [REST API], [The only writer to the database. Owns every rule,
+      authorisation decision and validation.],
+    [Real-time hub], [Pushes live updates. Shares the API's authentication and
+      data access. Covered in Report 9.],
+    [Relational store], [Holds state and enforces integrity through
+      constraints, not only through code.],
   ),
-  caption: [Features delivered in this part of the system.],
+  caption: [The four containers and what each is responsible for.],
 )
 
-= How a Venture Reaches the Public
+The property worth stating early: *the web application contains no business
+rules.* It does not compute funding totals and it does not decide permissions.
+It displays decisions the API has already made. Every later report depends on
+that separation holding.
 
-The path has four actors' decisions in it, and each one writes a different
-thing.
-
-+ *The founder creates a draft.* Nothing is public. The venture exists only in
-  the founder's own workspace.
-+ *The founder submits it.* Its moderation status becomes `Pending`. It enters
-  the review queue. It is still not public.
-+ *An administrator reviews it.* Approved, or rejected with a reason. The
-  decision is written to the audit log against that administrator.
-+ *If approved, it becomes visible* — provided the founder has not paused it.
-  Public visibility requires *two* conditions to agree, not one.
-+ *The founder keeps it current.* Updates and milestones are published as work
-  progresses; investors following the venture are notified.
-+ *An edit that changes substance returns it to review* — and this is where the
-  design of the state model matters.
-
-#full-page-figure(
-  "/assets/diagrams/out/flow-venture.svg",
-  caption: [The venture lifecycle. Two gates decide whether a venture is public:
-    an administrator's approval, and the founder's own lifecycle state. A
-    substantive edit returns it to review without touching anything else.],
-)
-
-== Three states, not one
-
-A venture carries three independent state columns. They answer three different
-questions and are written by three different actors.
+== Technology
 
 #figure(
   table(
-    columns: (34mm, 1fr, 32mm),
+    columns: (36mm, 1fr, 1fr),
     align: (left + top, left + top, left + top),
-    table.header([Column], [Question it answers], [Written by]),
-    [`ModerationStatus`], [Has an administrator allowed this to be public?],
-      [Administrator],
-    [`LifecycleStatus`], [Is the founder currently running this venture?],
-      [Founder, or the system],
-    [`Stage`], [How far has the venture progressed commercially?],
-      [The funding pipeline],
+    table.header([Technology], [Role in the platform], [Why]),
+    [React with Next.js], [The entire user interface],
+      [Public pages render on the server, so a venture page arrives complete
+       rather than as a loading shell.],
+    [TypeScript], [Frontend language],
+      [Type errors surface at build time rather than in the browser.],
+    [Tailwind CSS with shadcn/ui], [Styling and components],
+      [Unstyled, accessible primitives styled with our own tokens — the visual
+       language is ours rather than a library's.],
+    [ASP.NET Core], [The API and every rule],
+      [Compile-time typing for money-related invariants; authorisation,
+       validation and configuration are first-party concerns.],
+    [Entity Framework Core], [Database access],
+      [Every schema change is a versioned migration, so the schema history is
+       replayable.],
+    [SQL Server], [Storage],
+      [The data and its invariants are relational; constraints are enforced by
+       the database itself.],
   ),
-  caption: [Three columns, three writers, three questions.],
+  caption: [The foundation stack. Technologies specific to one part of the
+    system are introduced in the report that covers it.],
 )
+
+= Inside the API
+
+Components are grouped by responsibility rather than by entity. The grouping
+below is the actual shape of the codebase, counted from it.
 
 #full-page-figure(
-  "/assets/diagrams/out/state-project.svg",
-  caption: [The three state machines side by side. They share no transition and
-    no writer, which is what allows an administrator's decision and the funding
-    pipeline's progress to coexist without either overwriting the other.],
+  "/assets/diagrams/out/component-api.svg",
+  caption: [Component view of the API. Domain services hold the rules and
+    perform no I/O; only `AppDbContext` reaches the database.],
 )
 
-*Public visibility requires two of the three to agree.* A venture is listed only
-when its moderation status is approved *and* its lifecycle status is active.
-That is why the listing query filters on two columns, and why a composite index
-covering both exists — a cost paid once in an index definition, in exchange for
-a state model that cannot silently lose information.
-
-= Interface
-
-#shot(
-  "/assets/screenshots/my-projects-new.png",
-  [Venture creation. The form asks for the material an investor will need, in
-   the order they will read it — identity first, then the ask, then the
-   evidence.],
+#figure(
+  table(
+    columns: (36mm, 12mm, 1fr),
+    align: (left + top, center + top, left + top),
+    table.header([Group], [Count], [What it holds]),
+    [Controllers], [22],
+      [One per resource area — authentication, projects, investments, payments,
+       messages, notifications, follows, bookmarks, reports, admin moderation,
+       admin revenue, the three dashboards, insights.],
+    [Domain services], [5],
+      [`AuthService` owns identity; `PaymentService` owns the payment
+       lifecycle; `FundingMath` owns what a venture has raised; `PipelineStages`
+       owns valid stage transitions; `AccountRules` owns what an account may be.],
+    [Infrastructure services], [8],
+      [Upload validation, presence tracking, the notification fan-out queue and
+       its worker, mail, the UTC serialisation converters, the payment expiry
+       sweeper.],
+    [Data], [1],
+      [`AppDbContext` and the entity model.],
+  ),
+  caption: [The API by responsibility. Counted from the source, not estimated.],
 )
 
-#shot(
-  "/assets/screenshots/venture-detail-en-light.png",
-  [A published venture page. The hero carries the pitch and the essentials —
-   sector, stage, location and the founder — before it asks the reader for
-   anything.],
+The separation between the two service groups is the one that matters.
+`FundingMath` is arithmetic over rows and `PipelineStages` is a transition
+table; neither performs I/O, which is what makes them testable without a
+database. The whole automated test suite exists against those two for exactly
+that reason.
+
+== The layering, and where it stops
+
+A controller binds the request, checks authorisation, does the work, and shapes
+the result. The last of those is handled uniformly rather than per-controller: a
+shared extension translates a service result into an HTTP response, so the
+mapping from "not found" to `404` exists once rather than twenty-two times.
+
+#figure(
+  ```cs
+  // A service reports outcome in its return type; the controller maps it.
+  var result = await _payments.OpenCheckoutAsync(investmentId, userId, ct);
+  return result.ToActionResult(this);
+  ```,
+  caption: [The controller-to-service seam. Outcome mapping happens in one place
+    for the whole API.],
 )
 
-#shot(
-  "/assets/screenshots/founder-ventures.png",
-  [The founder's ventures, each showing its own moderation state. A founder can
-   always see where a submission stands, which is what stops a submitted venture
-   feeling like it disappeared.],
+Services return a result object rather than throwing for expected outcomes. An
+investment that cannot be created because the venture is closed is not an
+exceptional condition — it is an ordinary answer, and modelling it as an
+exception both costs performance and obscures the control flow.
+
+#note[
+  *Where the seam is not applied, and why.* Of twenty-two controllers, exactly
+  one — `AuthController` — reaches the database only through a service. The
+  other twenty-one query `AppDbContext` directly.
+
+  This is a deliberate boundary rather than an oversight. A service layer was
+  introduced where the rules are dangerous to get wrong — identity and money —
+  and not where a controller is a thin read against a table. Adding one
+  everywhere would have produced twenty-one services whose bodies were a single
+  query, which is indirection without a corresponding problem.
+
+  The cost is stated rather than hidden: the discipline is not uniform, and a
+  rule that later needs to apply to a listing endpoint has no obvious home. Any
+  claim that this codebase forbids controllers from touching the data context
+  would be false, and it is not made here.
+]
+
+= The Web Application
+
+*Routing.* Fifty-five route files, grouped into segments that correspond to
+*access level* rather than to feature: public pages, authentication pages, and
+an authenticated application group holding the dashboards, investment surfaces,
+messages, settings and the administrative area.
+
+Grouping by access level rather than by feature means the authorisation boundary
+is visible in the directory structure. An administrative page cannot be added in
+the wrong place without it being obvious in review.
+
+*Data fetching.* Public pages render on the server so their content is present
+in the first response. Authenticated surfaces fetch on the client, because their
+content is user-specific, not cacheable, and sits behind a navigation the user
+has already paid the load cost for.
+
+*State.* There is no global client state store, deliberately. Server state — the
+list of ventures, a portfolio, a conversation — belongs to the server and is
+fetched, not mirrored. What genuinely lives on the client is small: form state,
+whether an overlay is open, and the live connection status. A global store would
+create a second copy of the truth, and the synchronisation problem that follows
+it.
+
+= The Design System
+
+A platform asking strangers to exchange money must look like it can be trusted
+before anyone reads a word of it. Interface quality here is not decoration; it
+is the first evidence a visitor has, and it does work no feature can do.
+
+Four principles govern every decision in this part.
+
+/ Restraint over decoration: Financial interfaces lose credibility through
+  excess, not through plainness. One display face, one accent, a great deal of
+  space.
+
+/ One motif, used sparingly: A single structural idea — the chamfered plate —
+  carries the identity. It appears where structure genuinely changes. A motif
+  applied everywhere stops being a motif.
+
+/ Evidence over assertion: The interface shows numbers, dates and documents
+  rather than adjectives. Where two facts differ — committed and settled — it
+  shows both rather than reconciling them into one comfortable figure.
+
+/ Accessible by construction: Behaviour comes from primitives that are
+  accessible before they are styled, so compliance is the starting state rather
+  than a retrofit.
+
+== Tokens
+
+The system is defined as tokens, not as decisions made per component. Every
+value below has exactly one definition.
+
+#let _swatch(fill, name, hex) = block(
+  width: 100%,
+  {
+    block(width: 100%, height: 15mm, fill: fill, stroke: 0.5pt + border)
+    v(1.4mm)
+    eyebrow(name, size: 6pt)
+    v(0.4mm)
+    text(font: mono-font, size: 6.8pt, fill: muted)[#hex]
+  },
 )
 
-#shot(
-  "/assets/screenshots/admin-review.png",
-  [The review queue — the primary administrative surface. Every venture waiting
-   for a decision appears here, and nothing reaches the public without passing
-   through it.],
+#figure(
+  grid(
+    columns: (1fr,) * 4,
+    column-gutter: 4mm,
+    row-gutter: 5mm,
+    _swatch(ink, "ink", "#241C14"),
+    _swatch(muted, "text-secondary", "#71614C"),
+    _swatch(bronze, "bronze", "#8B4F2A"),
+    _swatch(gold, "gold", "#B08A3F"),
+    _swatch(paper, "bg", "#F6F2E7"),
+    _swatch(surface, "surface", "#FCFAF3"),
+    _swatch(border, "border", "#E3D9C4"),
+    block(width: 100%, {
+      block(
+        width: 100%, height: 15mm, fill: paper,
+        stroke: 0.5pt + border, inset: 3mm,
+        {
+          set text(size: 6.5pt, fill: ink)
+          [Ink on ground]
+          linebreak()
+          text(fill: muted)[Secondary on ground]
+          linebreak()
+          text(fill: bronze, weight: 700)[Bronze accent]
+        },
+      )
+      v(1.4mm)
+      eyebrow("contrast check", size: 6pt)
+      v(0.4mm)
+      text(font: mono-font, size: 6.8pt, fill: muted)[≥ 4.5:1]
+    }),
+  ),
+  caption: [The palette, printed from the token definitions themselves rather
+    than pictured. A dark set exists with the same role assignments.],
 )
 
-#shot(
-  "/assets/screenshots/admin-ventures.png",
-  [The venture registry: every venture in every state, for investigation rather
-   than for decision. The review queue is for acting; this is for looking.],
+#figure(
+  table(
+    columns: (34mm, 30mm, 1fr),
+    align: (left + top, left + top, left + top),
+    table.header([Token], [Family], [Role]),
+    [`--font-heading-en`], [Cinzel], [Display only: page titles and the
+      wordmark. Never in running text — it is an inscriptional capital face and
+      unreadable at paragraph size.],
+    [`--font-body-en`], [Karla], [Interface text, labels, controls.],
+    [`--font-numerals`], [Spectral], [Figures and long-form reading.],
+    [`--font-heading-ar`], [Aref Ruqaa], [Arabic display.],
+    [`--font-body-ar`], [Cairo], [Arabic interface text.],
+  ),
+  caption: [Typographic tokens. Five families across two scripts, each with one
+    role and no second use.],
 )
 
-#shot(
-  "/assets/screenshots/admin-reports.png",
-  [The reports queue, filtered by status. Reports concern published content;
-   they are a separate queue from review because they arrive at a different
-   rhythm and are worked differently.],
+#figure(
+  block(width: 100%, {
+    let row(label, body) = {
+      grid(
+        columns: (26mm, 1fr),
+        column-gutter: 5mm,
+        align: (left + horizon, left + horizon),
+        eyebrow(label, size: 6.2pt),
+        body,
+      )
+      v(2.5mm)
+      line(length: 100%, stroke: 0.4pt + border)
+      v(2.5mm)
+    }
+    row("display / cinzel", text(font: display-font, size: 21pt, weight: 600, tracking: 0.04em)[Ventures seeking capital])
+    row("heading / karla", text(font: heading-font, size: 13pt, weight: 700)[Funding totals are derived])
+    row("body / spectral", text(font: body-font, size: 10.5pt)[An approved commitment is not a funded one — the platform shows both figures.])
+    row("label / karla", eyebrow("moderation status", size: 7.5pt))
+    row("mono / code", text(font: mono-font, size: 8.5pt, fill: bronze)[FundingMath.RaisedAsync()])
+  }),
+  caption: [The type scale, set in the faces the product itself loads.],
 )
 
+#note[
+  Both figures above are *rendered from the tokens*, not pictures of them. The
+  swatches are filled with the same values the product uses and the specimen is
+  set in the same Cinzel, Karla and Spectral the product loads. A design system
+  that cannot be applied outside its original medium has not been abstracted
+  properly — so this report is a test of its own claim.
+]
+
+*Spacing and radii.* Spacing follows a four-pixel base scale. Radii are small
+and uniform; the chamfer, not rounding, is what carries character.
+
+== Components
+
+Components come from shadcn/ui: source files copied into the repository rather
+than taken as a dependency. Each composes Radix primitives that supply behaviour
+and are styled entirely with the tokens above.
+
+The consequence worth noting is ownership. A component that misbehaves is
+modified directly rather than overridden from outside, which means the code
+governing the interface is code the project can read. The cost is maintenance:
+an upstream fix does not arrive automatically.
+
+*Composition over configuration.* A card that takes fifteen props to cover every
+use eventually covers none of them well; a card that composes from a header, a
+body and a footer covers all of them.
+
+= Two Axes Every Screen Supports
+
+A design system is only a system if the same tokens hold across every axis the
+product varies on. This one varies on two, and both are shown on the *same*
+surface so the comparison is of the system rather than of two screens.
+
 #shot(
-  "/assets/screenshots/my-projects.png",
-  [The founder's workspace. Drafts, submissions awaiting review, and published
-   ventures in one list — so the state of every submission is visible without
-   opening it.],
+  "/assets/screenshots/landing-en-light.png",
+  [The landing page. Cinzel at display size, the gold accent used once, and an
+   image-led composition — the four principles in a single frame.],
 )
 
 #shots(
-  "/assets/screenshots/venture-detail-en-light.png",
-  "/assets/screenshots/venture-detail-ar-dark.png",
-  [The same venture page in English light and Arabic dark. Milestones, updates
-   and documents all mirror with the writing direction; the content and the
-   funding figures do not change.],
+  "/assets/screenshots/projects-en-light.png",
+  "/assets/screenshots/projects-en-dark.png",
+  [The venture listing under the light and dark token sets. Every colour
+   resolves through the same semantic role in both; nothing is re-chosen per
+   theme.],
 )
+
+#shots(
+  "/assets/screenshots/projects-en-light.png",
+  "/assets/screenshots/projects-ar-light.png",
+  [English and Arabic. The writing direction flips and the entire layout mirrors
+   — navigation, filters, progress bars and the grid. The display face changes to
+   the Arabic pair. The information does not change.],
+)
+
+Three things change with language and one does not. The direction flips, so
+layout mirrors. The display typeface changes, because the Latin display face has
+no Arabic coverage. Numerals and Latin proper nouns remain left-to-right inside
+right-to-left text, which the layout tolerates rather than fights. What does not
+change is the information: both captures show the same ventures, the same
+filters, the same figures.
 
 #delivered[
-  *Rejection carries a reason.* A rejected venture returns to its founder with a
-  stated cause, not a bare status change. A rejection with no reason is
-  indistinguishable from a fault, and produces a support request rather than a
-  corrected submission.
+  Layout is expressed in logical properties — start and end rather than left and
+  right — so mirroring is a property of the direction rather than a second set of
+  rules maintained by hand. This is why the Arabic capture required no separate
+  stylesheet and no separate screen.
 ]
 
-= Data
+= The Data Foundation
 
-This report owns the venture and everything the venture owns.
-
-#figure(
-  table(
-    columns: (38mm, 1fr, 26mm),
-    align: (left + top, left + top, left + top),
-    table.header([Table], [Holds], [On owner delete]),
-    [`Projects`], [The venture itself, including the three state columns and
-      the funding target.], [Cascade],
-    [`ProjectImages`], [Cover and gallery imagery.], [Cascade],
-    [`ProjectDocuments`], [Attached files and their visibility rule.],
-      [Cascade],
-    [`TeamMembers`], [People listed on the venture.], [Cascade],
-    [`Milestones`], [Declared objectives and their dates.], [Cascade],
-    [`ProjectUpdates`], [Published progress reports.], [Cascade],
-    [`ProjectUpdateImages`], [Imagery attached to an update.], [Cascade],
-    [`Reports`], [User reports raised against a venture.], [Cascade],
-    [`AdminAuditLog`], [Administrative decisions, attributed.], [Retained],
-  ),
-  caption: [Venture tables. Everything a venture owns cascades with it — except
-    the audit record of decisions made about it, which is deliberately
-    retained.],
-)
-
-Two design points are worth stating.
-
-*Everything a venture owns cascades.* An image or a milestone has no meaning
-without its venture, so deleting the venture removes them. That is the correct
-behaviour for owned content.
-
-*The audit record does not.* A decision made by an administrator is a record of
-something that happened, and it survives the object it was made about. The same
-principle appears again in Report 6.
+The platform stores four kinds of thing. Later reports add tables around them,
+but these four are the spine.
 
 #figure(
   table(
-    columns: (46mm, 1fr),
+    columns: (34mm, 1fr),
     align: (left + top, left + top),
-    table.header([Index], [Why it exists]),
-    [`(ModerationStatus, LifecycleStatus, CreatedDate)`],
-      [The public listing filters on both state columns and orders by date. One
-       composite index covers the whole query in a single seek.],
-    [`Stage`], [Stage-filtered discovery, used in Report 3.],
-    [`(ProjectId, Status)` on `Reports`],
-      [The moderation queue filters on exactly this pair.],
+    table.header([Entity], [What it represents]),
+    [`User`], [An account. May act as founder, investor, or both.],
+    [`Project`], [A venture seeking funding. Owned by exactly one founder.],
+    [`Investment`], [A commitment by an investor. An *intention*, not a
+      payment.],
+    [`PaymentTransaction`], [Evidence that money moved. A *fact*.],
   ),
-  caption: [Indexes added for this part, each for a query that needed it.],
+  caption: [The four core entities. Reports 4, 7 and 8 develop the last three.],
 )
 
-= Backend
-
-#figure(
-  ```cs
-  // Stage transitions are validated against a table of permitted moves rather
-  // than assigned freely. A stage that is not reachable from the current one
-  // is refused, and the venture is left untouched.
-  if (!PipelineStages.IsValid(requested))
-      return ServiceResult.Invalid("Unknown stage.");
-
-  if (!PipelineStages.CountsTowardFunding(requested) && project.HasSettledFunding)
-      return ServiceResult.Conflict(
-          "A venture with settled funding cannot return to a pre-approval stage.");
-  ```,
-  caption: [Stage transition validation. The second check is the one that stops
-    commercial progress being reversed by an unrelated operation.],
+#full-page-figure(
+  "/assets/diagrams/out/erd-core.svg",
+  caption: [The core relational model. The distinction that governs Report 8 is
+    already visible here: an `Investment` and a `PaymentTransaction` are separate
+    rows because they are separate facts.],
 )
 
-#figure(
-  ```cs
-  // Moderation writes ModerationStatus and nothing else. LifecycleStatus and
-  // Stage belong to other writers and are not touched here — which is what
-  // makes re-approval after an edit safe.
-  project.ModerationStatus = ModerationStatus.Approved;
-  project.ReviewedAtUtc   = DateTime.UtcNow;
-  project.ReviewedByAdminId = adminId;
+`Investor` and `Innovator` are specialisations of `User`, persisted in one table
+with a discriminator column. They share almost every column and differ mainly in
+what they are related to, so a separate table per specialisation would add a
+join to every authentication call for no benefit.
 
-  await _audit.RecordAsync(adminId, AdminAction.ApproveProject, project.Id, ct);
-  ```,
-  caption: [Approval. Three fields written, one audit record, and no other state
-    column referenced.],
+#full-page-figure(
+  "/assets/diagrams/out/class-domain.svg",
+  caption: [The domain model as classes. The specialisation above appears here as
+    inheritance and in the database as one table with a discriminator — the same
+    decision seen from two sides.],
 )
 
-#figure(
-  ```cs
-  // Uploads are validated against the file's actual bytes, not its declared
-  // content type or its extension — both of which the caller controls.
-  private static readonly string[] Permitted = { "jpg", "jpeg", "png", "gif", "bmp" };
-
-  if (file.Length > _limits.MaxImageBytes)          return Reject("Too large.");
-  if (!Permitted.Contains(SniffExtension(file)))    return Reject("Unsupported type.");
-
-  var storedName = $"{Guid.NewGuid():N}{Path.GetExtension(SniffExtension(file))}";
-  ```,
-  caption: [Image upload. The stored filename is generated, never taken from the
-    upload, so a crafted name cannot traverse a path or collide.],
-)
-
-= Key Endpoints
+= Patterns Applied
 
 #figure(
   table(
-    columns: (16mm, 50mm, 1fr),
-    align: (left + top, left + top, left + top),
-    table.header([Method], [Path], [Purpose]),
-    [`POST`], [`api/projects`], [Create a venture as a private draft.],
-    [`PUT`], [`api/projects/{id}`], [Update a venture the caller owns.],
-    [`POST`], [`api/projects/{id}/submit`], [Submit for review. Writes
-      moderation status only.],
-    [`POST`], [`api/projects/{id}/images`], [Attach imagery, validated by
-      content.],
-    [`POST`], [`api/projects/{id}/documents`], [Attach a document with a
-      visibility rule.],
-    [`POST`], [`api/projects/{id}/milestones`], [Declare a milestone.],
-    [`POST`], [`api/projects/{id}/updates`], [Publish a progress update;
-      notifies followers.],
-    [`GET`], [`api/admin/projects/pending`], [The review queue.],
-    [`POST`], [`api/admin/projects/{id}/approve`], [Approve; writes the audit
-      log.],
-    [`POST`], [`api/admin/projects/{id}/reject`], [Reject; a reason is
-      required.],
-    [`POST`], [`api/reports`], [Report a venture for attention.],
-  ),
-  caption: [Principal endpoints in this part.],
-)
-
-= Libraries Used in This Part
-
-#figure(
-  table(
-    columns: (40mm, 1fr),
+    columns: (34mm, 1fr),
     align: (left + top, left + top),
-    table.header([Library], [Role here]),
-    [`Entity Framework Core`], [Maps the venture and everything it owns, and
-      carries every schema change as a versioned migration.],
-    [`FluentValidation`], [Validates the submission payload before a service
-      sees it — required fields, positive amounts, sane dates.],
-    [`SixLabors.ImageSharp`], [Inspects uploaded image bytes to confirm the
-      declared content type, independently of the extension or header.],
+    table.header([Pattern], [Where, and what it buys]),
+    [Strategy],
+      [`IPaymentProvider`. The payment algorithm varies by configuration
+       without the caller knowing which is in use.],
+    [Data transfer object],
+      [Every API boundary. Entities are never serialised directly, so a schema
+       change cannot silently alter the public contract.],
+    [Result object],
+      [The service seam. Expected failure is a value, not an exception.],
+    [Producer–consumer],
+      [`NotificationFanOutQueue` with a background worker. Notification delivery
+       leaves the request path, so a slow fan-out cannot slow a write.],
+    [Projection],
+      [List queries project to DTOs rather than materialising entities, so a
+       listing returns the columns the card needs and not the full row.],
   ),
-  caption: [Libraries introduced in this part. Identity libraries from Report 1
-    remain in use throughout.],
+  caption: [Patterns used, and the specific problem each solves.],
 )
+
+The table deliberately omits patterns the system does *not* use. There is no
+mediator, no event bus and no generic repository abstraction over EF Core. Each
+was considered and rejected as indirection without a corresponding problem —
+`DbSet` is already a repository, and wrapping it produces a second, worse one.
+
+= Decisions on Record
+
+Ten decisions are recorded, each stated where its consequences are discussed
+rather than collected into a chapter of its own.
+
+#figure(
+  table(
+    columns: (12mm, 1fr, 20mm),
+    align: (center + top, left + top, center + top),
+    table.header([ADR], [Decision], [Report]),
+    [01], [Build the frontend on React with Next.js and unstyled primitives], [1],
+    [02], [Payment rules live in the domain, not in the provider integration], [8],
+    [03], [Send transactional mail over SMTP behind an interface], [3],
+    [04], [Funding totals are derived, never stored], [7],
+    [05], [Model moderation, lifecycle and commercial stage as independent columns], [4],
+    [06], [Build a layered monolith rather than a service-oriented system], [2],
+    [07], [Force UTC at the serialisation boundary rather than by convention], [2],
+    [08], [Hold presence in memory, persist last-seen], [9],
+    [09], [Move notification fan-out off the request path], [9],
+    [10], [Fail to start on a missing secret rather than falling back], [12],
+  ),
+  caption: [Index of architecture decisions, and the report that carries each
+    one's consequences.],
+)
+
+Each record states its context, the decision, and its cost. A record whose
+consequences are entirely positive has not been written honestly.
 
 = Challenges
 
-#challenge("Re-approval erased a venture's funding progress")[
-  A venture that was actively raising money reverted to an early commercial
-  stage after its founder edited the description and an administrator approved
-  it again.
+#challenge("A layered architecture that is only layered in two places")[
+  The intended discipline was that controllers delegate and never query. In
+  practice only `AuthController` does; twenty-one of twenty-two reach
+  `AppDbContext` directly.
 
-  *Diagnosis.* Not a bug in the edit handler. A single status column was being
-  written by three different actors — the administrator, the founder and the
-  funding pipeline — each for a legitimate reason and none aware of the others.
-  Re-approval wrote `approved` over a value that meant something entirely
-  different.
-
-  *Solution.* Three independent columns with one writer each, and transitions
-  validated per column rather than assigned. The sequence that produced the
-  defect is now structurally impossible: approval writes moderation status and
-  cannot reach the other two.
-
-  *Cost.* A schema migration, a rewrite of the visibility rule into a
-  two-column predicate, and a composite index to keep the listing query fast
-  under it.
+  *Resolution, and its cost.* The boundary was drawn at danger rather than at
+  uniformity: services exist for identity and money, where a mistake is
+  expensive, and not for thin reads, where a service would wrap a single query.
+  The cost is that the codebase does not have one rule about where data access
+  belongs — it has two, and which applies depends on the area. That is recorded
+  here rather than asserted away.
 ]
 
-#challenge("A submitted venture felt like it had disappeared")[
-  A founder who submitted a venture had no way to see what had happened to it,
-  and a rejection arrived as a bare status with no explanation.
+#challenge("Dates that are correct on the server and wrong in the browser")[
+  A `DateTime` that leaves the API without an explicit offset is interpreted in
+  the reader's local zone, which silently shifts every timestamp the interface
+  displays.
 
-  *Solution.* The founder's venture list shows the moderation state of every
-  venture at all times, and rejection requires the administrator to state a
-  reason, which is returned to the founder. A correction can then be made and
-  resubmitted rather than guessed at.
+  *Solution.* UTC is forced at the serialisation boundary rather than left to
+  convention: dedicated converters are registered on the serializer, so a new
+  DTO cannot opt out by omission. Any serializer added later must register them
+  too — which is a rule, and rules that are not enforced by the compiler are
+  written down. This one is.
 ]
 
-#challenge("An uploaded file cannot be trusted to describe itself")[
-  Both the declared content type and the file extension are supplied by the
-  caller, so neither is evidence of what a file actually contains.
+#challenge("A design system is easy to declare and hard to prove")[
+  Any project can list colour tokens. The claim that matters is that no screen
+  chooses its own — and that claim is invisible in a list.
 
-  *Solution.* Uploads are checked against the file's own bytes, capped by size,
-  restricted to an allow-list rather than a deny-list, and stored under a
-  generated filename so a crafted name cannot traverse a path.
+  *Solution.* The system is exercised on both axes it varies on, on the same
+  surface, in this report. The palette and the type specimen above are rendered
+  from the token definitions rather than screenshotted, so a token that had
+  drifted would show as a difference between the specimen and the captures.
 ]
 
 = How This Fits With the Rest of the System
 
-The venture is the object the other five reports revolve around. This table
-states exactly what each of them takes from here, and what it must not touch.
+Only the direct relationships are listed. Every later part inherits from this
+one; none of them amends it.
 
 #figure(
   table(
-    columns: (30mm, 1fr, 1fr),
+    columns: (34mm, 1fr, 1fr),
     align: (left + top, left + top, left + top),
-    table.header([Report], [Takes from this part], [Boundary]),
-    [1 · Foundation & Identity],
-      [The owner of a venture, and the administrator who reviews it, are both
-       identities established there.],
-      [This part assumes an authenticated caller with a role; it never decides
-       identity itself.],
-    [3 · Discovery],
-      [Only ventures that are approved *and* active are listed. The composite
-       index defined here is what makes that filter cheap.],
-      [Discovery reads venture state. It never writes it.],
-    [4 · Investment],
-      [A commitment attaches to a venture and reads its funding target.],
-      [The funding pipeline writes `Stage` and nothing else. It cannot change
-       moderation or lifecycle state.],
-    [5 · Real-time],
-      [Publishing an update notifies followers; document requests open a
-       conversation.],
-      [Notification delivery leaves the request path, so publishing an update
-       is never as slow as delivering it.],
-    [6 · Insight & Administration],
-      [Venture analytics and the moderation load reported there are derived
-       from the tables defined here.],
-      [Analytics read event rows. No counter on the venture is maintained.],
+    table.header([Report], [Relationship], [Boundary]),
+    [1 · Idea & Requirements],
+      [*This part implements it.* Every structure here answers a requirement
+       recorded there.],
+      [Nothing is built here that was not asked for there.],
+    [3 · Identity & Sessions],
+      [*Depends on this part.* Identity is the first domain service, and every
+       authentication screen is drawn from the tokens above.],
+      [It adds three tables; it changes none of the four here.],
+    [7 · Commitment & Pipeline],
+      [*Depends on this part.* `FundingMath` is a domain service in the group
+       described above, and the `Investment` / `PaymentTransaction` split is
+       already in the model here.],
+      [Funding figures are never computed anywhere but that one service.],
+    [12 · Administration & Evaluation],
+      [*Reports on this part.* Deployment, configuration and measured
+       performance all describe the containers defined here.],
+      [It measures the architecture rather than altering it.],
   ),
-  caption: [What each report takes from this part, and the line it does not
-    cross.],
+  caption: [Direct relationships only. Reports 4 to 6 and 8 to 11 inherit the
+    design system and the container split without a dependency worth naming
+    separately.],
 )
-
-The single rule that holds all of this together: *three state columns, one
-writer each.* Every boundary in the table above is an expression of it.
 
 = Summary
 
 #delivered[
-  *For the founder.* A complete venture record — imagery, team, documents,
-  milestones and updates — created as a private draft, submitted deliberately,
-  and kept current after publication.
+  *Shape.* A four-container architecture in which the API owns every rule and
+  the web application owns none. Twenty-two controllers, five domain services,
+  eight infrastructure services and one data context, grouped by responsibility
+  and counted from the source. A uniform controller-to-service seam so outcome
+  mapping exists once. Fifty-five client routes grouped by access level, server
+  rendering for public pages, and no global client state store.
 
-  *For the administrator.* A review queue, approval and reason-bearing
-  rejection, a full venture registry for investigation, a report queue, and an
-  audit record of every decision.
+  *Appearance.* Seven colour tokens and five typographic tokens with one
+  definition each, applied across every screen in two languages and two themes,
+  with layout expressed in logical properties so mirroring is a property rather
+  than a second stylesheet.
 
-  *For the system.* A three-column state model in which administrative,
-  operational and commercial state move independently; upload validation based
-  on file content; and a composite index that keeps the two-column visibility
-  rule cheap to evaluate.
-
-  *Verified.* The stage-transition rules are covered by automated tests, which
-  assert directly that a moderation change leaves commercial stage untouched.
+  *Data.* A relational core of four entities with the commitment-versus-payment
+  distinction present in the schema from the start, and integrity enforced by
+  constraints rather than only by code.
 ]
 
-*Still open in this part.* Non-image attachments are not supported; documents
-are limited to the permitted image and document types. Milestones are recorded
-as declared by the founder — the platform timestamps and publishes them, it does
-not verify that one was met.
+*Still open in this part.* The layering discipline is applied to identity and
+payments and not elsewhere, as recorded above. There is exactly one production
+instance of each container — no load balancer, no autoscaling, no read replica —
+and Report 12 states which would be needed first and at what point.
 
-*What this enables.* Report 3 can now assume a population of approved, active
-ventures exists — which is what makes discovery a real problem worth solving.
+*What this enables.* Report 3 can now assume a place to put identity: a domain
+service that owns it, tables the data context reaches, and a set of screens that
+need only be composed, not designed.

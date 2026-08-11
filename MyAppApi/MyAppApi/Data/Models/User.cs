@@ -54,6 +54,16 @@
         // in the messenger. Null until they've been online at least once.
         public DateTime? LastSeenAt { get; set; }
 
+        // When the first-run flow was completed. Null = never onboarded, which is
+        // what gates the redirect after login.
+        //
+        // This lived in localStorage first, which made it a per-browser fact rather
+        // than an account one: the same person met the welcome flow again on every
+        // new device, and clearing site data silently reset it. A timestamp rather
+        // than a bool because "when" is the question worth asking later, and it
+        // costs the same column.
+        public DateTime? OnboardedAtUtc { get; set; }
+
         [Required]
         [StringLength(50)]
         public string UniqueNumber { get; set; }

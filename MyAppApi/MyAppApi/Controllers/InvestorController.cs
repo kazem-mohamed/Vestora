@@ -151,7 +151,19 @@ namespace MyAppApi.Controllers
             };
 
             _context.Investments.Add(investment);
-            await _context.SaveChangesAsync();
+            StageLog.Opened(_context, investment, currentUserId);
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (Services.Payments.PaymentService.IsUniqueViolation(ex))
+            {
+                // UX_Investments_OneLivePerInvestor caught what the check above raced
+                // past. Same answer the check would have given, so the investor sees the
+                // rule rather than a server error.
+                _context.Entry(investment).State = EntityState.Detached;
+                return BadRequest(new { Message = "You already have a support request for this project." });
+            }
 
             var notificationForOwner = new Notification
             {
@@ -188,6 +200,78 @@ namespace MyAppApi.Controllers
             return Ok(new { Message = "Support request submitted for approval.", ContactMethod = supportDto.ContactMethod });
         }
 
+        /// <summary>
+        /// The founder accepts a support request, addressed by the relationship itself.
+        /// <para>
+        /// The pre-existing approval endpoint is keyed on a notification id, which made
+        /// the decision depend on a row that is deleted when the counterpart request is
+        /// declined and paged out of the feed as it ages. A founder whose notification
+        /// was gone saw the approve button disabled with no other way in. Declining
+        /// already had an investment-addressed endpoint; accepting now has the matching
+        /// one, and the notification path stays for the notification feed itself.
+        /// </para>
+        /// </summary>
+        [Authorize(Roles = "Innovator")]
+        [HttpPost("investments/{investmentId}/approve-support")]
+        public async Task<IActionResult> ApproveSupport(int investmentId)
+        {
+            var currentUserId = GetCurrentUserId();
+            var investment = await _context.Investments
+                .Include(i => i.Project)
+                .FirstOrDefaultAsync(i => i.Id == investmentId);
+
+            if (investment == null) return NotFound(new { Message = "Request not found." });
+            if (investment.Project.OwnerId != currentUserId) return Forbid();
+            if (!investment.InvestorId.HasValue)
+                return BadRequest(new { Message = "This request has no investor attached." });
+
+            if (investment.Status == "Approved")
+                return BadRequest(new { Message = "This support is already approved." });
+
+            if (investment.Status == PipelineStages.Declined)
+                return BadRequest(new { Message = "This request was declined. The investor may submit a new one." });
+
+            // Same capacity rule as the notification-addressed path — see the comment
+            // there. Two doors into one decision must not disagree about the round.
+            var headroom = await FundingMath.HeadroomForAsync(
+                _context, investment.ProjectId, investment.Project.InvestmentNeeded, investment.Id);
+            if (investment.Amount > headroom)
+            {
+                return BadRequest(new
+                {
+                    Message = $"Approving this would exceed the round. Only {headroom:N0} USD is still open — decline it, or raise the venture's target first."
+                });
+            }
+
+            investment.Status = "Approved";
+            await StageLog.MoveAsync(_context, investment, PipelineStages.Approved, currentUserId);
+
+            // The prompt that asked for this decision is answered, whichever door was used.
+            var prompt = await _context.Notifications
+                .FirstOrDefaultAsync(n => n.InvestmentId == investment.Id
+                                          && n.UserId == currentUserId
+                                          && n.NotificationType == "ProjectSupported");
+            if (prompt != null) prompt.IsRead = true;
+
+            var approvalNotification = new Notification
+            {
+                Content = $"Your support for '{investment.Project.Name}' ({investment.Amount} USD) has been approved.",
+                NotificationType = "ProjectSupportApproved",
+                ProjectId = investment.ProjectId,
+                InvestmentId = investment.Id,
+                ActorUserId = currentUserId,
+                DateCreated = DateTime.UtcNow,
+                IsRead = false,
+                UserId = investment.InvestorId.Value
+            };
+            _context.Notifications.Add(approvalNotification);
+
+            await _context.SaveChangesAsync();
+            await _hub.PushAsync(approvalNotification);
+
+            return Ok(new { Message = "Support approved." });
+        }
+
         [Authorize(Roles = "Innovator")]
         [HttpPost("{investmentId}/reject-support")]
         public async Task<IActionResult> RejectSupport(int investmentId)
@@ -219,9 +303,18 @@ namespace MyAppApi.Controllers
 
             // Decline without deleting — see NotificationController.RejectSupport.
             investment.Status = PipelineStages.Declined;
-            investment.Stage = PipelineStages.Declined;
-            investment.StageUpdatedAt = DateTime.UtcNow;
+            await StageLog.MoveAsync(_context, investment, PipelineStages.Declined, currentUserId);
             await CloseFundingForAsync(investment.Id, "The relationship was declined.");
+
+            // The prompt that asked for this decision is answered. Marked read rather
+            // than deleted: the founder's record of what they were asked survives, and
+            // the "needs you" queue stops offering a decision that has been made.
+            var prompt = await _context.Notifications
+                .FirstOrDefaultAsync(n => n.InvestmentId == investment.Id
+                                          && n.UserId == currentUserId
+                                          && n.NotificationType == "ProjectSupported");
+            if (prompt != null) prompt.IsRead = true;
+
             await _context.SaveChangesAsync();
 
             var rejectionNotification = new Notification
@@ -405,8 +498,23 @@ namespace MyAppApi.Controllers
                     return BadRequest(new { Message = "This investment has been funded and cannot be declined. Request a refund instead." });
             }
 
-            investment.Stage = dto.Stage;
-            investment.StageUpdatedAt = DateTime.UtcNow;
+            // Moving a pending relationship past Approved commits its amount, so the
+            // round's capacity is checked here for the same reason it is checked on the
+            // approve endpoint: several requests can each fit an empty round, and
+            // accepting them all pushes Committed past the goal, after which no funding
+            // request can ever be issued against any of them.
+            if (investment.Status != "Approved" && PipelineStages.CountsTowardFunding(dto.Stage))
+            {
+                var headroom = await FundingMath.HeadroomForAsync(
+                    _context, investment.ProjectId, investment.Project.InvestmentNeeded, investment.Id);
+                if (investment.Amount > headroom)
+                    return BadRequest(new
+                    {
+                        Message = $"Accepting this would exceed the round. Only {headroom:N0} USD is still open — decline it, or raise the venture's target first."
+                    });
+            }
+
+            await StageLog.MoveAsync(_context, investment, dto.Stage, currentUserId, dto.Reason);
 
             // Keep the funding gate consistent with the pipeline.
             if (dto.Stage == PipelineStages.Declined)
@@ -420,6 +528,13 @@ namespace MyAppApi.Controllers
             else if (PipelineStages.CountsTowardFunding(dto.Stage))
             {
                 investment.Status = "Approved";
+
+                // Concluding a relationship also ends what it owes. Only Declined used to
+                // clean up, which left a Closed deal carrying a payable ask — and nothing
+                // downstream reads the stage before taking money, so that ask stayed
+                // payable. A relationship that is over cannot still be collecting.
+                if (dto.Stage == PipelineStages.Closed)
+                    await CloseFundingForAsync(investment.Id, "The relationship was closed.");
             }
 
             await _context.SaveChangesAsync();

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   ArrowRight,
@@ -11,6 +12,7 @@ import {
   CheckCheck,
   ChevronDown,
   Clock,
+  Download,
   MessageSquare,
   RotateCw,
   X,
@@ -24,6 +26,7 @@ import {
 } from "@/lib/hooks/use-chat";
 import { usersApi, avatarUrl } from "@/lib/api/users";
 import { messagesApi } from "@/lib/api/messages";
+import { attachmentIcon, attachmentLabel, isImageAttachment } from "@/lib/attachments";
 import { sendTyping } from "@/lib/realtime/chat";
 import { useChatStore } from "@/lib/realtime/chat-store";
 import { useAuthStore } from "@/lib/auth/store";
@@ -172,6 +175,82 @@ function AttachmentImage({
           <span className="size-7 animate-spin rounded-full border-2 border-white/40 border-t-white" />
         </span>
       )}
+    </button>
+  );
+}
+
+/**
+ * A document attachment. There is nothing to show, so the bubble offers the
+ * file instead: type, name, size, and a download that goes through the same
+ * bearer-guarded fetch the images use — the endpoint is private, so a bare
+ * href would 401.
+ */
+function AttachmentFile({
+  messageId,
+  name,
+  contentType,
+  mine,
+  pending,
+}: {
+  messageId: number;
+  name?: string | null;
+  contentType?: string | null;
+  mine: boolean;
+  pending?: boolean;
+}) {
+  const { t } = useLocale();
+  const [busy, setBusy] = useState(false);
+  const Icon = attachmentIcon(contentType);
+
+  async function download() {
+    if (pending || messageId <= 0) return;
+    setBusy(true);
+    try {
+      const url = await messagesApi.attachmentObjectUrl(messageId);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name ?? "attachment";
+      a.click();
+      // The object URL is only needed for the duration of the click.
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch {
+      toast.error(t("msg.attach.failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      data-cursor="hover"
+      onClick={download}
+      disabled={busy || pending}
+      aria-label={`${t("msg.attach.download")} — ${name ?? ""}`}
+      className={cn(
+        "flex w-full max-w-[19rem] items-center gap-3 rounded-xl p-2 text-start transition-colors disabled:opacity-60",
+        mine ? "hover:bg-primary-foreground/10" : "hover:bg-foreground/[0.05]"
+      )}
+    >
+      <span
+        className={cn(
+          "grid size-10 shrink-0 place-items-center rounded-lg",
+          mine ? "bg-primary-foreground/15 text-primary-foreground" : "bg-primary/10 text-primary"
+        )}
+      >
+        {busy ? (
+          <span className="size-4 animate-spin rounded-full border-2 border-current/40 border-t-current" />
+        ) : (
+          <Icon className="size-5" strokeWidth={1.75} />
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">{name ?? t("msg.attach.file")}</span>
+        <span className={cn("mt-0.5 block text-xs", mine ? "opacity-75" : "text-muted-foreground")}>
+          {attachmentLabel(name, contentType)} · {t("msg.attach.download")}
+        </span>
+      </span>
+      <Download className={cn("size-4 shrink-0", mine ? "opacity-75" : "text-muted-foreground")} />
     </button>
   );
 }
@@ -419,7 +498,8 @@ export function MessageThread({
                     }
 
                     const { msg, mine, firstOfGroup, lastOfGroup } = item;
-                    const isImage = (msg.attachmentType ?? "").startsWith("image/");
+                    const isImage = isImageAttachment(msg.attachmentType);
+                    const isFile = !!msg.attachmentType && !isImage;
                     return (
                       <motion.div
                         key={msg.id}
@@ -443,7 +523,7 @@ export function MessageThread({
                             title={timeFmt.format(new Date(msg.sentAt))}
                             className={cn(
                               "overflow-hidden text-[14.5px] leading-relaxed",
-                              isImage ? "p-1.5" : "px-4 py-2.5",
+                              isImage || isFile ? "p-1.5" : "px-4 py-2.5",
                               mine
                                 ? "rounded-2xl bg-primary text-primary-foreground shadow-sm shadow-primary/20"
                                 : "rounded-2xl border border-border/70 bg-card/80 text-foreground shadow-sm backdrop-blur-sm",
@@ -462,11 +542,21 @@ export function MessageThread({
                               />
                             )}
 
+                            {isFile && (
+                              <AttachmentFile
+                                messageId={msg.id}
+                                name={msg.attachmentName}
+                                contentType={msg.attachmentType}
+                                mine={mine}
+                                pending={msg.pending}
+                              />
+                            )}
+
                             {msg.content && (
                               <p
                                 className={cn(
                                   "whitespace-pre-wrap break-words",
-                                  isImage && "px-2.5 pt-2"
+                                  (isImage || isFile) && "px-2.5 pt-2"
                                 )}
                               >
                                 {msg.content}
@@ -477,7 +567,7 @@ export function MessageThread({
                               <span
                                 className={cn(
                                   "flex items-center gap-1.5",
-                                  isImage ? "px-2.5 pb-1 pt-1.5" : "mt-1",
+                                  isImage || isFile ? "px-2.5 pb-1 pt-1.5" : "mt-1",
                                   mine ? "justify-end" : "justify-start"
                                 )}
                               >

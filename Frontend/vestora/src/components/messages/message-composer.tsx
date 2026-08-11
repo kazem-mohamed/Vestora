@@ -2,8 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ImagePlus, Smile, SendHorizontal, X } from "lucide-react";
+import { Paperclip, Smile, SendHorizontal, X } from "lucide-react";
 import { useLocale } from "@/lib/i18n/locale";
+import {
+  ATTACHMENT_ACCEPT,
+  attachmentIcon,
+  attachmentLabel,
+  formatFileSize,
+  isImageAttachment,
+} from "@/lib/attachments";
 import { cn } from "@/lib/utils";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
@@ -52,7 +59,9 @@ export function MessageComposer({
     const file = e.target.files?.[0];
     if (file) {
       setAttachment(file);
-      setAttachmentPreview(URL.createObjectURL(file));
+      // Only an image has something to preview; a document is described by its
+      // name and size instead, so it never allocates an object URL.
+      setAttachmentPreview(isImageAttachment(file.type) ? URL.createObjectURL(file) : null);
     }
   }
   function clearAttachment() {
@@ -149,7 +158,7 @@ export function MessageComposer({
       <div className="mx-auto w-full max-w-3xl px-4 py-3 sm:px-6">
         {/* Attachment preview */}
         <AnimatePresence>
-          {attachmentPreview && (
+          {attachment && (
             <motion.div
               initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
@@ -158,12 +167,16 @@ export function MessageComposer({
               className="overflow-hidden"
             >
               <div className="relative mb-3 inline-block">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={attachmentPreview}
-                  alt={attachment?.name ?? ""}
-                  className="size-24 rounded-xl border border-border/70 object-cover shadow-sm"
-                />
+                {attachmentPreview ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={attachmentPreview}
+                    alt={attachment.name}
+                    className="size-24 rounded-xl border border-border/70 object-cover shadow-sm"
+                  />
+                ) : (
+                  <FilePreviewChip file={attachment} />
+                )}
                 <button
                   type="button"
                   data-cursor="hover"
@@ -222,22 +235,22 @@ export function MessageComposer({
             </AnimatePresence>
           </div>
 
-          {/* Attach image */}
+          {/* Attach image or document */}
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={ATTACHMENT_ACCEPT}
             onChange={pickFile}
             className="hidden"
           />
           <button
             type="button"
             data-cursor="hover"
-            aria-label={t("msg.attach.image")}
+            aria-label={t("msg.attach.file")}
             onClick={() => fileInputRef.current?.click()}
             className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-all duration-200 hover:bg-foreground/[0.06] hover:text-foreground active:scale-95"
           >
-            <ImagePlus className="size-4.5" strokeWidth={1.75} />
+            <Paperclip className="size-4.5" strokeWidth={1.75} />
           </button>
 
           {/* Input — borderless; the wrapper owns the frame and focus ring.
@@ -300,5 +313,23 @@ export function MessageComposer({
         </p>
       </div>
     </form>
+  );
+}
+
+/** A document has no thumbnail, so it is described instead: type, name, size. */
+function FilePreviewChip({ file }: { file: File }) {
+  const Icon = attachmentIcon(file.type);
+  return (
+    <div className="flex max-w-[17rem] items-center gap-3 rounded-xl border border-border/70 bg-card/70 p-3 shadow-sm">
+      <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="size-5" strokeWidth={1.75} />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium">{file.name}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          {attachmentLabel(file.name, file.type)} · {formatFileSize(file.size)}
+        </span>
+      </span>
+    </div>
   );
 }

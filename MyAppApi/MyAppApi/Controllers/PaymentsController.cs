@@ -129,6 +129,32 @@ namespace MyAppApi.Controllers
             return Ok(await _payments.MapRequestAsync(request, ct));
         }
 
+        /// <summary>
+        /// The investor proposes a different number. The founder's figure was the only
+        /// one on the table, and "pay it or let it lapse" is not a negotiation.
+        /// </summary>
+        [HttpPost("funding-requests/{id:int}/counter")]
+        [Authorize(Roles = "Investor")]
+        public async Task<IActionResult> CounterOffer(
+            int id, [FromBody] CounterOfferInput input, CancellationToken ct)
+        {
+            var result = await _payments.CounterOfferAsync(id, Me(), input.Amount, input.Note, ct);
+            return this.ToActionResult(result);
+        }
+
+        /// <summary>
+        /// The founder answers a counter. Accepting closes the ask and issues a new one
+        /// at the agreed figure — the two numbers are the record of what was negotiated.
+        /// </summary>
+        [HttpPost("funding-requests/{id:int}/counter/answer")]
+        [Authorize(Roles = "Innovator")]
+        public async Task<IActionResult> AnswerCounterOffer(
+            int id, [FromBody] AnswerCounterInput input, CancellationToken ct)
+        {
+            var result = await _payments.AnswerCounterOfferAsync(id, Me(), input.Accept, input.Note, ct);
+            return this.ToActionResult(result);
+        }
+
         /// <summary>Founder withdraws an ask that has not been paid.</summary>
         [HttpPost("funding-requests/{id:int}/cancel")]
         public async Task<IActionResult> CancelFundingRequest(

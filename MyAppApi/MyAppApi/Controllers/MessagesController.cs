@@ -91,9 +91,10 @@ namespace MyAppApi.Controllers
             return Ok(new { message = "Message sent successfully", data = message });
         }
 
-        // Send an image attachment (optional caption). The bytes are validated by
-        // the shared upload-security service and stored 1:1 in MessageAttachment;
-        // the created message is broadcast to the receiver and returned to the caller.
+        // Send an image or document attachment (optional caption). The bytes are
+        // validated by the shared upload-security service and stored 1:1 in
+        // MessageAttachment; the created message is broadcast to the receiver and
+        // returned to the caller.
         [HttpPost("send-attachment")]
         [RequestSizeLimit(15 * 1024 * 1024)]
         public async Task<IActionResult> SendAttachment([FromForm] SendAttachmentDto dto)
@@ -115,10 +116,10 @@ namespace MyAppApi.Controllers
                 return NotFound(new { message = "Receiver not found." });
             }
 
-            var imageResult = await _fileSecurity.ReadValidatedImageAsync(dto.File);
-            if (imageResult.Status != ServiceResultStatus.Ok || imageResult.Value is null)
+            var fileResult = await _fileSecurity.ReadValidatedAttachmentAsync(dto.File);
+            if (fileResult.Status != ServiceResultStatus.Ok || fileResult.Value is null)
             {
-                return BadRequest(new { message = imageResult.Message ?? "Invalid image file." });
+                return BadRequest(new { message = fileResult.Message ?? "Invalid file." });
             }
 
             var message = new Message
@@ -136,7 +137,7 @@ namespace MyAppApi.Controllers
             _context.MessageAttachments.Add(new MessageAttachment
             {
                 MessageId = message.Id,
-                Data = imageResult.Value
+                Data = fileResult.Value
             });
             await _context.SaveChangesAsync();
 
@@ -179,7 +180,10 @@ namespace MyAppApi.Controllers
                 return NotFound();
             }
 
-            return File(attachment.Data, message.AttachmentType);
+            // The stored name rides along so a saved document keeps it instead of
+            // landing as the message id. Images are fetched into an object URL and
+            // never touch this, so it costs them nothing.
+            return File(attachment.Data, message.AttachmentType, message.AttachmentName);
         }
 
         /// <summary>

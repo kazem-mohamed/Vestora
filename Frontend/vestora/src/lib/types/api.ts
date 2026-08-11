@@ -12,6 +12,8 @@ export interface LoginResponse {
   userType: UserType;
   userName: string;
   userEmail: string;
+  /** Account-level, not per-browser: false sends the user to /onboarding. */
+  hasOnboarded: boolean;
 }
 
 export interface ApiMessage {
@@ -142,6 +144,10 @@ export type FundingState =
   | "Committed"
   | "PaymentDue"
   | "Processing"
+  // Some of the commitment has settled and some has not. A commitment may be called
+  // in over several tranches, and neither "PaymentDue" nor "Funded" tells the truth
+  // about that halfway point.
+  | "PartiallyFunded"
   | "Funded"
   | "Refunded"
   | "Declined"
@@ -219,6 +225,18 @@ export interface FundingRequest {
   feeRateBps: number;
   estimatedFee: number;
   estimatedNetProceeds: number;
+
+  // ---- Counter-offer ----
+  // The founder names a figure; this is the investor's half of that sentence.
+  counterAmount: number | null;
+  counterNote: string | null;
+  counterAtUtc: string | null;
+  counterStatus: "Proposed" | "Accepted" | "Declined" | null;
+  /** The ask this one replaced, when it was issued to accept a counter. */
+  supersedesRequestId: number | null;
+  /** The agreed terms this ask calls in, when the relationship has any. */
+  termSheetId: number | null;
+
   /** Every attempt made against this request, oldest first. */
   attempts: PaymentTransaction[];
 }
@@ -315,6 +333,45 @@ export interface AdminRevenue {
 export interface AdminTransactionRow extends PaymentTransaction {
   providerSessionId: string | null;
   refundedByAdminId: number | null;
+}
+
+/**
+ * A confirmation the system recorded but could not act on.
+ *
+ * Most are harmless — a resent webhook arriving after the return trip already settled
+ * the payment. `isConflict` marks the ones that are not: the provider reports money
+ * taken against an attempt Vestora had written off, which means the two sides disagree
+ * about a real payment and a person has to go and look.
+ */
+export interface ReconciliationEvent {
+  id: number;
+  provider: string;
+  providerEventId: string;
+  eventType: string;
+  source: string;
+  outcome: string | null;
+  receivedAtUtc: string;
+  isConflict: boolean;
+  reviewedAtUtc: string | null;
+  reviewNote: string | null;
+
+  transactionId: number | null;
+  transactionReference: string | null;
+  transactionStatus: PaymentStatus | null;
+  amount: number | null;
+  currency: string | null;
+  investmentId: number | null;
+  projectName: string | null;
+  investorName: string | null;
+}
+
+export interface Reconciliation {
+  items: ReconciliationEvent[];
+  totalCount: number;
+  /** Unreviewed conflicts across the whole queue, not just this page. */
+  openConflicts: number;
+  page: number;
+  pageSize: number;
 }
 
 /**
@@ -485,7 +542,7 @@ export interface Message {
   senderId: number;
   receiverId: number;
   isRead: boolean;
-  /** Image attachment metadata; null/absent for a plain text message. */
+  /** Attachment metadata (image or document); null/absent for plain text. */
   attachmentType?: string | null;
   attachmentName?: string | null;
   /** Client-only: an optimistic message not yet confirmed by the server. */
@@ -1067,6 +1124,18 @@ export interface DealEvent {
   actorName: string | null;
   detail: string | null;
   refId: number | null;
+  /** Free prose attached to the event — a decline reason, a settlement reference. */
+  note: string | null;
+  /** On a stage event: minutes spent in the stage the relationship just left. */
+  durationMinutes: number | null;
+}
+
+/** Time in one stage, in the order the relationship passed through them. */
+export interface StageDuration {
+  stage: PipelineStage;
+  minutes: number;
+  /** The stage it is sitting in now — this clock is still running. */
+  isCurrent: boolean;
 }
 
 export interface DealQuestion {
@@ -1081,9 +1150,18 @@ export interface DealQuestion {
   isWithdrawn: boolean;
   canAnswer: boolean;
   canWithdraw: boolean;
+  /** The question this clarifies, when it is a follow-up. */
+  parentQuestionId: number | null;
+  /** True when the caller may push back on the answer. Asker only, once, roots only. */
+  canFollowUp: boolean;
+  /** Follow-ups on this question, oldest first. Always empty on a follow-up. */
+  followUps: DealQuestion[];
 }
 
 export type DocRequestStatus = "Open" | "Fulfilled" | "Declined" | "Withdrawn";
+
+/** "ToFounder" — the investor is asking. "ToInvestor" — the founder is. */
+export type DocRequestDirection = "ToFounder" | "ToInvestor";
 
 export interface DealDocumentRequest {
   id: number;
@@ -1099,6 +1177,54 @@ export interface DealDocumentRequest {
   resolvedAtUtc: string | null;
   canResolve: boolean;
   canWithdraw: boolean;
+  direction: DocRequestDirection;
+  /** The investor's uploaded answer, when they were the one being asked. */
+  responseFileName: string | null;
+  responseSizeBytes: number | null;
+  hasResponseFile: boolean;
+  responseNote: string | null;
+}
+
+export type TermSheetStatus = "Proposed" | "Accepted" | "Declined" | "Superseded";
+
+/**
+ * What the two sides say they agreed to, in writing, each having accepted it.
+ *
+ * Not a contract — Vestora holds no signatures and enforces nothing. It is the text
+ * that the "agreed off-platform" stage was standing in for, so the funding request
+ * that follows rests on something a person can read.
+ */
+export interface TermSheet {
+  id: number;
+  version: number;
+  amount: number;
+  currency: string;
+  equityPct: number | null;
+  valuation: number | null;
+  useOfFunds: string | null;
+  otherTerms: string | null;
+  status: TermSheetStatus;
+  proposedByUserId: number;
+  proposedByMe: boolean;
+  /** Stated separately, because whose acceptance is missing is the actionable half. */
+  acceptedByMe: boolean;
+  acceptedByThem: boolean;
+  agreedAtUtc: string | null;
+  declinedReason: string | null;
+  createdAtUtc: string;
+  canAccept: boolean;
+  canDecline: boolean;
+}
+
+export type DealHealthStatus = "Healthy" | "Slowing" | "Stalled" | "Concluded";
+
+/** Whether the relationship is moving, and what is holding it up. Derived, never stored. */
+export interface DealHealth {
+  status: DealHealthStatus;
+  score: number;
+  daysSinceActivity: number;
+  /** Machine-readable reasons, translated client-side via `deal.health.reason.*`. */
+  reasons: string[];
 }
 
 export interface DealDocument {
@@ -1155,9 +1281,22 @@ export interface DealRoom {
   documentRequests: DealDocumentRequest[];
   documents: DealDocument[];
   timeline: DealEvent[];
+  /** Time in each stage passed through, current one included and still counting. */
+  stageDurations: StageDuration[];
   unreadMessages: number;
   nextSteps: DealNextStep[];
   allowedStages: string[];
+
+  /** Every version of the terms this relationship has produced, newest first. */
+  termSheets: TermSheet[];
+  /** The version both sides accepted, when there is one. The deal, in writing. */
+  agreedTerms: TermSheet | null;
+  /** Whether the relationship is moving, and what is holding it up. */
+  health: DealHealth;
+  /** Settled across every tranche on this relationship. */
+  settledTotal: number;
+  /** What it is expected to settle in total — agreed terms if any, else the commitment. */
+  commitmentTarget: number;
 
   // ---- Funding ----
   //

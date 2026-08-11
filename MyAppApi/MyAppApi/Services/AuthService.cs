@@ -477,7 +477,8 @@ namespace MyAppApi.Services
                 UserId = user.Id,
                 UserType = user.UserType,
                 UserName = user.UserName,
-                UserEmail = user.Email
+                UserEmail = user.Email,
+                HasOnboarded = user.OnboardedAtUtc != null
             };
         }
 

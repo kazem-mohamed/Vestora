@@ -7,7 +7,6 @@ import { motion, useAnimationControls, useReducedMotion } from "framer-motion";
 import { authApi } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import { useAuthStore } from "@/lib/auth/store";
-import { hasCompletedOnboarding } from "@/lib/onboarding";
 import { emailError } from "@/lib/validation/rules";
 import { useLocale } from "@/lib/i18n/locale";
 import { AuthStage } from "@/components/auth/auth-stage";
@@ -89,8 +88,7 @@ export default function LoginPage() {
       // Success is a transition, not a toast. The plate lifts and dims while the next
       // route resolves, so the two pages feel continuous rather than swapped.
       setLeaving(true);
-      const needsOnboarding =
-        res.userType !== "Admin" && !hasCompletedOnboarding(res.userId);
+      const needsOnboarding = res.userType !== "Admin" && !res.hasOnboarded;
       const home =
         res.userType === "Investor"
           ? "/invest"

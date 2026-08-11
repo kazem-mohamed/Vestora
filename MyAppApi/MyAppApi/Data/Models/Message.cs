@@ -9,7 +9,9 @@
         // Read receipt for the RECEIVER — drives unread counts + the inbox badge.
         public bool IsRead { get; set; }
 
-        // Attachment metadata (image only for now). Null = a plain text message.
+        // Attachment metadata — an image or a document. Null = a plain text
+        // message. The content type is what the client branches on to decide
+        // between rendering a picture and offering a file to open.
         // The bytes live in MessageAttachment so history queries stay lightweight.
         public string? AttachmentType { get; set; }
         public string? AttachmentName { get; set; }

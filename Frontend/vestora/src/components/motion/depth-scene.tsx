@@ -112,7 +112,6 @@ export function DepthLayer({
       style={{
         ...style,
         transform: reduce ? undefined : `translateZ(${z}px)`,
-        transformStyle: "preserve-3d",
       }}
     >
       {children}

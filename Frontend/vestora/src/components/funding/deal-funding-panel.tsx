@@ -24,7 +24,7 @@ import {
   useRelativeTime,
 } from "@/components/funding/funding-primitives";
 import { RequestFundsDialog } from "@/components/funding/request-funds-dialog";
-import { paymentsApi } from "@/lib/api/payments";
+import { counterOfferApi, paymentsApi } from "@/lib/api/payments";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { DealRoom } from "@/lib/types/api";
@@ -51,6 +51,9 @@ export function DealFundingPanel({ deal }: { deal: DealRoom }) {
 
   const [askOpen, setAskOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [counterOpen, setCounterOpen] = useState(false);
+  const [counterAmount, setCounterAmount] = useState("");
+  const [counterNote, setCounterNote] = useState("");
 
   const isFounder = deal.viewerRole === "founder";
   const request = deal.fundingRequest;
@@ -79,9 +82,37 @@ export function DealFundingPanel({ deal }: { deal: DealRoom }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // The investor's half of the negotiation. Before this the founder named a figure and
+  // the only two answers were "pay it" and silence — and most deals that die here die
+  // of the second one, recorded by the platform as an expiry.
+  const counter = useMutation({
+    mutationFn: () =>
+      counterOfferApi.propose(request!.id, Number(counterAmount), counterNote.trim() || undefined),
+    onSuccess: () => {
+      toast.success(t("fund.counter.sent"));
+      setCounterOpen(false);
+      setCounterAmount("");
+      setCounterNote("");
+      qc.invalidateQueries({ queryKey: ["deal", deal.investmentId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const answerCounter = useMutation({
+    mutationFn: (accept: boolean) => counterOfferApi.answer(request!.id, accept),
+    onSuccess: (_r, accept) => {
+      toast.success(accept ? t("fund.counter.accepted") : t("fund.counter.declined"));
+      qc.invalidateQueries({ queryKey: ["deal", deal.investmentId] });
+      qc.invalidateQueries({ queryKey: ["founder-dashboard"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const funded = deal.fundingState === "Funded";
+  const partial = deal.fundingState === "PartiallyFunded";
   const refunded = deal.fundingState === "Refunded";
   const due = request?.status === "Open";
+  const counterLive = request?.counterStatus === "Proposed" && request.counterAmount != null;
 
   return (
     <motion.section
@@ -231,6 +262,66 @@ export function DealFundingPanel({ deal }: { deal: DealRoom }) {
                     {t("fund.open.withdraw")}
                   </button>
                 </>
+              ) : counterLive ? (
+                /* A number is on the table from the other direction. Neither side is
+                   offered the payment button while it stands — paying the original
+                   figure while proposing a different one is two contradictory answers
+                   to the same question. */
+                <div className="mt-5 rounded-xl border border-bronze/40 bg-bronze/[0.05] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-bronze">
+                    {t("fund.counter.tag")}
+                  </p>
+                  <p className="font-numeric mt-2 text-2xl leading-none text-bronze">
+                    {money(request!.counterAmount!)}
+                  </p>
+                  <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+                    {isFounder
+                      ? t("fund.counter.founderBody")
+                          .replace("{investor}", deal.investorName)
+                          .replace("{asked}", money(request!.amount))
+                          .replace("{offered}", money(request!.counterAmount!))
+                      : t("fund.counter.investorBody").replace(
+                          "{offered}",
+                          money(request!.counterAmount!)
+                        )}
+                  </p>
+                  {request!.counterNote && (
+                    <p className="mt-2.5 border-s-2 border-bronze/40 ps-3 text-[13px] italic leading-relaxed text-muted-foreground">
+                      {request!.counterNote}
+                    </p>
+                  )}
+
+                  {isFounder && (
+                    <div className="mt-4 flex flex-wrap gap-2.5">
+                      <button
+                        type="button"
+                        disabled={answerCounter.isPending}
+                        onClick={() => answerCounter.mutate(true)}
+                        data-cursor="hover"
+                        className="inline-flex min-h-10 items-center rounded-full bg-primary px-5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                      >
+                        {t("fund.counter.accept")}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={answerCounter.isPending}
+                        onClick={() => answerCounter.mutate(false)}
+                        data-cursor="hover"
+                        className="inline-flex min-h-10 items-center rounded-full border border-border px-5 text-xs text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:opacity-50"
+                      >
+                        {t("fund.counter.decline")}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : !deal.canCompletePayment ? (
+                /* Open, but not payable — the deadline passed and the sweeper has not
+                   come round yet. The server refuses the checkout either way, so a
+                   live-looking button here only buys an error message. Saying what
+                   happened, and that a new ask can be issued, is the whole content. */
+                <p className="mt-5 rounded-xl border border-border/70 bg-secondary/30 p-4 text-[13px] leading-relaxed text-muted-foreground">
+                  {t("fund.due.lapsed")}
+                </p>
               ) : (
                 <>
                   <p className="mt-4 text-[11.5px] leading-relaxed text-muted-foreground/85">
@@ -273,6 +364,70 @@ export function DealFundingPanel({ deal }: { deal: DealRoom }) {
                   <p className="mt-2.5 text-center text-[11px] text-muted-foreground/75">
                     {t("fund.due.leaving")}
                   </p>
+
+                  {/* The other answer. Sits under the payment button rather than beside
+                      it — countering is the secondary move, but it has to exist, or the
+                      only way to say "not at that number" is to say nothing. */}
+                  {!counterOpen ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCounterOpen(true);
+                        setCounterAmount(String(request.amount));
+                      }}
+                      data-cursor="hover"
+                      className="link-underline mx-auto mt-3 block text-[11.5px] text-muted-foreground transition-colors hover:text-primary"
+                    >
+                      {t("fund.counter.open")}
+                    </button>
+                  ) : (
+                    <div className="mt-4 rounded-xl border border-border/70 bg-background/40 p-4">
+                      <label
+                        htmlFor="counter-amount"
+                        className="text-[11px] text-muted-foreground"
+                      >
+                        {t("fund.counter.label")}
+                      </label>
+                      <input
+                        id="counter-amount"
+                        type="number"
+                        min={1}
+                        value={counterAmount}
+                        onChange={(e) => setCounterAmount(e.target.value)}
+                        className="font-numeric mt-2 h-11 w-full rounded-xl border border-input bg-background/60 px-4 text-sm outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/25"
+                      />
+                      <textarea
+                        value={counterNote}
+                        onChange={(e) => setCounterNote(e.target.value.slice(0, 500))}
+                        rows={2}
+                        placeholder={t("fund.counter.notePlaceholder")}
+                        aria-label={t("fund.counter.notePlaceholder")}
+                        className="mt-2.5 w-full resize-none rounded-xl border border-input bg-background/60 px-4 py-2.5 text-xs outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/25"
+                      />
+                      <div className="mt-3 flex items-center gap-3">
+                        <button
+                          type="button"
+                          disabled={
+                            counter.isPending ||
+                            !(Number(counterAmount) > 0) ||
+                            Number(counterAmount) === request.amount
+                          }
+                          onClick={() => counter.mutate()}
+                          data-cursor="hover"
+                          className="inline-flex min-h-10 items-center rounded-full bg-primary px-5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+                        >
+                          {counter.isPending ? t("deal.q.sending") : t("fund.counter.send")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCounterOpen(false)}
+                          className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          {t("form.cancel")}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </motion.div>
@@ -294,8 +449,57 @@ export function DealFundingPanel({ deal }: { deal: DealRoom }) {
             </motion.div>
           )}
 
+          {/* ---------- Part paid, the rest still to come ----------
+              A commitment called in over tranches. Neither "payment due" nor "funded"
+              describes this, and the old model had no third answer — so the first
+              instalment closed the relationship and the balance became uncollectable. */}
+          {partial && !due && (
+            <motion.div
+              key="partial"
+              initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.5, ease: EASE }}
+              className="mt-5"
+            >
+              <p className="font-numeric text-3xl leading-none text-bronze">
+                {money(deal.settledTotal)}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {t("fund.partial.of")
+                  .replace("{settled}", money(deal.settledTotal))
+                  .replace("{target}", money(deal.commitmentTarget))}
+              </p>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary/60">
+                <span
+                  className="block h-full rounded-full bg-primary"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.round((deal.settledTotal / Math.max(1, deal.commitmentTarget)) * 100)
+                    )}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">
+                {isFounder ? t("fund.partial.founder") : t("fund.partial.investor")}
+              </p>
+
+              {deal.canRequestFunds && (
+                <button
+                  type="button"
+                  onClick={() => setAskOpen(true)}
+                  data-cursor="hover"
+                  className="gold-cta mt-5 inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                >
+                  {t("fund.partial.requestNext")}
+                </button>
+              )}
+            </motion.div>
+          )}
+
           {/* ---------- Nothing asked for yet ---------- */}
-          {!funded && !due && !refunded && (
+          {!funded && !partial && !due && !refunded && (
             <motion.div
               key="idle"
               initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}

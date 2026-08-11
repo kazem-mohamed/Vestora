@@ -144,6 +144,9 @@ namespace MyAppApi.Migrations
                     b.Property<bool>("IsWithdrawn")
                         .HasColumnType("bit");
 
+                    b.Property<int?>("ParentQuestionId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Question")
                         .IsRequired()
                         .HasMaxLength(1000)
@@ -154,6 +157,8 @@ namespace MyAppApi.Migrations
                     b.HasIndex("AnsweredByUserId");
 
                     b.HasIndex("AskedByUserId");
+
+                    b.HasIndex("ParentQuestionId");
 
                     b.HasIndex("InvestmentId", "CreatedAtUtc");
 
@@ -214,6 +219,24 @@ namespace MyAppApi.Migrations
 
                     b.Property<DateTime?>("ResolvedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ResponseContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte[]>("ResponseData")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ResponseFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("ResponseNote")
+                        .HasMaxLength(600)
+                        .HasColumnType("nvarchar(600)");
+
+                    b.Property<long?>("ResponseSizeBytes")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -282,6 +305,21 @@ namespace MyAppApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<decimal?>("CounterAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("CounterAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CounterNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CounterStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -314,6 +352,9 @@ namespace MyAppApi.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
+                    b.Property<int>("RemindersSent")
+                        .HasColumnType("int");
+
                     b.Property<int>("RequestedByUserId")
                         .HasColumnType("int");
 
@@ -321,6 +362,12 @@ namespace MyAppApi.Migrations
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
+
+                    b.Property<int?>("SupersedesRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TermSheetId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -331,6 +378,8 @@ namespace MyAppApi.Migrations
 
                     b.HasIndex("Reference")
                         .IsUnique();
+
+                    b.HasIndex("TermSheetId");
 
                     b.HasIndex("InvestorId", "Status");
 
@@ -393,7 +442,53 @@ namespace MyAppApi.Migrations
 
                     b.HasIndex("ProjectId", "Status");
 
+                    b.HasIndex(new[] { "ProjectId", "InvestorId" }, "UX_Investments_OneLivePerInvestor")
+                        .IsUnique()
+                        .HasFilter("[InvestorId] IS NOT NULL AND [Status] IN ('Pending', 'Approved')");
+
                     b.ToTable("Investments");
+                });
+
+            modelBuilder.Entity("MyAppApi.Data.Models.InvestmentStageEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("AtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FromStage")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("InvestmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MinutesInPreviousStage")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("ToStage")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentId", "AtUtc");
+
+                    b.HasIndex("ToStage", "AtUtc");
+
+                    b.ToTable("InvestmentStageEvents");
                 });
 
             modelBuilder.Entity("MyAppApi.Data.Models.Message", b =>
@@ -579,6 +674,16 @@ namespace MyAppApi.Migrations
 
                     b.Property<DateTime>("ReceivedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReviewedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ReviewedByAdminId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Source")
                         .IsRequired()
@@ -1322,6 +1427,81 @@ namespace MyAppApi.Migrations
                     b.ToTable("TeamMembers");
                 });
 
+            modelBuilder.Entity("MyAppApi.Data.Models.TermSheet", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AgreedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("DeclinedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("EquityPct")
+                        .HasPrecision(7, 4)
+                        .HasColumnType("decimal(7,4)");
+
+                    b.Property<DateTime?>("FounderAcceptedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("InvestmentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("InvestorAcceptedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OtherTerms")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("ProposedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("UseOfFunds")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal?>("Valuation")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "InvestmentId" }, "UX_TermSheets_OneLivePerInvestment")
+                        .IsUnique()
+                        .HasFilter("[Status] = 'Proposed'");
+
+                    b.ToTable("TermSheets");
+                });
+
             modelBuilder.Entity("MyAppApi.Data.Models.User", b =>
                 {
                     b.Property<int>("Id")
@@ -1394,6 +1574,9 @@ namespace MyAppApi.Migrations
 
                     b.Property<bool>("NotifyOnProjectUpdate")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime?>("OnboardedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Password")
                         .IsRequired()
@@ -1578,11 +1761,18 @@ namespace MyAppApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("MyAppApi.Data.Models.DealQuestion", "ParentQuestion")
+                        .WithMany()
+                        .HasForeignKey("ParentQuestionId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("AnsweredByUser");
 
                     b.Navigation("AskedByUser");
 
                     b.Navigation("Investment");
+
+                    b.Navigation("ParentQuestion");
                 });
 
             modelBuilder.Entity("MyAppApi.Data.Models.DocumentDownloadLog", b =>
@@ -1630,7 +1820,14 @@ namespace MyAppApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("MyAppApi.Data.Models.TermSheet", "TermSheet")
+                        .WithMany()
+                        .HasForeignKey("TermSheetId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("Investment");
+
+                    b.Navigation("TermSheet");
                 });
 
             modelBuilder.Entity("MyAppApi.Data.Models.Investment", b =>
@@ -1649,6 +1846,17 @@ namespace MyAppApi.Migrations
                     b.Navigation("Investor");
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("MyAppApi.Data.Models.InvestmentStageEvent", b =>
+                {
+                    b.HasOne("MyAppApi.Data.Models.Investment", "Investment")
+                        .WithMany()
+                        .HasForeignKey("InvestmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Investment");
                 });
 
             modelBuilder.Entity("MyAppApi.Data.Models.Message", b =>
@@ -1889,6 +2097,17 @@ namespace MyAppApi.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("MyAppApi.Data.Models.TermSheet", b =>
+                {
+                    b.HasOne("MyAppApi.Data.Models.Investment", "Investment")
+                        .WithMany()
+                        .HasForeignKey("InvestmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Investment");
                 });
 
             modelBuilder.Entity("MyAppApi.Data.Models.UserProjectInteraction", b =>

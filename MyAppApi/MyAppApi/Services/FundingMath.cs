@@ -204,6 +204,34 @@ namespace MyAppApi.Services
         public static decimal RemainingCapacity(decimal goal, decimal committed) =>
             Math.Max(0m, goal - committed);
 
+        /// <summary>Commitments on a round that belong to somebody other than one relationship.</summary>
+        public static async Task<decimal> CommittedElsewhereAsync(
+            AppDbContext db, int projectId, int exceptInvestmentId, CancellationToken ct = default) =>
+            await db.Investments
+                .Where(i => i.ProjectId == projectId
+                            && i.Status == "Approved"
+                            && i.Id != exceptInvestmentId)
+                .SumAsync(i => (decimal?)i.Amount, ct) ?? 0m;
+
+        /// <summary>
+        /// What a round can still absorb for one relationship — every OTHER commitment
+        /// counted, this one excluded.
+        /// <para>
+        /// The exclusion is what makes the figure usable both before and after the
+        /// relationship counts: approving asks "would this fit?", and requesting funds
+        /// asks "how much of this may I call in?". Without it the second question can
+        /// never be answered for the deal that filled the round, because its own
+        /// commitment is already inside the total it is being measured against.
+        /// </para>
+        /// <para>
+        /// Pass <c>0</c> for <paramref name="exceptInvestmentId"/> when nothing is
+        /// excluded — no row has that id, so the whole round counts.
+        /// </para>
+        /// </summary>
+        public static async Task<decimal> HeadroomForAsync(
+            AppDbContext db, int projectId, decimal goal, int exceptInvestmentId, CancellationToken ct = default) =>
+            RemainingCapacity(goal, await CommittedElsewhereAsync(db, projectId, exceptInvestmentId, ct));
+
         // ------------------------------------------------------------------
         //  Relationship funding state (one relationship, not one venture)
         // ------------------------------------------------------------------
@@ -212,23 +240,84 @@ namespace MyAppApi.Services
         public const string StateCommitted = "Committed";
         public const string StatePaymentDue = "PaymentDue";
         public const string StateProcessing = "Processing";
+        public const string StatePartiallyFunded = "PartiallyFunded";
         public const string StateFunded = "Funded";
         public const string StateRefunded = "Refunded";
         public const string StateDeclined = "Declined";
 
         /// <summary>
+        /// Whether a relationship's commitment has been settled in full.
+        /// <para>
+        /// Compared as a sum against the commitment, not as "has one payment succeeded".
+        /// A commitment can be called in over several tranches — which is how large
+        /// cheques are actually paid — and the first-success test would have declared a
+        /// relationship funded on its opening instalment, closed the ask permanently,
+        /// and left the rest of the money uncollectable.
+        /// </para>
+        /// <para>
+        /// A zero or negative commitment is treated as fully funded once anything has
+        /// settled: there is no target left to reach, and reporting such a relationship
+        /// as perpetually partial would be arithmetic, not truth.
+        /// </para>
+        /// </summary>
+        public static bool IsFullySettled(decimal settled, decimal commitment) =>
+            commitment <= 0m ? settled > 0m : settled >= commitment;
+
+        /// <summary>How much of a commitment may still be called in, given what has settled.</summary>
+        public static decimal UnsettledCommitment(decimal commitment, decimal settled) =>
+            Math.Max(0m, commitment - settled);
+
+        /// <summary>
+        /// What one relationship is expected to settle in total.
+        /// <para>
+        /// Agreed terms win over the opening request when they exist. The investor's
+        /// original number is what they asked for before anybody had talked; the term
+        /// sheet is what the two of them accepted afterwards, and measuring tranches
+        /// against the first would call a relationship complete while the agreement it
+        /// actually rests on was still half unpaid.
+        /// </para>
+        /// </summary>
+        public static async Task<decimal> CommitmentTargetAsync(
+            AppDbContext db, int investmentId, decimal fallbackAmount, CancellationToken ct = default)
+        {
+            var agreed = await db.TermSheets
+                .AsNoTracking()
+                .Where(s => s.InvestmentId == investmentId && s.Status == TermSheetStatus.Accepted)
+                .OrderByDescending(s => s.Version)
+                .Select(s => (decimal?)s.Amount)
+                .FirstOrDefaultAsync(ct);
+
+            return agreed ?? fallbackAmount;
+        }
+
+        /// <summary>Settled capital for one relationship — the sum, across every tranche.</summary>
+        public static async Task<decimal> SettledForInvestmentAsync(
+            AppDbContext db, int investmentId, CancellationToken ct = default) =>
+            await db.PaymentTransactions
+                .Where(t => t.InvestmentId == investmentId && t.Status == PaymentStatus.Succeeded)
+                .SumAsync(t => (decimal?)t.Amount, ct) ?? 0m;
+
+        /// <summary>
         /// Where one relationship sits on the money axis, derived rather than stored.
         /// A stored column would be a fifth place for the numbers to disagree.
+        /// <para>
+        /// Partial settlement outranks an open ask on purpose. Money that has arrived is
+        /// the strongest fact in the room, and a relationship that is half paid with the
+        /// next tranche outstanding should read as half paid — "PaymentDue" would erase
+        /// the part that is already done.
+        /// </para>
         /// </summary>
         public static string StateOf(
             string investmentStatus,
             bool hasSucceededPayment,
             bool hasRefundedPayment,
             bool hasOpenRequest,
-            bool hasProcessingPayment)
+            bool hasProcessingPayment,
+            bool isFullySettled = true)
         {
-            if (hasSucceededPayment) return StateFunded;
+            if (hasSucceededPayment && isFullySettled) return StateFunded;
             if (investmentStatus == PipelineStages.Declined) return StateDeclined;
+            if (hasSucceededPayment) return StatePartiallyFunded;
             if (hasProcessingPayment) return StateProcessing;
             if (hasOpenRequest) return StatePaymentDue;
             if (hasRefundedPayment) return StateRefunded;

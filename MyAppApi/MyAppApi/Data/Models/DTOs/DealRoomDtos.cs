@@ -97,10 +97,34 @@ namespace MyAppApi.Data.Models.DTOs
         public List<DealQuestionDto> Questions { get; set; } = new();
         public List<DocumentRequestDto> DocumentRequests { get; set; } = new();
         public List<DealEventDto> Timeline { get; set; } = new();
+
+        /// <summary>
+        /// Time spent in each stage this relationship has passed through, current one
+        /// included and still counting. Read off the appended history rather than
+        /// inferred, which is why it can exist at all — a single StageUpdatedAt column
+        /// could only ever say how long the latest stage had lasted.
+        /// </summary>
+        public List<StageDurationDto> StageDurations { get; set; } = new();
+
         public int UnreadMessages { get; set; }
 
         /// <summary>Documents visible to the caller for this venture.</summary>
         public List<DealDocumentDto> Documents { get; set; } = new();
+
+        /// <summary>Every version of the terms this relationship has produced, newest first.</summary>
+        public List<TermSheetDto> TermSheets { get; set; } = new();
+
+        /// <summary>The version both sides accepted, when there is one. The deal, in writing.</summary>
+        public TermSheetDto? AgreedTerms { get; set; }
+
+        /// <summary>Whether the relationship is moving, and what is holding it up.</summary>
+        public DealHealthDto Health { get; set; } = new();
+
+        /// <summary>Settled across every tranche on this relationship.</summary>
+        public decimal SettledTotal { get; set; }
+
+        /// <summary>What the relationship is expected to settle in total — agreed terms if any.</summary>
+        public decimal CommitmentTarget { get; set; }
 
         /// <summary>
         /// What this side is expected to do next, derived from real state rather than
@@ -124,6 +148,66 @@ namespace MyAppApi.Data.Models.DTOs
         public bool IsWithdrawn { get; set; }
         public bool CanAnswer { get; set; }
         public bool CanWithdraw { get; set; }
+
+        /// <summary>The question this clarifies, when it is a follow-up.</summary>
+        public int? ParentQuestionId { get; set; }
+
+        /// <summary>
+        /// True when the caller may push back on the answer they were given. Offered to
+        /// the asker only, once, and only on a root question — a thread is a
+        /// clarification, not a forum.
+        /// </summary>
+        public bool CanFollowUp { get; set; }
+
+        /// <summary>Follow-ups on this question, oldest first. Always empty on a follow-up.</summary>
+        public List<DealQuestionDto> FollowUps { get; set; } = new();
+    }
+
+    /// <summary>One version of the terms, as the caller sees them.</summary>
+    public class TermSheetDto
+    {
+        public int Id { get; set; }
+        public int Version { get; set; }
+        public decimal Amount { get; set; }
+        public string Currency { get; set; } = "USD";
+        public decimal? EquityPct { get; set; }
+        public decimal? Valuation { get; set; }
+        public string? UseOfFunds { get; set; }
+        public string? OtherTerms { get; set; }
+
+        /// <summary>Proposed | Accepted | Declined | Superseded.</summary>
+        public string Status { get; set; } = string.Empty;
+
+        public int ProposedByUserId { get; set; }
+        public bool ProposedByMe { get; set; }
+
+        /// <summary>
+        /// The two acceptances, from the caller's side. Stated separately rather than as
+        /// one "agreed" flag: whose signature is missing is the actionable half.
+        /// </summary>
+        public bool AcceptedByMe { get; set; }
+        public bool AcceptedByThem { get; set; }
+
+        public DateTime? AgreedAtUtc { get; set; }
+        public string? DeclinedReason { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
+
+        public bool CanAccept { get; set; }
+        public bool CanDecline { get; set; }
+    }
+
+    public class TermSheetInput
+    {
+        public decimal Amount { get; set; }
+        public decimal? EquityPct { get; set; }
+        public decimal? Valuation { get; set; }
+        public string? UseOfFunds { get; set; }
+        public string? OtherTerms { get; set; }
+    }
+
+    public class DeclineTermsInput
+    {
+        public string? Reason { get; set; }
     }
 
     public class DocumentRequestDto
@@ -141,6 +225,46 @@ namespace MyAppApi.Data.Models.DTOs
         public DateTime? ResolvedAtUtc { get; set; }
         public bool CanResolve { get; set; }
         public bool CanWithdraw { get; set; }
+
+        /// <summary>
+        /// "ToFounder" when the investor is asking the venture for something,
+        /// "ToInvestor" when the founder is asking the backer. Derived from who asked
+        /// rather than stored — there are only two parties, so the requester settles it.
+        /// </summary>
+        public string Direction { get; set; } = "ToFounder";
+
+        /// <summary>The investor's uploaded answer, when they were the one being asked.</summary>
+        public string? ResponseFileName { get; set; }
+        public long? ResponseSizeBytes { get; set; }
+        public bool HasResponseFile { get; set; }
+        public string? ResponseNote { get; set; }
+    }
+
+    /// <summary>
+    /// Whether this relationship is actually moving, and what is holding it up.
+    /// <para>
+    /// Assembled from facts the room already had — the last movement, unanswered
+    /// questions, outstanding document requests, money asked for and not paid. Nobody
+    /// maintains it, which is the only reason it can be trusted: a health field somebody
+    /// has to update is a health field that is always green.
+    /// </para>
+    /// </summary>
+    public class DealHealthDto
+    {
+        /// <summary>Healthy | Slowing | Stalled | Concluded.</summary>
+        public string Status { get; set; } = "Healthy";
+
+        /// <summary>0–100. Not a score anyone is graded on — a way to sort a list of deals.</summary>
+        public int Score { get; set; }
+
+        /// <summary>Days since anything at all happened in this relationship.</summary>
+        public int DaysSinceActivity { get; set; }
+
+        /// <summary>
+        /// Machine-readable reasons, translated client-side. Empty when nothing is wrong,
+        /// which is a result rather than an absence.
+        /// </summary>
+        public List<string> Reasons { get; set; } = new();
     }
 
     public class DealDocumentDto
@@ -169,6 +293,30 @@ namespace MyAppApi.Data.Models.DTOs
         /// <summary>Short factual payload — a stage name, a document title, a question.</summary>
         public string? Detail { get; set; }
         public int? RefId { get; set; }
+
+        /// <summary>
+        /// Free prose attached to the event, kept apart from <see cref="Detail"/> because
+        /// that field is looked up in a translation map and anything appended to it stops
+        /// matching. A decline reason belongs here.
+        /// </summary>
+        public string? Note { get; set; }
+
+        /// <summary>
+        /// On a stage event: how long the relationship spent in the stage it just left.
+        /// The gap between two rows is the part of a pipeline nobody can see, and it is
+        /// usually where the deal was actually lost.
+        /// </summary>
+        public int? DurationMinutes { get; set; }
+    }
+
+    /// <summary>How long one relationship has spent in one stage, in the order it passed through them.</summary>
+    public class StageDurationDto
+    {
+        public string Stage { get; set; } = string.Empty;
+        public int Minutes { get; set; }
+
+        /// <summary>True for the stage the relationship is sitting in now — its clock is still running.</summary>
+        public bool IsCurrent { get; set; }
     }
 
     // ---- Inputs ----
@@ -176,6 +324,9 @@ namespace MyAppApi.Data.Models.DTOs
     public class AskQuestionInput
     {
         public string Question { get; set; } = string.Empty;
+
+        /// <summary>Set to push back on an answer rather than start a new thread.</summary>
+        public int? ParentQuestionId { get; set; }
     }
 
     public class AnswerQuestionInput
@@ -193,7 +344,16 @@ namespace MyAppApi.Data.Models.DTOs
     {
         /// <summary>"Fulfilled" or "Declined".</summary>
         public string Status { get; set; } = string.Empty;
+
+        /// <summary>Which data-room document answers it. The founder's way of fulfilling.</summary>
         public int? DocumentId { get; set; }
+
+        /// <summary>
+        /// What the responder said. The investor's only way of fulfilling without a file,
+        /// and useful context alongside one.
+        /// </summary>
+        public string? ResponseNote { get; set; }
+
         public string? DeclinedReason { get; set; }
     }
 
