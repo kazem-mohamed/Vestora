@@ -69,8 +69,8 @@ docs/                  the documentation set
 - **The doc comments in this codebase explain *why*.** Read them; they are the design rationale, not noise. Keep that density when you add code near them.
 - **Next.js 16 has breaking changes** vs. most training data. See `Frontend/vestora/AGENTS.md`. Check `node_modules/next/dist/docs/` before relying on an API.
 - **The database is remote and shared.** Never run `dotnet ef database update` without saying so.
-- **The test suite covers the domain layer only** — 41 xUnit tests over `FundingMath` and `PipelineStages` (`cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj`). There are **no** integration, authorisation, payment or end-to-end tests. A green run proves the arithmetic and the stage vocabulary, nothing else. State how you verified a change; do not claim it works if you did not run it.
-- **The project is under git**, on a single initial commit. Branch or commit before a large deletion — `git` is the only undo there is.
+- **The test suite covers the domain layer only** — 48 xUnit tests over `FundingMath` and `PipelineStages` (`cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj`). There are **no** integration, authorisation, payment or end-to-end tests. A green run proves the arithmetic and the stage vocabulary, nothing else. State how you verified a change; do not claim it works if you did not run it.
+- **The project is under git**, with history pushed to GitHub (`origin/main`). Branch or commit before a large deletion — `git` is the only undo there is.
 
 ---
 
