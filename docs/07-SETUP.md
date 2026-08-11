@@ -71,7 +71,7 @@ cd MyAppApi/MyAppApi && dotnet user-secrets clear
 
 ## 3. قاعدة البيانات
 
-الـ schema بيتدار بـ EF Core migrations (22 migration).
+الـ schema بيتدار بـ EF Core migrations (26 migration).
 
 ```bash
 cd MyAppApi/MyAppApi && dotnet ef database update

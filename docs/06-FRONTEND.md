@@ -84,6 +84,7 @@
 | `/admin/users` | المستخدمون — تعليق/استعادة/حذف |
 | `/admin/ventures` | كل المشاريع |
 | `/admin/revenue` | إيرادات المنصّة + المعاملات + refund |
+| `/admin/reconciliation` | تأكيدات المدفوعات اللي محتاجة نظرة تانية — تعارضات المزوّد أولًا، إعادة تحقّق، تسجيل المراجعة |
 | `/admin/audit` | سجلّ الإجراءات الإدارية |
 | `/admin/security` | الأحداث الأمنية |
 | `/admin/activity` | الـ feed العام |
@@ -106,7 +107,7 @@
 
 ---
 
-## 3. المكوّنات (147 ملف)
+## 3. المكوّنات (149 ملف)
 
 ```
 components/
@@ -120,7 +121,8 @@ components/
 │                          backers-list · bookmark · share · report · video-modal · next-ventures
 ├── dashboard/    (10)  ← لوحة المؤسّس: kpi-cards · charts · panels · widgets · interest-funnel
 ├── invest/        (2)  ← لوحة المستثمر: sidebar + invest-primitives
-├── deals/         (4)  ← غرفة الصفقة: room · timeline · questions · documents
+├── deals/         (6)  ← غرفة الصفقة: room · timeline · questions (بمتابعات) · documents
+│                          (في الاتجاهين) · terms (شروط + عروض مقابلة) · chat (محادثة الغرفة)
 ├── funding/       (4)  ← التمويل: deal-funding-panel · founder-funding-ladder ·
 │                          request-funds-dialog · funding-primitives
 ├── messages/      (7)  ← الشات: realtime · inbox · thread · composer · launcher
@@ -165,7 +167,7 @@ Component → lib/hooks/use-*.ts (TanStack Query) → lib/api/*.ts → lib/api/c
 
 إعدادات `QueryClient` الافتراضية: `staleTime: 30s` · `retry: 1` · `refetchOnWindowFocus: false` · الـ mutations بدون إعادة محاولة.
 
-### `lib/types/api.ts` (1318 سطر)
+### `lib/types/api.ts` (1457 سطر)
 
 عقد الأنواع الكامل — مطابق للـ DTOs في الـ backend. **أي تغيير في DTO لازم يتبعه تحديث هنا.** بيغطّي: المصادقة، المشاريع، المدفوعات، الصفقات، اللوحات، الإدارة، الإشارات، التقييمات.
 
@@ -278,7 +280,7 @@ lib/auth/tokens.ts   ← الـ refreshToken في localStorage تحت "vestora.r
 ## 8. الترجمة (i18n)
 
 ```
-lib/i18n/dictionaries.ts   ← 4317 سطر — قاموس EN/AR مسطّح
+lib/i18n/dictionaries.ts   ← 4630 سطر — قاموس EN/AR مسطّح
 lib/i18n/locale.tsx        ← LocaleProvider + useLocale() + useT()
 ```
 

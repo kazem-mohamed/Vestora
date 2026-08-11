@@ -1,6 +1,6 @@
 # 04 · API Reference
 
-> All **150 endpoints** across **22 controllers**, extracted from the `[Route]` / `[Http*]` / `[Authorize]` attributes in `MyAppApi/MyAppApi/Controllers/`.
+> All **161 endpoints** across **22 controllers**, extracted from the `[Route]` / `[Http*]` / `[Authorize]` attributes in `MyAppApi/MyAppApi/Controllers/`.
 > **English by design** — every path, DTO and role name here is a literal identifier.
 
 **Base URL (dev):** `http://localhost:5078` · **Swagger (dev only):** `/swagger`
@@ -151,13 +151,14 @@ The venture's story surface: updates, milestones, team, data room.
 
 ---
 
-## 5. `InvestorController` — `/api/investor` · 10 endpoints
+## 5. `InvestorController` — `/api/investor` · 11 endpoints
 The support request + relationship pipeline.
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | GET | `/{investorId}/supported-projects` | `Investor` | |
-| POST | `/{projectId}/support` | `Investor` | `SupportProjectDto` (amount + contact info). Creates `Investment(Pending, Stage=New)`. **Rejected** if the project is Paused/Closed or the round has no remaining capacity. |
+| POST | `/{projectId}/support` | `Investor` | `SupportProjectDto` (amount + contact info). Creates `Investment(Pending, Stage=New)`. **Rejected** if the project is Paused/Closed or the round has no remaining capacity. On a concurrent duplicate, `UX_Investments_OneLivePerInvestor` refuses the insert and the controller turns that into the same `400` the pre-check gives. |
+| POST | `/investments/{investmentId}/approve-support` | `Innovator` + owner | **Relationship-addressed**, unlike §9's notification-keyed approval — the notification row can be gone (declined counterpart, aged out of the feed) while the decision itself is still live. Checks the round's remaining capacity *at approval*, same as §9. |
 | POST | `/{investmentId}/reject-support` | `Innovator` + owner | Sets `Status` and `Stage` to `Declined` (row kept). |
 | GET | `/{investorId}/investment-summary` | `Investor` | |
 | GET | `/{projectId}/my-support` | `Investor` | The caller's own relationship with one venture. |
@@ -169,17 +170,19 @@ The support request + relationship pipeline.
 
 ---
 
-## 6. `PaymentsController` — `/api/payments` · 13 endpoints
+## 6. `PaymentsController` — `/api/payments` · 15 endpoints
 See the full state machine in [05-BUSINESS-RULES §3](05-BUSINESS-RULES.md).
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | GET | `/config` | **anonymous** | `{ provider, isSandbox, currency, feeRateBps, … }`. Drives the sandbox disclosure in the UI. |
-| POST | `/investments/{investmentId}/funding-request` | `Innovator` | `CreateFundingRequestInput` (amount + note). At most one `Open` per investment. |
+| POST | `/investments/{investmentId}/funding-request` | `Innovator` | `CreateFundingRequestInput` (amount + note). At most one `Open` per investment. Amount is capped by the accepted term sheet, when there is one, and by what remains unsettled on it when tranches have already landed. |
 | GET | `/investments/{investmentId}/funding-request` | participant | Current request for a relationship. |
 | GET | `/funding-requests/{id}` | participant | |
 | POST | `/funding-requests/{id}/cancel` | founder or admin | Voids any live attempt too. |
-| POST | `/funding-requests/{id}/checkout` | `Investor` · **`Checkout` limit** | Opens a provider checkout session, creates `PaymentTransaction(Initiated)`. |
+| POST | `/funding-requests/{id}/counter` | `Investor` | `CounterOfferInput` (amount + note). One live counter per request; any in-flight checkout on the ask is cancelled first, since paying the original figure and proposing a different one are contradictory answers to the same question. |
+| POST | `/funding-requests/{id}/counter/answer` | `Innovator` | `AnswerCounterInput` (`accept` + note). **Accepting closes the countered ask and issues a new one at the agreed figure** — amounts on a financial row are never rewritten in place — through the ordinary `funding-request` creation path, so every guard on that path runs again. If the replacement is refused (capacity, closed round), the original ask is reopened rather than left with no live ask at all. |
+| POST | `/funding-requests/{id}/checkout` | `Investor` · **`Checkout` limit** | Opens a provider checkout session, creates `PaymentTransaction(Initiated)`. Refused if the relationship has closed or a counter-offer is currently on the table. |
 | POST | `/transactions/{id}/verify` | participant | **Server-side** verification with the provider. The browser redirect is never trusted. |
 | POST | `/transactions/{id}/cancel` | `Investor` | Investor abandoned the attempt. |
 | GET | `/transactions/{id}` | participant | |
@@ -190,19 +193,24 @@ See the full state machine in [05-BUSINESS-RULES §3](05-BUSINESS-RULES.md).
 
 ---
 
-## 7. `DealRoomController` — `/api/deals` · 9 endpoints
+## 7. `DealRoomController` — `/api/deals` · 14 endpoints
 Authenticated; access is checked per deal (investor, founder, or admin).
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/` | `?activeOnly=true` — the caller's deals (`DealSummary[]`). |
-| GET | `/{investmentId:int}` | Full `DealRoom`: participants, funding state, questions, document requests, documents, **timeline**, and derived next steps. |
-| POST | `/{investmentId:int}/questions` | `AskQuestionInput`. |
+| GET | `/{investmentId:int}` | Full `DealRoom`: participants, funding state, questions (with follow-up threads), document requests, documents, term sheets, derived **health**, per-stage **durations**, **timeline**, and derived next steps. |
+| POST | `/{investmentId:int}/questions` | `AskQuestionInput` — pass `parentQuestionId` to push back on an answer instead of opening a new question. One follow-up per question, from the asker, once it has an answer. |
 | PUT | `/questions/{questionId:int}/answer` | `AnswerQuestionInput`. |
 | POST | `/questions/{questionId:int}/withdraw` | Sets `IsWithdrawn`. |
-| POST | `/{investmentId:int}/document-requests` | `RequestDocumentInput`. |
-| PUT | `/document-requests/{requestId:int}` | `ResolveDocumentRequestInput` — fulfil (link a document) or decline with a reason. |
+| POST | `/{investmentId:int}/document-requests` | `RequestDocumentInput`. **Either side** may ask now — direction is derived from who asked. |
+| PUT | `/document-requests/{requestId:int}` | `ResolveDocumentRequestInput`. Whoever did **not** ask resolves it: the founder fulfils by linking a data-room document (`documentId`); the investor fulfils by an uploaded file and/or `responseNote`. Either side can decline with a reason. |
+| POST | `/document-requests/{requestId:int}/upload` | multipart `file`, ≤ 20 MB, same byte-signature validation as message attachments. The investor's answer to a request — stored on the row itself, never promoted to the venture's public data room. |
+| GET | `/document-requests/{requestId:int}/file` | Downloads what was uploaded. Participants only. |
 | POST | `/document-requests/{requestId:int}/withdraw` | |
+| POST | `/{investmentId:int}/terms` | `TermSheetInput` (amount, equity%, valuation, use of funds, other terms). Either side may propose; proposing counts as that side's own acceptance. A live sheet is superseded, not blocked, by a new proposal. |
+| POST | `/terms/{sheetId:int}/accept` | The **other** side's acceptance. Completing the pair sets `Status = Accepted`, stamps `AgreedAtUtc`, and moves the relationship's `Stage` to `Committed` **through `StageLog`** — the first time that stage has been backed by a document rather than a claim. |
+| POST | `/terms/{sheetId:int}/decline` | `DeclineTermsInput` (reason required — a decline with no reason ends the conversation, not just the sheet). |
 | PUT | `/{investmentId:int}/note` | Writes the caller's **own** note field only. |
 
 ---
@@ -231,7 +239,7 @@ Authenticated.
 |---|---|---|
 | GET | `/{userId}/notifications` | `?page=1&pageSize=50`. |
 | POST | `/notifications/{notificationId}/mark-as-read` | |
-| POST | `/{notificationId}/approve-support` | `Innovator` — **approves the support request from the notification row itself.** |
+| POST | `/{notificationId}/approve-support` | `Innovator` — **approves the support request from the notification row itself.** The relationship-addressed twin used by the founder request board lives at §5, `POST /api/investor/investments/{investmentId}/approve-support` — it survives the notification being gone. |
 | POST | `/{notificationId}/reject-support` | `Innovator` |
 
 ---
@@ -353,7 +361,7 @@ Authenticated.
 
 ---
 
-## 22. `AdminRevenueController` — `/api/admin/revenue` · 3 endpoints
+## 22. `AdminRevenueController` — `/api/admin/revenue` · 6 endpoints
 **`Admin` only.**
 
 | Method | Path | Notes |
@@ -361,6 +369,9 @@ Authenticated.
 | GET | `/` | `AdminRevenue`: KPIs, revenue over time, top-earning ventures. Built from **snapshotted** `FeeAmount`, never recomputed from current config. |
 | GET | `/transactions` | `?status=&q=&page=1&pageSize=25`. |
 | POST | `/transactions/{id:int}/refund` | `RefundInput` (reason). **The only path to a refund** — never self-service. Moves `Succeeded → Refunded`, which removes it from every funded figure by construction. |
+| GET | `/reconciliation` | `?includeReviewed=false&page=1&pageSize=50` — `PaymentEvent` rows where `Applied = false`: resent confirmations, and the `CONFLICT` ones where the provider says a payment landed against an attempt Vestora had already closed. Conflicts sort first. |
+| POST | `/reconciliation/{id:int}/reverify` | Re-runs the transaction behind the event through the **ordinary** `VerifyAsync` confirmation path — never patches a row directly. |
+| POST | `/reconciliation/{id:int}/review` | `ReviewEventInput` (note required). Records what an admin found. **Never rewrites `Applied` or `Outcome`** — those describe what the system did at the time; a later human finding is a separate fact. |
 
 ---
 

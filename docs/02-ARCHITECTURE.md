@@ -29,7 +29,7 @@
 │                                                                      │
 │  ┌─────────────┐   ┌──────────────┐   ┌──────────────────────────┐   │
 │  │ Controllers │──▶│ Services      │──▶│ AppDbContext (EF Core)  │   │
-│  │ (22)        │   │ Auth·Payments │   │ 32 DbSet · query filters│   │
+│  │ (22)        │   │ Auth·Payments │   │ 34 DbSet · query filters│   │
 │  │             │   │ FundingMath   │   │ TPH · unique indexes    │   │
 │  └─────────────┘   └──────────────┘   └──────────────────────────┘   │
 │         │                                                            │

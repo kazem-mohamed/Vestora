@@ -28,6 +28,7 @@ Interest  ≥  Committed  ≥  Funded          (holds everywhere by construction
 3. **A round is complete when the money arrived**, not when people said yes: `IsFullyFunded` (funded ≥ goal) is distinct from `IsFullyCommitted` (committed ≥ goal).
 4. **Refunds subtract by construction.** A refunded transaction leaves `Succeeded`, so it drops out of every funded sum with no special case anywhere.
 5. `FundingMath.SummariesAsync` uses `IgnoreQueryFilters()` deliberately — a soft-deleted venture's settled money must still reconcile in admin revenue.
+6. **A commitment may settle over several tranches.** `Funded` on one relationship is the **sum** of its succeeded transactions, compared against a commitment target (the accepted term sheet's amount, else the investment's own amount) — never "has one payment succeeded". See `PartiallyFunded` below and [§3.0–3.1](#30-term-sheet--what-backs-committed).
 
 ### Public status on a venture card
 
@@ -54,14 +55,17 @@ RemainingCapacity(goal, committed) = Math.Max(0, goal - committed)
 `FundingMath.StateOf(...)` is **derived, never stored** (a stored column would be a fifth place for the numbers to disagree). Evaluation order matters:
 
 ```
-hasSucceededPayment          → "Funded"
-investmentStatus == Declined → "Declined"
-hasProcessingPayment         → "Processing"
-hasOpenRequest               → "PaymentDue"
-hasRefundedPayment           → "Refunded"
-investmentStatus == Approved → "Committed"
-otherwise                    → "Requested"
+hasSucceededPayment && isFullySettled → "Funded"
+investmentStatus == Declined          → "Declined"
+hasSucceededPayment                   → "PartiallyFunded"
+hasProcessingPayment                  → "Processing"
+hasOpenRequest                        → "PaymentDue"
+hasRefundedPayment                    → "Refunded"
+investmentStatus == Approved          → "Committed"
+otherwise                             → "Requested"
 ```
+
+**`PartiallyFunded` is a tranche having landed with more still owed** — money in hand outranks an open ask on purpose, because "PaymentDue" would erase the part that already settled. `isFullySettled` compares the **sum** of every `Succeeded` transaction on the relationship against a commitment target — the accepted term sheet's amount when one exists, otherwise the investment's own amount (`FundingMath.IsFullySettled` / `CommitmentTargetAsync`). Before tranches existed this was "has any payment succeeded", which declared a relationship funded on its first instalment and made the rest of a split commitment uncollectable — with the balance still sitting in `Committed` forever.
 
 ---
 
@@ -82,7 +86,7 @@ New → Reviewing → Approved → Contacted → InDiscussion → Committed → 
 | `Approved` | Founder accepted — **counts toward funding** |
 | `Contacted` | Founder reached out |
 | `InDiscussion` | Active back-and-forth |
-| `Committed` | Both sides agreed terms off-platform |
+| `Committed` | Both sides accepted a `TermSheet` — see §3.0. Reached automatically the moment the second acceptance lands, or (for relationships with no term sheet) when a funding request is issued. |
 | `Closed` | Relationship concluded |
 | `Declined` | Founder said no — **row kept for history** |
 
@@ -92,7 +96,10 @@ New → Reviewing → Approved → Contacted → InDiscussion → Committed → 
 - **`Status` and `Stage` are two different axes.** `Status` is the funding gate (`Pending`/`Approved`/`Declined`); `Stage` is what is actually happening between two people. Do not collapse them.
 - Only the **founder who owns the project** may move a stage (`PATCH /api/investor/investments/{id}/stage`). An investor gets `403`.
 - **Moving to any stage that `CountsTowardFunding` also sets `Status = "Approved"`** — the funding gate is kept consistent with the pipeline automatically.
+- **Accepting a stage that counts toward funding — including the founder's own approval — is checked against `RemainingCapacity` first**, the same guard §1 describes for a new support request. Capacity used to be enforced only at submission; several requests can each fit an empty round on their own, and accepting all of them pushed `Committed` past the goal with no way back, because every funding request after that is measured against a total that already exceeds the target.
+- **Every stage move is appended to `InvestmentStageEvent`** through `Services/StageLog.cs`, never assigned to `Investment.Stage` directly — see [03-DATA-MODEL §4](03-DATA-MODEL.md). The append happens in the same `SaveChangesAsync` as the column it describes.
 - Declining sets **both** `Status` and `Stage` to `Declined`, stores `DeclinedReason`, and calls `CloseFundingForAsync`: any open funding request **and any live checkout** are cancelled. **Never delete the row.**
+- **Moving to `Closed` also closes out funding** the same way declining does — a concluded relationship cannot still be collecting on an open ask.
 - **A funded investment cannot be declined** — not via `reject-support` and not via a stage change. Both return *"Request a refund instead."* Reversing arrived money is an admin action with an audit trail, not a dropdown on a pipeline board.
 - The stage vocabulary is deliberately limited to what the product can evidence. No "Due Diligence" / "Negotiation" theatre — Vestora holds no contracts.
 - **Private notes:** `FounderNote` and `InvestorNote`. Each side writes and reads only its own field. Neither ever sees the other's.
@@ -102,6 +109,24 @@ New → Reviewing → Approved → Contacted → InDiscussion → Committed → 
 ## 3. Payments — the state machines
 
 > **Sandbox only.** The app throws at startup if `Payments:Stripe:SecretKey` is not `sk_test_…`. The check runs twice: `Program.cs` and `StripeSandboxPaymentProvider`'s constructor.
+
+### 3.0 Term sheet — what backs `Committed`
+
+```
+                (either side proposes — proposing is that side's own acceptance)
+                        ↓
+                   Proposed ──────────► Accepted   (second acceptance lands)  [terminal]
+                        │                    ↑ moves relationship Stage → Committed
+                        ├────────────────────┴──► Declined   (reason required)  [terminal]
+                        └──► Superseded   (a new version is proposed while this one is live) [terminal]
+```
+
+`TermSheetService.ProposeAsync` preconditions: relationship `Status == "Approved"`; `Stage` not `Declined`/`Closed`; `0 < amount ≤ 100,000,000`; equity 0–100%; if anything has already settled on this relationship, the new amount cannot be less than what settled.
+
+- **Both acceptances are tracked separately** (`FounderAcceptedAtUtc`, `InvestorAcceptedAtUtc`). One side accepting on behalf of the pair is exactly the claim this table exists to stop the product making.
+- **`UX_TermSheets_OneLivePerInvestment`** — at most one `Proposed` sheet per relationship. Proposing while one is already live **supersedes** it rather than being blocked, so renegotiation never leaves a window with no terms at all.
+- Reaching `Accepted` moves the relationship's `Stage` to `Committed` through `StageLog`, with the sheet's version and amount as the reason — the first time that stage has been backed by a document instead of a claim.
+- Not a contract. Vestora holds no signatures and enforces nothing.
 
 ### 3.1 Funding request
 
@@ -123,12 +148,21 @@ New → Reviewing → Approved → Contacted → InDiscussion → Committed → 
 5. `Project.LifecycleStatus != "Closed"`.
 6. `0 < amount ≤ 100,000,000`.
 7. No `Open` request already exists for this investment.
-8. **No still-`Succeeded` transaction** for this investment.
-9. `amount ≤ RemainingCapacity(goal, committedElsewhere)` — this relationship's own commitment is excluded from the total, otherwise a founder could never call in the last deal.
+8. **The commitment is not already fully settled** — `IsFullySettled(sumOfSucceeded, commitmentTarget)`, not "no transaction has ever succeeded". A commitment may be called in over several tranches; testing for any success at all would block every request after the first instalment.
+9. `amount ≤ RemainingCapacity(goal, committedElsewhere) − sumOfSucceeded` — this relationship's own commitment is excluded from the round total (otherwise a founder could never call in the last deal), and its own already-settled tranches are excluded again (otherwise the same commitment could be called in twice by splitting it).
+10. When an accepted term sheet exists, `amount ≤ UnsettledCommitment(termSheet.Amount, sumOfSucceeded)` — an ask may call the agreement in, never quietly exceed it. A bigger number is a renegotiation, with its own door (§3.0).
 
-**Side effects:** the relationship advances to `Committed` (unless already `Committed`/`Closed`) — asking for the money is the clearest possible statement that terms were agreed. Investor gets a `funding_requested` notification. An `AdminAuditLog` row is written.
+**Side effects:** the relationship advances to `Committed` (unless already `Committed`/`Closed`), recorded through `StageLog` with the request's reference as the reason. Investor gets a `funding_requested` notification. An `AdminAuditLog` row is written.
 
 > ⚠️ **Why step 8 tests the transaction, not the request status:** a refunded request keeps `Paid` on purpose — it *was* paid and then reversed, and rewriting the row would erase the first half of that. But the money is gone, so the founder must be able to ask again. Reading the request's status here would freeze every refunded deal forever.
+
+**Reminders:** the sweeper sends up to two, at T-3-days and T-1-day before `ExpiresAtUtc`, to the investor only — it's their move, and a founder does not need telling twice that someone else has not paid. `FundingRequest.RemindersSent` tracks which rung has fired.
+
+**Counter-offer** (`PaymentService.CounterOfferAsync` / `AnswerCounterOfferAsync`) — the investor's answer to a figure they don't want to pay as stated:
+
+- The investor proposes `CounterAmount` against an `Open` request. One live counter at a time; any in-flight checkout on that request is cancelled first — paying the original figure and proposing a different one are contradictory answers to the same question.
+- The founder **accepts or declines**. Accepting does not edit the amount in place: it closes the countered request (`ClosedReason = "Superseded by the agreed …"`) and issues a **new** request at the countered figure through the ordinary creation path above — every precondition on this list runs again for the replacement.
+- If the replacement is refused (capacity, a closed round, an agreed term sheet that no longer covers it), **the original request is reopened** rather than leaving the relationship with no live ask at all — the investor was never told their counter succeeded, so silently ending the negotiation there would be worse than the original ask standing.
 
 ### 3.2 Payment transaction
 
@@ -150,12 +184,13 @@ New → Reviewing → Approved → Contacted → InDiscussion → Committed → 
 **Settlement** (`SettleAsync`) freezes the economics **onto the row**:
 
 ```
-feeRateBps  = Payments:FeeRateBps            (500 = 5%)
+feeRateBps  = transaction.FeeRateBps         (quoted at checkout — falls back to
+                                               Payments:FeeRateBps only if unset)
 fee         = round(amount * bps / 10000, 2, AwayFromZero)
 net         = amount - fee
 ```
 
-`FeeRateBps`, `FeeAmount`, `NetToFounder` are snapshotted at success and **never recomputed** from live configuration. Changing the platform's rate next term must not rewrite what Vestora earned last term.
+The rate is read from the transaction's own row, not live configuration, because it was already quoted to the investor when the checkout opened — a rate change between checkout and settlement must not move the founder's proceeds after the fact. `FeeRateBps`, `FeeAmount`, `NetToFounder` are snapshotted at success and **never recomputed**. Changing the platform's rate next term must not rewrite what Vestora earned last term.
 
 The fee comes **out of the founder's proceeds**, never on top of what the investor pays.
 
@@ -163,11 +198,12 @@ The fee comes **out of the founder's proceeds**, never on top of what the invest
 
 **Refund** (`RefundAsync`) — **admin only**, never self-service:
 - Only a `Succeeded` transaction can be refunded, and only once.
+- **Claims a `PaymentEvent` key (`refund:{transactionId}`) before calling the provider**, not after — two admins on the same receipt both pass the status check before either writes, and the claim is what moves that collision to before the irreversible call instead of after it. A refusal from the provider frees the claim so a corrected attempt can retry; a genuine refund marks it `Applied = true`.
 - The funding request **stays `Paid`** — the honest record is "it was paid, then reversed".
 - Funded totals and platform revenue both fall automatically, because the row left `Succeeded`. The platform does not keep revenue on money it returned.
 - Both parties are notified.
 
-### 3.3 The four database constraints that carry the system
+### 3.3 The database constraints that carry the system
 
 Database constraints, not service checks — **application code loses races, indexes do not.**
 
@@ -176,35 +212,43 @@ Database constraints, not service checks — **application code loses races, ind
 | 1 | `UX_FundingRequests_OneOpenPerInvestment` — unique `InvestmentId` where `Status='Open'` | One live ask per relationship. Two would let one deal be funded twice. |
 | 2 | `UX_PaymentTransactions_OneActivePerRequest` — unique `FundingRequestId` where `Status IN ('Initiated','Processing')` | One live attempt per request. |
 | 3 | `UX_PaymentTransactions_OneSucceededPerRequest` — unique `FundingRequestId` where `Status='Succeeded'` | Even if every other guard failed, the database refuses to record the same funding twice. |
-| 4 | `UX_PaymentEvents_ProviderEventId` — unique `(Provider, ProviderEventId)` | **The idempotency gate.** |
+| 4 | `UX_PaymentEvents_ProviderEventId` — unique `(Provider, ProviderEventId)` | **The idempotency gate**, now also claimed by refunds. |
+| 5 | `UX_Investments_OneLivePerInvestor` — unique `(ProjectId, InvestorId)` where `InvestorId IS NOT NULL AND Status IN ('Pending','Approved')` | One live relationship per investor per venture — closes the check-then-insert race in `SupportProject`. |
+| 6 | `UX_TermSheets_OneLivePerInvestment` — unique `InvestmentId` where `Status='Proposed'` | One proposal on the table at a time. |
 
 ### 3.4 Idempotency & the double-confirmation race
 
 Two paths can confirm the same payment **at the same moment**: the browser's return-trip verify, and the provider's webhook. Providers also legitimately resend webhooks.
 
 ```
-confirmation arrives (webhook | verify | simulated)
+confirmation arrives (webhook | verify | sweep | simulated)
         ↓
+BEGIN TRANSACTION
 INSERT INTO PaymentEvents (Provider, ProviderEventId, …)   ← constraint #4
         ↓ unique violation?
-       yes → { received: true, applied: false }   nothing downstream runs
+       yes → ROLLBACK → { received: true, applied: false }   nothing downstream runs
         ↓ no
 apply the effect (settle / fail / cancel / mark processing)
         ↓ DbUpdateConcurrencyException (RowVersion)?
-       yes → the other path already did the work → treat as success
+       yes → ROLLBACK, forget tracked changes → the other path already did the work → treat as success
+        ↓ any other exception?
+       yes → ROLLBACK (the claim goes with the failed effect, so a retry can still apply it) → rethrow
+        ↓ no
+COMMIT
 ```
 
 **Rules**
-- Every confirmation path **records the event before acting on it**.
+- Every confirmation path **records the event before acting on it**, and the claim and the effect commit or roll back **together, in one transaction** — a process death between the two used to leave the key claimed and the settlement lost, with no retry able to recover it because the retry is exactly what the claimed key then blocked.
 - For a *verify*, `ProviderEventId` is a deterministic key derived from the session + outcome, so a repeated verify collides with itself.
 - **The redirect is never trusted.** Returning to the success URL only triggers a server-side `verify`. Settlement comes from the provider's own answer or a signature-verified webhook.
-- A settled payment arriving against an already-closed attempt is logged as `RECONCILIATION:` at **error** level and recorded with a `CONFLICT` outcome — never swallowed as a duplicate.
+- A settled payment arriving against an already-closed attempt is logged as `RECONCILIATION:` at **error** level and recorded with a `CONFLICT` outcome — never swallowed as a duplicate, and surfaced to a human through `GET /api/admin/revenue/reconciliation` rather than living only in the log.
 
 ### 3.5 Expiry sweeper
 
-`PaymentExpirySweeper` (hosted service):
-- `Initiated`/`Processing` past `ExpiresAtUtc` → `Cancelled` with reason `expired`.
-- `Open` funding requests past `ExpiresAtUtc` → `Expired`, which **releases their share of the round's capacity**.
+`PaymentExpirySweeper` (hosted service), every 3 minutes:
+- `Initiated`/`Processing` past `ExpiresAtUtc` — **asks the provider first**, through the same confirmation path §3.4 describes, before writing anything off. Expiry is Vestora's clock running out, not evidence about what the provider did; an investor who pays in the last minute before a sweep runs must not have that payment discarded as abandoned. Only an attempt the provider still calls open is cancelled with reason `expired`. If the provider cannot be reached, the attempt is left alone for the next sweep — up to 24 hours past its deadline, after which it is written off anyway (logged as `RECONCILIATION:`) so one unanswerable attempt can never permanently block the relationship's one-live-attempt constraint.
+- `Open` funding requests past `ExpiresAtUtc` → `Expired`, which **releases their share of the round's capacity**. Both sides are notified (`funding_request_expired`) — a request that lapsed in silence left the investor wondering where the pay button went and the founder still believing money was on its way.
+- Sends the T-3-day / T-1-day reminder ladder described in §3.1, to the investor only.
 
 TTLs: `Payments:CheckoutTtlMinutes` (default 35) · `Payments:FundingRequestTtlDays` (default 14).
 
@@ -282,9 +326,11 @@ One endorsement per `(project, investor)` — enforced by a unique index.
 | Type | Lane |
 |---|---|
 | `ProjectSupported` | needsYou *(resolvable inline — approve/decline from the row)* |
-| `deal_question` · `doc_request` · `funding_requested` · `ProjectRejected` | needsYou |
-| `ProjectSupportApproved` · `ProjectSupportRejected` · `deal_answer` · `doc_fulfilled` · `doc_declined` · `round_closed` · `payment_succeeded` · `payment_failed` · `refund_completed` | outcome |
+| `deal_question` · `doc_request` · `funding_requested` · `ProjectRejected` · `funding_request_reminder` · `funding_counter_offered` · `terms_proposed` | needsYou |
+| `ProjectSupportApproved` · `ProjectSupportRejected` · `deal_answer` · `doc_fulfilled` · `doc_declined` · `round_closed` · `payment_succeeded` · `payment_failed` · `refund_completed` · `funding_counter_answered` · `terms_agreed` · `terms_declined` | outcome |
 | `ProjectSupportSubmitted` · `ProjectUpdate` · `NewProject` · `UserFollowed` · `funding_request_expired` | activity |
+
+> `funding_request_expired` sits in `activity` because nothing can be done about an ask that has already lapsed; the reminders that fire *before* that point (`funding_request_reminder`) are `needsYou` because there is still time to act.
 
 Unknown types fall back to the `activity` lane with the server's own sentence — they are never lost and never mistaken for something urgent.
 
@@ -352,13 +398,18 @@ Roles come from the JWT role claim (= `User.UserType`). Enforced by `[Authorize(
 |---|---|
 | Project edit/delete/lifecycle/close | `Project.OwnerId == currentUserId` |
 | Updates / milestones / team / documents | ownership of the parent project |
-| Approve / decline support | founder owns the project behind the notification |
+| Approve / decline support | founder owns the project — either through the notification row or, now, directly by `investmentId` |
 | Pipeline stage | founder owns the project — investors get **403** |
 | Private notes | each side writes only its own field |
 | `TeamMember.Email` | owner-only in the roster (prevents email harvesting) |
 | `BackersOnly` documents | `CanSeeBackerDocsAsync` = owner or approved backer |
 | Comment / reply delete | author only |
-| Funding request | founder for issue; investor for checkout |
+| Funding request | founder for issue; investor for checkout, counter-offer |
+| Counter-offer answer | founder only — the counter targets the figure they set |
+| Term sheet propose / accept / decline | either participant, never admin |
+| Document request — ask | either participant; resolve is **whoever did not ask** |
+| Deal-question follow-up | the original asker only, one per answered question |
+| Reconciliation review | admin only |
 | Refund | admin only |
 
 ---
@@ -455,3 +506,6 @@ There is **no "Verified" badge**, because Vestora verifies nothing about a perso
 - [ ] Is every new `DateTime` UTC, and does its serializer carry the UTC converters?
 - [ ] Did you add a money column without `HasPrecision(18, 2)`?
 - [ ] Did you add a second index on a column that already has one, without naming it explicitly?
+- [ ] Did you test "has any payment succeeded" instead of comparing the settled **sum** against the commitment target? Tranches mean the first is always wrong.
+- [ ] Does a new payment confirmation path claim its `PaymentEvent` and apply its effect in the **same transaction**?
+- [ ] Did you assign `Investment.Stage` directly instead of going through `StageLog.MoveAsync`?

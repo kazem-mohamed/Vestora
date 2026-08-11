@@ -284,7 +284,7 @@ cd MyAppApi/MyAppApi && dotnet build
 
 ## 8. اختبار التغيير
 
-**الاختبارات الآلية بتغطّي طبقة المجال بس** — `MyAppApi.Tests` فيه 41 اختبار وحدة على `FundingMath` و`PipelineStages`. أي حاجة تانية (endpoints، صلاحيات، دفع، واجهة) **تحقّقها يدوي**، فخلّي معاييرك واضحة قبل ما تبدأ.
+**الاختبارات الآلية بتغطّي طبقة المجال بس** — `MyAppApi.Tests` فيه 48 اختبار وحدة على `FundingMath` و`PipelineStages`. أي حاجة تانية (endpoints، صلاحيات، دفع، واجهة) **تحقّقها يدوي**، فخلّي معاييرك واضحة قبل ما تبدأ.
 
 | النوع | إزاي |
 |---|---|
@@ -306,7 +306,7 @@ cd MyAppApi/MyAppApi && dotnet build
 
 | المسار | إيه ده |
 |---|---|
-| `.claude/launch.json` | تعريف سيرفر التطوير `vestora-web` لأدوات المعاينة |
+| `.claude/launch.json` | تعريف سيرفري التطوير `vestora-frontend` و`vestora-backend` لأدوات المعاينة |
 | `.claude/settings.local.json` | إعدادات Claude Code المحلّية |
 | `.codex/hooks.json` · `.kiro/steering/` | إعدادات أدوات وكلاء تانية |
 | `.impeccable/` · `**/.impeccable/` | كاش مؤقّت لأداة — **مُتجاهَل في `.gitignore`، متلمسهوش** |

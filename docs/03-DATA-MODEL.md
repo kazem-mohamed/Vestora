@@ -4,7 +4,7 @@
 > **English by design** — every name here is a literal identifier in the code and the database.
 
 **Source of truth:** `MyAppApi/MyAppApi/Data/AppDbContext.cs` (`OnModelCreating` + `ConfigureFunding`).
-32 `DbSet`s · 22 migrations · SQL Server · EF Core 8.
+34 `DbSet`s · 26 migrations · SQL Server · EF Core 8.
 
 ---
 
@@ -31,12 +31,14 @@ Innovator ──owns──▶ Project*                              (cascade)
                      ├─ Bookmark*            (cascade)
                      ├─ Comment* ─ Reply*    (restrict)
                      └─ Investment*          (restrict on Investor)
-                          ├─ DealQuestion*      (cascade)
+                          ├─ InvestmentStageEvent*  (cascade) — append-only, never updated
+                          ├─ DealQuestion*      (cascade) — self-FK ParentQuestionId (NoAction, one level)
                           ├─ DocumentRequest*   (cascade)
-                          └─ FundingRequest*    (cascade)
+                          ├─ TermSheet*         (cascade)
+                          └─ FundingRequest*    (cascade) ── TermSheetId? (NoAction)
                                └─ PaymentTransaction*  (cascade)
 
-PaymentEvent          — standalone idempotency ledger
+PaymentEvent          — standalone idempotency ledger + reconciliation review
 Notification          — FKs to Project / Investment / ActorUser (all restrict-ish)
 Follow                — (FollowerId, FollowedId) ints, no FK navs
 AdminAuditLog         — standalone
@@ -66,6 +68,7 @@ Discriminator column: **`UserType`** → `"Investor"` | `"Innovator"` | `"Admin"
 | `CoverImage` | varbinary? | profile hero blob |
 | `CreatedAtUtc` | datetime2? | nullable so pre-existing rows just hide "joined" |
 | `LastSeenAt` | datetime2? | written by `ChatHub` on last disconnect |
+| `OnboardedAtUtc` | datetime2? | set once, first onboarding screen per account |
 | `UniqueNumber` | nvarchar(50) | required |
 | `IsEmailVerified` · `EmailVerifiedAtUtc` | bool · datetime2? | |
 | `EmailVerificationTokenHash` | nvarchar(128)? | hash only, never the raw code |
@@ -197,15 +200,61 @@ Event types written by `AuthService` include login success/failure, lockout, and
 
 > Declining sets both `Stage` and `Status` to `Declined` rather than deleting the row — the relationship history survives.
 
+🔒 **`UX_Investments_OneLivePerInvestor`** — unique on `(ProjectId, InvestorId)` `WHERE InvestorId IS NOT NULL AND Status IN ('Pending','Approved')`. Closes the race in `SupportProject`'s check-then-insert: two concurrent submissions from the same investor on the same venture both pass the application-level check, and only the database catches the second one. `Declined` rows sit outside the filter on purpose — a decline must leave the investor free to approach the venture again.
+
+### `InvestmentStageEvent` — append-only stage history
+
+| Column | Notes |
+|---|---|
+| `InvestmentId` | cascade |
+| `FromStage?` | nvarchar(20) — **null on the opening event**, there was no previous stage |
+| `ToStage` | nvarchar(20), required |
+| `ActorUserId` | usually the founder; settlement moves a relationship too and the investor is the actor there |
+| `Reason?` | nvarchar(300) — a decline reason, or the automatic note a closing round leaves |
+| `MinutesInPreviousStage?` | int — computed **once, at write time**, from the previous event (or `StageUpdatedAt`/`Date` for a relationship with no prior rows) |
+| `AtUtc` | |
+
+**Indexes:** `(InvestmentId, AtUtc)` · `(ToStage, AtUtc)`.
+
+> Every write goes through `Services/StageLog.cs`, never through `Investment.Stage =` directly — that was seven call sites hand-assigning the column before this table existed, one silent miss away from a timeline missing a step. `StageLog.MoveAsync` adds the event to the same change tracker as the column it describes, so one `SaveChangesAsync` commits both or neither. This is what makes the deal room's per-stage duration chart possible — a single `StageUpdatedAt` column could only ever say how long the *current* stage had lasted.
+
 ### `DealQuestion`
-`InvestmentId` (cascade) · `AskedByUserId` (**restrict**) · `Question` (1000) · `Answer` (4000)? · `AnsweredByUserId?` (**restrict**) · `CreatedAtUtc` · `AnsweredAtUtc?` · `IsWithdrawn`.
+`InvestmentId` (cascade) · `ParentQuestionId?` → `DealQuestion` (**self-FK, NoAction, one level only**) · `AskedByUserId` (**restrict**) · `Question` (1000) · `Answer` (4000)? · `AnsweredByUserId?` (**restrict**) · `CreatedAtUtc` · `AnsweredAtUtc?` · `IsWithdrawn`.
 **Index:** `(InvestmentId, CreatedAtUtc)`.
 
+> `ParentQuestionId` turns one answered question into one follow-up — never a second, and never nested. A thread is a clarification, not a forum.
+
 ### `DocumentRequest`
-`InvestmentId` (cascade) · `RequestedByUserId` (**restrict**) · `Title` (160) · `Note` (600)? · `Status` (default `"Open"`) · `DeclinedReason` (500)? · `FulfilledByDocumentId?` → `ProjectDocument` (**NoAction**) · `CreatedAtUtc` · `ResolvedAtUtc?`.
+`InvestmentId` (cascade) · `RequestedByUserId` (**restrict**) · `Title` (160) · `Note` (600)? · `Status` (default `"Open"`) · `DeclinedReason` (500)? · `FulfilledByDocumentId?` → `ProjectDocument` (**NoAction**) · `ResponseFileName?` (255) · `ResponseContentType?` (100) · `ResponseSizeBytes?` bigint · `ResponseData?` varbinary(max) · `ResponseNote?` (600) · `CreatedAtUtc` · `ResolvedAtUtc?`.
 **Index:** `(InvestmentId, Status)`.
 
 > **Why NoAction and not SetNull:** both this table and `ProjectDocuments` reach `Projects` by cascade, and SQL Server refuses the resulting multiple cascade paths. The unlink is therefore done **explicitly** in `ProjectStoryController.DeleteDocument`, which is also the only place that can honestly reopen the request.
+>
+> **Direction (`ToFounder` / `ToInvestor`) is derived, not stored** — from whether `RequestedByUserId` is the venture's owner. Either side may ask now; each answers differently because each holds documents differently. A founder links something from the data room (`FulfilledByDocumentId`). An investor has no data room of their own, so their answer is a file attached directly to the request (`Response*`) — held here rather than promoted to `ProjectDocument`, because a venture's data room is readable by every other approved backer and a bank letter is not for them.
+
+### `TermSheet` — what both sides say they agreed to
+
+| Column | Notes |
+|---|---|
+| `InvestmentId` | cascade |
+| `Version` | int — 1, 2, 3… within one relationship |
+| `Amount` | **decimal(18,2)** required — gross, the same convention as `FundingRequest.Amount` |
+| `Currency` | char(3) |
+| `EquityPct?` | **decimal(7,4)** — a 18,2 column would round 12.375% to 12.38 and quietly move somebody's stake |
+| `Valuation?` | decimal(18,2) |
+| `UseOfFunds?` (1000) · `OtherTerms?` (2000) | free text — board seats, tranching, vesting, anything the structured fields can't carry |
+| `Status` | `Proposed` \| `Accepted` \| `Declined` \| `Superseded` |
+| `ProposedByUserId` | |
+| `FounderAcceptedAtUtc?` · `InvestorAcceptedAtUtc?` | **both**, tracked separately — one party accepting on behalf of the pair is exactly the claim this table exists to stop the product making |
+| `AgreedAtUtc?` | set when the second acceptance lands |
+| `DeclinedReason?` (500) | |
+| `CreatedAtUtc` | |
+
+**Indexes**
+- `(InvestmentId, Version)` — **unique**.
+- 🔒 **`UX_TermSheets_OneLivePerInvestment`** — unique on `InvestmentId` `WHERE Status = 'Proposed'`. At most one proposal on the table at a time; a live sheet is superseded, not blocked, so renegotiation never leaves a window with no terms at all.
+
+> Not a contract — Vestora holds no signatures and enforces nothing. It is the text that `Investment.Stage == "Committed"` used to mean without having any — "both sides agreed terms off-platform" — with nothing behind the claim. Rows are immutable once `Accepted`; a renegotiation proposes a new version rather than editing this one, so the sequence of what was offered and by whom survives.
 
 ---
 
@@ -225,12 +274,19 @@ Event types written by `AuthService` include login success/failure, lockout, and
 | `Currency` | char(3), default `USD` |
 | `Status` | `Open` \| `Paid` \| `Cancelled` \| `Expired` |
 | `ClosedReason` (200)? · `Note` (500)? | |
+| `TermSheetId?` → `TermSheet` (**NoAction**) | the agreed terms this ask calls in, when the relationship has any — optional, so rows funded before term sheets existed stay valid |
+| `RemindersSent` | int, default 0 — which rung of the T-3-day / T-1-day reminder ladder has fired; a count, not timestamps, because the ladder is fixed and all the sweeper needs to know is which rung it's on |
+| **`CounterAmount?`** · `CounterNote?` (500) · `CounterAtUtc?` | the investor's proposed figure against this ask |
+| **`CounterStatus?`** | `Proposed` \| `Accepted` \| `Declined` — null when nobody countered |
+| **`SupersedesRequestId?`** | the ask this one replaced, when it was issued to accept a counter — amounts on a financial row are never rewritten, so accepting a counter closes the old request and opens a new one |
 | `CreatedAtUtc` · `ExpiresAtUtc` · `ClosedAtUtc?` · `PaidAtUtc?` | |
 
 **Indexes**
 - 🔒 **`UX_FundingRequests_OneOpenPerInvestment`** — unique on `InvestmentId` `WHERE Status = 'Open'`.
   *Two live asks for the same relationship would let one deal be funded twice.*
-- `(ProjectId, Status)` · `(InvestorId, Status)`
+- `(ProjectId, Status)` · `(InvestorId, Status)` · `TermSheetId`
+
+> **Tranches:** a commitment may now be called in over several requests. `IsFullySettled` compares the **sum** of every `Succeeded` transaction against the commitment target (the accepted term sheet's amount, or the investment's own amount when there is none) — not "has any payment succeeded". The first-success test would have declared a relationship funded on its opening instalment and made the rest of the money uncollectable. See [05-BUSINESS-RULES §1](05-BUSINESS-RULES.md).
 
 ### `PaymentTransaction` — **one attempt**, not one payment
 
@@ -263,11 +319,15 @@ Event types written by `AuthService` include login success/failure, lockout, and
 
 ### `PaymentEvent` — the idempotency ledger (not a log)
 
-`Provider` (24) · `ProviderEventId` (255) · `EventType` (64) · `Source` (`webhook` \| `verify` \| `simulated`) · `PaymentTransactionId?` · `Payload` (4000)? · `ReceivedAtUtc` (**indexed**) · `Applied` bool · `Outcome` (300)?.
+`Provider` (24) · `ProviderEventId` (255) · `EventType` (64) · `Source` (`webhook` \| `verify` \| `sweep` \| `admin` \| `simulated`) · `PaymentTransactionId?` · `Payload` (4000)? · `ReceivedAtUtc` (**indexed**) · `Applied` bool · `Outcome` (300)? · `ReviewedAtUtc?` · `ReviewedByAdminId?` · `ReviewNote?` (500).
 
 - 🔒 **`UX_PaymentEvents_ProviderEventId`** — unique on `(Provider, ProviderEventId)`.
 
-> Every confirmation path inserts here **first**. A resent webhook, a repeated verify, and a webhook racing a verify all collide at this index before a single funding figure moves. Nothing downstream needs to defend itself. For a verify, `ProviderEventId` is a deterministic key derived from the session + outcome, so a repeat collides with itself.
+> Every confirmation path inserts here **first**. A resent webhook, a repeated verify, and a webhook racing a verify all collide at this index before a single funding figure moves. Nothing downstream needs to defend itself. For a verify, `ProviderEventId` is a deterministic key derived from the session + outcome, so a repeat collides with itself. `ApplyProviderResultAsync` now wraps the claim and the effect in **one database transaction** — a process death between claiming the key and applying it used to leave the key committed and the settlement lost, with no retry able to recover it because the retry is exactly what the key then blocked.
+>
+> **The review columns are the admin reconciliation queue.** Every event that changed nothing — including a `CONFLICT` outcome, where the provider reports a payment against an attempt Vestora had already closed — sat here unindexed for a human until `AdminRevenueController`'s reconciliation endpoints existed to surface it. Reviewing records what a human found; it never rewrites `Applied` or `Outcome`, which describe what the system did at the time.
+>
+> Refunds now claim a key here too (`ProviderEventId = "refund:{transactionId}"`), closing the gap where two admins on the same receipt could both pass the status check before either wrote — and, unlike settlement, the claim is made **before** the provider is asked to reverse the charge, not after.
 
 ---
 
@@ -318,7 +378,11 @@ Every monetary column declares `HasPrecision(18, 2)`. Without it SQL Server fall
 | `Project.EquityOffered` | **5,2** (percent) |
 | `Investor.TicketMin` / `TicketMax` | 18,2 |
 | `FundingRequest.Amount` | 18,2 required |
+| `FundingRequest.CounterAmount` | 18,2 |
 | `PaymentTransaction.Amount` / `FeeAmount` / `NetToFounder` | 18,2 required |
+| `TermSheet.Amount` | 18,2 required |
+| `TermSheet.Valuation` | 18,2 |
+| `TermSheet.EquityPct` | **7,4** (percent, finer than `Project.EquityOffered`) |
 
 ---
 
@@ -335,7 +399,7 @@ Applies to **every** LINQ query including `Find`. Opt out with `.IgnoreQueryFilt
 
 ## 10. Migrations
 
-22 migrations in `Migrations/`, in order:
+26 migrations in `Migrations/`, in order:
 
 | # | Migration | What it added |
 |---|---|---|
@@ -361,6 +425,10 @@ Applies to **every** LINQ query including `Find`. Opt out with `.IgnoreQueryFilt
 | 20 | `NotificationPrefsAndSelfDelete` | `NotifyOn*`, `DeletedAtUtc` |
 | 21 | `ExpansionRelationshipWorkspace` | DealQuestions, DocumentRequests, contextual messaging |
 | 22 | `FundingRequestsAndSandboxPayments` | FundingRequests, PaymentTransactions, PaymentEvents + all 4 integrity indexes |
+| 23 | `AddUserOnboardedAt` | `User.OnboardedAtUtc` |
+| 24 | `OneLiveInvestmentPerInvestor` | `UX_Investments_OneLivePerInvestor` |
+| 25 | `StageHistoryRemindersAndReconciliation` | InvestmentStageEvents, `FundingRequest.RemindersSent`, `PaymentEvent` review columns |
+| 26 | `TermSheetsCounterOffersAndTwoWayDocs` | TermSheets, `FundingRequest` counter-offer + tranche columns, `DocumentRequest` response columns, `DealQuestion.ParentQuestionId` |
 
 **Commands** (from `MyAppApi/MyAppApi`):
 

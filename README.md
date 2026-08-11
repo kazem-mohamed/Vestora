@@ -1,6 +1,6 @@
 # Vestora
 
-> منصّة تربط **روّاد الأعمال (Founders / Innovators)** اللي بيدوّروا على تمويل، بـ **المستثمرين (Investors)** اللي بيدوّروا على فُرَص — من أول ما المشروع يتنشر، لحد ما الفلوس توصل فعلاً وتتسجّل على الطرفين.
+> منصّة تربط **روّاد الأعمال (Founders / Innovators)** اللي بيدوّروا على تمويل، بـ **المستثمرين (Investors)** اللي بيدوّروا على فُرَص — من أول ما المشروع يتنشر، لحد ما الفلوس توصل فعلاً وتتسجّل على الطرفين. غرفة الصفقة نفسها فيها تفاوض حقيقي: شروط متّفق عليها بموافقة الطرفين، عروض مقابلة على المبلغ، وتمويل على أقساط لو الالتزام كبير.
 
 ```
 Vestora/
@@ -23,7 +23,7 @@ Vestora/
 | 1 | [docs/01-OVERVIEW.md](docs/01-OVERVIEW.md) | إيه هو Vestora، المصطلحات، الأدوار الأربعة، رحلة كل مستخدم |
 | 2 | [docs/02-ARCHITECTURE.md](docs/02-ARCHITECTURE.md) | إزاي النظام مبني: الطبقات، دورة الطلب، المصادقة، الـ realtime، الـ background jobs |
 | 3 | [docs/03-DATA-MODEL.md](docs/03-DATA-MODEL.md) | *(EN)* كل جدول، كل عمود، كل علاقة، كل constraint، وكل migration |
-| 4 | [docs/04-API-REFERENCE.md](docs/04-API-REFERENCE.md) | *(EN)* الـ 150 endpoint كلهم: المسار، الصلاحية، المدخلات، المخرجات |
+| 4 | [docs/04-API-REFERENCE.md](docs/04-API-REFERENCE.md) | *(EN)* الـ 161 endpoint كلهم: المسار، الصلاحية، المدخلات، المخرجات |
 | 5 | [docs/05-BUSINESS-RULES.md](docs/05-BUSINESS-RULES.md) | *(EN)* **الأهم** — القواعد اللي مينفعش تتكسر: حسابات التمويل، الـ state machines، مصفوفة الصلاحيات |
 | 6 | [docs/06-FRONTEND.md](docs/06-FRONTEND.md) | كل صفحة، كل component، إدارة الحالة، الـ design system، الترجمة، الحركة |
 | 7 | [docs/07-SETUP.md](docs/07-SETUP.md) | تشغيل المشروع محليًا: الأسرار، قاعدة البيانات، الإيميل، Stripe، حل المشاكل |
@@ -70,10 +70,11 @@ cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj
 
 | | |
 |---|---|
-| Backend | 22 controller · 150 endpoint · 32 DbSet · 22 migration · 1 SignalR hub · 2 background worker |
-| Frontend | 55 صفحة (route) · 147 component · 17 API module · دعم كامل EN/AR مع RTL |
-| الاختبارات | 41 اختبار وحدة (xUnit) على طبقة المجال — `FundingMath` + `PipelineStages`. مفيش integration ولا E2E. |
+| Backend | 22 controller · 161 endpoint · 34 DbSet · 26 migration · 1 SignalR hub · 2 background worker |
+| Frontend | 55 صفحة (route) · 149 component · 17 API module · دعم كامل EN/AR مع RTL |
+| الاختبارات | 48 اختبار وحدة (xUnit) على طبقة المجال — `FundingMath` + `PipelineStages`. مفيش integration ولا E2E. |
 | المدفوعات | **Sandbox فقط** — simulator أوفلاين أو Stripe test-mode. التطبيق بيرفض يشتغل بمفتاح Stripe حقيقي. |
+| الإيميل | SMTP حقيقي (Brevo عبر MailKit) — الأسرار في `user-secrets`، مش في الكود. تفاصيل الإعداد في [docs/07-SETUP.md §7](docs/07-SETUP.md). |
 
 ---
 
