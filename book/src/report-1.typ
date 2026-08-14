@@ -141,7 +141,7 @@ These are excluded deliberately, and Report 12 returns to each.
 #note[
   The out-of-scope list is not an apology. Each entry is a decision with a
   reason, and each is repeated verbatim in the report that would otherwise be
-  expected to contain it — so that no reader reaches Report 8 expecting live
+  expected to contain it — so that no reader reaches Report 10 expecting live
   settlement and finds a simulator instead.
 ]
 
@@ -208,8 +208,8 @@ a priority and a pointer to where it is satisfied.
     [Identity and access], [7], [Report 3],
     [Projects and ventures], [7], [Report 4],
     [Discovery and engagement], [7], [Report 6],
-    [Investment and funding], [9], [Reports 7 and 8],
-    [Communication], [7], [Reports 9 and 10],
+    [Investment and funding], [9], [Reports 9 and 10],
+    [Communication], [7], [Reports 7 and 8],
     [Administration and moderation], [6], [Reports 5 and 11],
   ),
   caption: [Functional requirements by area, and the report that delivers each

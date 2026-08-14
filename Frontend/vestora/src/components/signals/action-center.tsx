@@ -8,11 +8,15 @@ import {
   ArrowLeft,
   Bell,
   FileQuestion,
+  FileSignature,
   HelpCircle,
+  Hourglass,
   Inbox,
   Sparkles,
   Stamp,
+  TimerReset,
   UserCheck,
+  Wallet,
 } from "lucide-react";
 import { signalsApi } from "@/lib/api/deals";
 import { useAuthStore } from "@/lib/auth/store";
@@ -33,15 +37,23 @@ interface Item {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
 }
 
+// Ordered by urgency, and the order is the point: this is a list, not a grid. A grid of
+// tiles says every item is equally important, which is exactly the reading that made the
+// old band easy to skip past.
 const FOUNDER_ITEMS: Item[] = [
+  { key: "termSheetsAwaitingYou", labelKey: "act.termSheets", href: "/dashboard/requests", icon: FileSignature },
+  { key: "requestsNearingExpiry", labelKey: "act.expiringRequests", href: "/dashboard/funding", icon: TimerReset },
   { key: "pendingRequests", labelKey: "act.pendingRequests", href: "/dashboard/requests", icon: Stamp },
-  { key: "approvedAwaitingContact", labelKey: "act.awaitingContact", href: "/dashboard/requests", icon: UserCheck },
   { key: "questionsToAnswer", labelKey: "act.questions", href: "/dashboard/requests", icon: HelpCircle },
   { key: "documentRequestsToFill", labelKey: "act.docRequests", href: "/dashboard/requests", icon: FileQuestion },
+  { key: "approvedAwaitingContact", labelKey: "act.awaitingContact", href: "/dashboard/requests", icon: UserCheck },
 ];
 
 const INVESTOR_ITEMS: Item[] = [
+  { key: "paymentsDue", labelKey: "act.paymentsDue", href: "/invest/payments", icon: Wallet },
+  { key: "termSheetsAwaitingYou", labelKey: "act.termSheets", href: "/invest/pipeline", icon: FileSignature },
   { key: "questionsToAnswer", labelKey: "act.questions", href: "/invest/pipeline", icon: HelpCircle },
+  { key: "documentRequestsToFill", labelKey: "act.docRequests", href: "/invest/pipeline", icon: FileQuestion },
 ];
 
 /**
@@ -83,14 +95,14 @@ export function ActionCenter() {
   const informational =
     data.unreadMessages + data.unreadNotifications + data.newFromSavedSearches;
 
-  // Nothing owed and nothing new: say nothing at all.
-  if (items.length === 0 && informational === 0) return null;
+  // Nothing owed, nothing gone quiet, nothing new: say nothing at all.
+  if (items.length === 0 && data.stalledDeals === 0 && informational === 0) return null;
 
   return (
     <div className="space-y-3">
       {/* ================= NEEDS YOU ================= */}
       <AnimatePresence initial={false}>
-        {items.length > 0 && (
+        {(items.length > 0 || data.stalledDeals > 0) && (
           <motion.section
             key="needs"
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: -10 }}
@@ -129,7 +141,7 @@ export function ActionCenter() {
                 </span>
               </div>
 
-              <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+              <ul className="mt-4 space-y-2">
                 {items.map((item, i) => {
                   const count = data[item.key] as number;
                   const Icon = item.icon;
@@ -181,6 +193,25 @@ export function ActionCenter() {
                   );
                 })}
               </ul>
+
+              {/* Stalled sits below the obligations and outside the count. Nobody is
+                  blocked on it — it is a relationship that has gone quiet, which is worth
+                  knowing and is not a task. Folding it into the badge would inflate the
+                  number with something that cannot be cleared by doing anything. */}
+              {data.stalledDeals > 0 && (
+                <Link
+                  href={isFounder ? "/dashboard/requests" : "/invest/pipeline"}
+                  data-cursor="hover"
+                  className="mt-3 flex items-center gap-2.5 rounded-xl border border-bronze/30 bg-bronze/[0.04] px-4 py-2.5 text-sm transition-colors hover:border-bronze/50"
+                >
+                  <Hourglass className="size-4 shrink-0 text-bronze" strokeWidth={1.8} />
+                  <span className="font-numeric shrink-0 text-xs text-bronze">{data.stalledDeals}</span>
+                  <span className="min-w-0 flex-1 text-foreground/85">
+                    {t("act.stalled").replace("{days}", String(data.stalledAfterDays))}
+                  </span>
+                  <Arrow className="size-3.5 shrink-0 text-muted-foreground" />
+                </Link>
+              )}
             </div>
           </motion.section>
         )}

@@ -22,8 +22,8 @@ The second is *appearance*: the tokens, typefaces and rules from which every
 screen in reports 3 to 12 is drawn.
 
 They belong in one report because both are decisions made once and then obeyed
-everywhere. Neither is revisited by a later part. A screen in Report 10 does not
-choose a colour; a controller in Report 8 does not invent a way to return an
+everywhere. Neither is revisited by a later part. A screen in Report 8 does not
+choose a colour; a controller in Report 10 does not invent a way to return an
 error.
 
 = Objective
@@ -57,7 +57,7 @@ The platform is four pieces, and this shape does not change in any later report.
     [REST API], [The only writer to the database. Owns every rule,
       authorisation decision and validation.],
     [Real-time hub], [Pushes live updates. Shares the API's authentication and
-      data access. Covered in Report 9.],
+      data access. Covered in Report 7.],
     [Relational store], [Holds state and enforces integrity through
       constraints, not only through code.],
   ),
@@ -399,12 +399,12 @@ but these four are the spine.
       payment.],
     [`PaymentTransaction`], [Evidence that money moved. A *fact*.],
   ),
-  caption: [The four core entities. Reports 4, 7 and 8 develop the last three.],
+  caption: [The four core entities. Reports 4, 9 and 10 develop the last three.],
 )
 
 #full-page-figure(
   "/assets/diagrams/out/erd-core.svg",
-  caption: [The core relational model. The distinction that governs Report 8 is
+  caption: [The core relational model. The distinction that governs Report 10 is
     already visible here: an `Investment` and a `PaymentTransaction` are separate
     rows because they are separate facts.],
 )
@@ -534,7 +534,7 @@ one; none of them amends it.
       [*Depends on this part.* Identity is the first domain service, and every
        authentication screen is drawn from the tokens above.],
       [It adds three tables; it changes none of the four here.],
-    [7 · Commitment & Pipeline],
+    [9 · Commitment & Pipeline],
       [*Depends on this part.* `FundingMath` is a domain service in the group
        described above, and the `Investment` / `PaymentTransaction` split is
        already in the model here.],
@@ -544,7 +544,7 @@ one; none of them amends it.
        performance all describe the containers defined here.],
       [It measures the architecture rather than altering it.],
   ),
-  caption: [Direct relationships only. Reports 4 to 6 and 8 to 11 inherit the
+  caption: [Direct relationships only. Reports 4 to 8, 10 and 11 inherit the
     design system and the container split without a dependency worth naming
     separately.],
 )

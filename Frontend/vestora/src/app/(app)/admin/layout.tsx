@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AdminSearch } from "@/components/admin/admin-search";
 import { AdminMobileNav, AdminSidebar } from "@/components/admin/admin-sidebar";
 import { useAuthStore } from "@/lib/auth/store";
 import { useLocale } from "@/lib/i18n/locale";
@@ -26,7 +27,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <AdminMobileNav />
       <div className="mt-4 lg:mt-0 lg:grid lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-8">
         <aside className="hidden lg:block">
-          <div className="sticky top-20">
+          {/* Above the navigation, because looking a record up is more often the reason
+              an administrator is here than browsing a section is. */}
+          <div className="sticky top-20 space-y-4">
+            <AdminSearch />
             <AdminSidebar />
           </div>
         </aside>

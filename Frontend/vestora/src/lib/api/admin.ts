@@ -1,11 +1,16 @@
 import { api } from "@/lib/api/client";
 import type {
+  AdminAlerts,
   AdminAnalytics,
+  AdminAuditFilters,
   AdminAuditLogResponse,
   AdminGrowth,
+  AdminInsights,
   AdminReportsResponse,
+  AdminSearchResults,
   AdminSecurity,
   AdminUser,
+  AdminUserOverview,
   PagedResult,
   PendingProject,
 } from "@/lib/types/api";
@@ -22,18 +27,35 @@ export const adminApi = {
     return api.get<PagedResult<AdminUser>>(`/api/admin/users?${q.toString()}`);
   },
 
-  deleteUser: (id: number) => api.del<{ message: string }>(`/api/admin/users/${id}`),
+  userOverview: (id: number) => api.get<AdminUserOverview>(`/api/admin/users/${id}/overview`),
 
-  suspendUser: (id: number, reason?: string) =>
-    api.post<{ message: string }>(`/api/admin/users/${id}/suspend`, { reason: reason ?? null }),
+  alerts: () => api.get<AdminAlerts>("/api/admin/alerts"),
+
+  insights: () => api.get<AdminInsights>("/api/admin/insights"),
+
+  search: (q: string, signal?: AbortSignal) =>
+    api.get<AdminSearchResults>(`/api/admin/search?q=${encodeURIComponent(q)}`, { signal }),
+
+  // A reason is required by the API on every destructive action — the person on the
+  // other end will ask why, and the audit row is where that answer has to live.
+  deleteUser: (id: number, reason: string) =>
+    api.del<{ message: string }>(`/api/admin/users/${id}`, { body: { reason } }),
+
+  suspendUser: (id: number, reason: string) =>
+    api.post<{ message: string }>(`/api/admin/users/${id}/suspend`, { reason }),
 
   restoreUser: (id: number) =>
     api.post<{ message: string }>(`/api/admin/users/${id}/restore`, {}),
 
-  auditLog: (opts: { page?: number; pageSize?: number }) => {
+  auditLog: (opts: AdminAuditFilters) => {
     const q = new URLSearchParams();
     q.set("page", String(opts.page ?? 1));
     q.set("pageSize", String(opts.pageSize ?? 30));
+    if (opts.adminId != null) q.set("adminId", String(opts.adminId));
+    if (opts.action) q.set("action", opts.action);
+    if (opts.targetType) q.set("targetType", opts.targetType);
+    if (opts.from) q.set("from", opts.from);
+    if (opts.to) q.set("to", opts.to);
     return api.get<AdminAuditLogResponse>(`/api/admin/audit-log?${q.toString()}`);
   },
 
@@ -41,7 +63,8 @@ export const adminApi = {
 
   growth: (months = 6) => api.get<AdminGrowth>(`/api/admin/growth?months=${months}`),
 
-  deleteProject: (id: number) => api.del<{ message: string }>(`/api/admin/projects/${id}`),
+  deleteProject: (id: number, reason: string) =>
+    api.del<{ message: string }>(`/api/admin/projects/${id}`, { body: { reason } }),
 
   reports: (opts: { status?: string; page?: number; pageSize?: number }) => {
     const q = new URLSearchParams();
@@ -70,6 +93,6 @@ export const adminApi = {
 
   approveProject: (id: number) => api.post<{ message: string }>(`/api/admin/projects/${id}/approve`, {}),
 
-  rejectProject: (id: number, reason?: string) =>
-    api.post<{ message: string }>(`/api/admin/projects/${id}/reject`, { reason: reason ?? null }),
+  rejectProject: (id: number, reason: string) =>
+    api.post<{ message: string }>(`/api/admin/projects/${id}/reject`, { reason }),
 };

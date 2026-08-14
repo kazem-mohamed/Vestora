@@ -64,7 +64,7 @@ and the reason, and including everything that was not built.
 = Accounts Are Suspended, Not Deleted
 
 An account with financial history cannot be deleted. The referential rules
-introduced in Report 7 prevent it, and correctly so: deleting such an account
+introduced in Report 9 prevent it, and correctly so: deleting such an account
 would erase the record of commitments that *other parties* made.
 
 Suspension therefore exists as a first-class state rather than as a softer form
@@ -300,17 +300,17 @@ on a test rather than on inspection says so where it is made.
       [Public browsing, search, four filters, six sort orders, saved searches,
        watchlist, following, feed, reviews, comments, reporting, investor
        directory; deterministic ranking.],
-    [7 · Commitment & Pipeline],
+    [9 · Commitment & Pipeline],
       [Commitment as intention, founder approval, capacity measured in
        commitments, four funding figures derived and never stored.],
-    [8 · Payments],
+    [10 · Payments],
       [Time-boxed checkout, provider abstraction with two implementations,
        signature-verified webhooks, duplicate protection, expiry sweeping,
        refunds, platform fee.],
-    [9 · Messaging & Notifications],
+    [7 · Messaging & Notifications],
       [Live messaging with presence, durable last-seen, typing, server-side read
        receipts, attachments, notifications with background fan-out.],
-    [10 · The Deal Room],
+    [8 · The Deal Room],
       [A per-relationship room, document requests with download logging, and
        access decided by party membership rather than by role.],
     [11 · Dashboards & Analytics],
@@ -375,7 +375,7 @@ disclosed for the first time here.
 
   *Solution.* Two limits rather than one. First *scope*: administrators moderate
   reported content and cannot read private conversations — the deal room of
-  Report 10 admits parties, not roles. Second *accountability*: every
+  Report 8 admits parties, not roles. Second *accountability*: every
   administrative action is written to a durable, queryable, attributed record
   inside the same unit of work as the action itself, so an action cannot exist
   without its record.

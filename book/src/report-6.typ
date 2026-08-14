@@ -94,7 +94,7 @@ to be slow, because it does three expensive things at once:
 + It filters on *two* state columns — a venture is listed only when its
   moderation status is approved and its lifecycle status is active (Report 4).
 + It aggregates funding progress *per row* — and those totals are derived rather
-  than stored (Report 7).
+  than stored (Report 9).
 + It orders and pages the result.
 
 Three measures keep it fast, applied in the order a database problem should be
@@ -392,7 +392,7 @@ decided `AdminAuditLog` two reports ago.
   *Solution.* A unique index on the pair. The second write fails, and the failure
   is the correct outcome — the handler reports success because the venture is
   saved either way. The same pattern was applied to following and to reviews, and
-  the same reasoning appears again in Report 8 against a payment provider that
+  the same reasoning appears again in Report 10 against a payment provider that
   delivers the same confirmation twice.
 ]
 
@@ -425,7 +425,7 @@ the commitment: it reads a great deal and writes almost nothing.
       [*Consumes its output.* Only approved ventures enter the population, and
        reports raised here enter the queue there.],
       [Discovery cannot make or change a moderation decision.],
-    [7 · Commitment & Pipeline],
+    [9 · Commitment & Pipeline],
       [*Feeds it.* The funding figure on every card comes from `FundingMath`, and
        the watchlist is where a commitment usually begins.],
       [No funding figure is computed here; the listing calls the same service the
@@ -459,5 +459,5 @@ is a relational `LIKE` across five columns rather than a full-text index, which
 is adequate at the current population size and is the first thing that would need
 to change as it grows. Report 12 states at what point.
 
-*What this enables.* Report 7 can now assume an investor who has found a venture
+*What this enables.* Report 9 can now assume an investor who has found a venture
 they want to back — which is where the money starts.

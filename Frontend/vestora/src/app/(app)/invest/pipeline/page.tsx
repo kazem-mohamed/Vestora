@@ -12,6 +12,7 @@ import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import {
   EASE,
+  STAGE_LABEL_KEY,
   STAGE_ORDER,
   StagePill,
   VentureThumb,
@@ -23,7 +24,7 @@ import { useInvestorDashboard } from "@/lib/hooks/use-investor-dashboard";
 import { useAuthStore } from "@/lib/auth/store";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
-import type { PipelineItem } from "@/lib/types/api";
+import type { PipelineItem, PipelineStage } from "@/lib/types/api";
 
 type Filter = "active" | "all" | "declined";
 
@@ -228,6 +229,84 @@ function PipelineRow({ item, index }: { item: PipelineItem; index: number }) {
   );
 }
 
+/** The ladder, in order. Declined is a way out of it, not a rung. */
+const FUNNEL_STAGES: PipelineStage[] = [
+  "New",
+  "Reviewing",
+  "Approved",
+  "Contacted",
+  "InDiscussion",
+  "Committed",
+];
+
+/**
+ * This investor's own funnel, derived from the pipeline the page already has.
+ *
+ * Cumulative — "reached at least this far" — because a relationship that got to
+ * Committed is not sitting in Reviewing, and a chart built from current stages would
+ * read as if it had fallen out. Counts lead; the drop-off is a count too. No endpoint:
+ * every number here is a group-by over data that was already fetched.
+ */
+function InvestorFunnel({ items }: { items: PipelineItem[] }) {
+  const { t } = useLocale();
+
+  const live = items.filter((i) => i.stage !== "Declined");
+  const declined = items.length - live.length;
+
+  const reachedAtLeast = (stage: PipelineStage) => {
+    const target = FUNNEL_STAGES.indexOf(stage);
+    return live.filter((i) => {
+      // Closed means the relationship ran its course, so it topped the ladder.
+      const ord = i.stage === "Closed" ? FUNNEL_STAGES.length - 1 : FUNNEL_STAGES.indexOf(i.stage);
+      return ord >= target;
+    }).length;
+  };
+
+  const steps = FUNNEL_STAGES.map((stage) => ({ stage, count: reachedAtLeast(stage) }));
+  const funded = items.filter((i) => (i.fundedAmount ?? 0) > 0).length;
+  steps.push({ stage: "Funded" as PipelineStage, count: funded });
+
+  const widest = Math.max(1, ...steps.map((s) => s.count));
+  if (widest === 0) return null;
+
+  return (
+    <Panel title={t("inv.funnel.title")}>
+      <ul className="space-y-3">
+        {steps.map((s, i) => {
+          const lost = i > 0 ? steps[i - 1].count - s.count : 0;
+          return (
+            <li key={s.stage}>
+              <div className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="font-medium">{t(STAGE_LABEL_KEY[s.stage] ?? "stage.new")}</span>
+                <span className="flex items-baseline gap-2">
+                  <span className="font-numeric text-foreground">{s.count}</span>
+                  {lost > 0 && (
+                    <span className="font-numeric text-[11px] text-muted-foreground">−{lost}</span>
+                  )}
+                </span>
+              </div>
+              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-secondary">
+                <span
+                  className={cn(
+                    "block h-full rounded-full",
+                    s.stage === ("Funded" as PipelineStage) ? "bg-primary" : "bg-bronze"
+                  )}
+                  style={{ width: `${Math.round((s.count / widest) * 100)}%` }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {declined > 0 && (
+        <p className="mt-4 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+          <span className="font-numeric text-foreground">{declined}</span> {t("inv.funnel.declined")}
+        </p>
+      )}
+    </Panel>
+  );
+}
+
 export default function InvestPipelinePage() {
   const { t } = useLocale();
   const { data, isLoading, isError, refetch } = useInvestorDashboard();
@@ -277,6 +356,10 @@ export default function InvestPipelinePage() {
         />
       ) : (
         <>
+          {/* Performance before the list. The relationships are below either way; this
+              says how the investor's own activity is converting. */}
+          <InvestorFunnel items={data?.pipeline ?? []} />
+
           <div className="flex flex-wrap gap-2">
             {FILTERS.map((f) => (
               <button

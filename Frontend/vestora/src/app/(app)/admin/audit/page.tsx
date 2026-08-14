@@ -34,15 +34,83 @@ function targetHref(targetType: string, targetId: number | null): string | null 
   return null;
 }
 
+/**
+ * The changed fields, either side of the action.
+ *
+ * Rendered only where the two differ. An action that touched three columns and moved one
+ * of them should show one line, not three — the pair is stored so the reader can see
+ * what changed, and printing what stayed the same buries it.
+ */
+function Diff({ before, after }: { before: string | null; after: string | null }) {
+  const { t } = useLocale();
+  if (!before && !after) return null;
+
+  let b: Record<string, unknown> = {};
+  let a: Record<string, unknown> = {};
+  try {
+    b = before ? JSON.parse(before) : {};
+    a = after ? JSON.parse(after) : {};
+  } catch {
+    // A row written by an older build, or hand-edited. Showing nothing is better than
+    // showing a parser error in a moderation trail.
+    return null;
+  }
+
+  const keys = Array.from(new Set([...Object.keys(b), ...Object.keys(a)])).filter(
+    (k) => JSON.stringify(b[k]) !== JSON.stringify(a[k])
+  );
+  if (keys.length === 0) return null;
+
+  const show = (v: unknown) =>
+    v === null || v === undefined || v === "" ? "—" : typeof v === "boolean" ? String(v) : String(v);
+
+  return (
+    <ul className="mt-2 space-y-1 rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+      {keys.map((k) => (
+        <li key={k} className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
+          <span className="text-muted-foreground">{k}</span>
+          <span className="font-numeric text-muted-foreground/70 line-through">{show(b[k])}</span>
+          <span className="text-muted-foreground/50">→</span>
+          <span className="font-numeric text-foreground">{show(a[k])}</span>
+        </li>
+      ))}
+      <li className="sr-only">{t("admin.audit.diff")}</li>
+    </ul>
+  );
+}
+
 export default function AdminAuditPage() {
   const { t, locale } = useLocale();
   const [page, setPage] = useState(1);
+  const [adminId, setAdminId] = useState<number | undefined>();
+  const [action, setAction] = useState<string | undefined>();
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
 
   const q = useQuery({
-    queryKey: ["admin-audit", page],
-    queryFn: () => adminApi.auditLog({ page, pageSize: 30 }),
+    queryKey: ["admin-audit", page, adminId, action, from, to],
+    queryFn: () =>
+      adminApi.auditLog({
+        page,
+        pageSize: 30,
+        adminId,
+        action,
+        from: from || undefined,
+        to: to || undefined,
+      }),
     placeholderData: (prev) => prev,
   });
+
+  const facets = q.data?.facets;
+  const filtered = adminId != null || action != null || from !== "" || to !== "";
+
+  function reset() {
+    setAdminId(undefined);
+    setAction(undefined);
+    setFrom("");
+    setTo("");
+    setPage(1);
+  }
 
   const items = q.data?.items ?? [];
   const totalPages = q.data ? Math.max(1, Math.ceil(q.data.totalCount / q.data.pageSize)) : 1;
@@ -59,6 +127,92 @@ export default function AdminAuditPage() {
         sub={t("admin.audit.sub")}
         eyebrowKey="admin.sidebar.label"
       />
+
+      {/* Filters, built from what the table actually contains. */}
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-border/60 bg-card/40 p-4">
+        <label className="flex min-w-40 flex-col gap-1.5">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            {t("admin.audit.filter.admin")}
+          </span>
+          <select
+            value={adminId ?? ""}
+            onChange={(e) => {
+              setAdminId(e.target.value ? Number(e.target.value) : undefined);
+              setPage(1);
+            }}
+            className="h-9 rounded-lg border border-input bg-card/60 px-3 text-sm outline-none focus-visible:border-primary/60"
+          >
+            <option value="">{t("admin.audit.filter.any")}</option>
+            {facets?.admins.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex min-w-40 flex-col gap-1.5">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            {t("admin.audit.filter.action")}
+          </span>
+          <select
+            value={action ?? ""}
+            onChange={(e) => {
+              setAction(e.target.value || undefined);
+              setPage(1);
+            }}
+            className="h-9 rounded-lg border border-input bg-card/60 px-3 text-sm outline-none focus-visible:border-primary/60"
+          >
+            <option value="">{t("admin.audit.filter.any")}</option>
+            {facets?.actions.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            {t("admin.audit.filter.from")}
+          </span>
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => {
+              setFrom(e.target.value);
+              setPage(1);
+            }}
+            className="h-9 rounded-lg border border-input bg-card/60 px-3 text-sm outline-none focus-visible:border-primary/60"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            {t("admin.audit.filter.to")}
+          </span>
+          <input
+            type="date"
+            value={to}
+            onChange={(e) => {
+              setTo(e.target.value);
+              setPage(1);
+            }}
+            className="h-9 rounded-lg border border-input bg-card/60 px-3 text-sm outline-none focus-visible:border-primary/60"
+          />
+        </label>
+
+        {filtered && (
+          <button
+            type="button"
+            data-cursor="hover"
+            onClick={reset}
+            className="h-9 rounded-full border border-border px-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("admin.audit.filter.clear")}
+          </button>
+        )}
+      </div>
 
       <Panel elevated>
         {q.isLoading && !q.data ? (
@@ -111,9 +265,25 @@ export default function AdminAuditPage() {
                       {e.details && (
                         <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{e.details}</p>
                       )}
+                      {/* The reason gets its own line and its own weight. It is the field
+                          a support conversation quotes back, not a footnote to Details. */}
+                      {e.reason && (
+                        <p className="mt-1 text-xs">
+                          <span className="text-muted-foreground">{t("admin.reason.label")}: </span>
+                          <span className="text-foreground">{e.reason}</span>
+                        </p>
+                      )}
+                      <Diff before={e.beforeJson} after={e.afterJson} />
                     </div>
-                    <span className="shrink-0 font-numeric text-[11px] text-muted-foreground/70">
-                      {dtf.format(new Date(e.createdAtUtc))}
+                    <span className="shrink-0 text-end">
+                      <span className="block font-numeric text-[11px] text-muted-foreground/70">
+                        {dtf.format(new Date(e.createdAtUtc))}
+                      </span>
+                      {e.ipAddress && (
+                        <span className="mt-0.5 block font-numeric text-[10px] text-muted-foreground/50">
+                          {e.ipAddress}
+                        </span>
+                      )}
                     </span>
                   </motion.li>
                 );

@@ -249,9 +249,20 @@ namespace MyAppApi.Controllers
                 q.Answer == null && !q.IsWithdrawn && q.AskedByUserId != me &&
                 (q.Investment.Project.OwnerId == me || q.Investment.InvestorId == me));
 
+            // Stated thresholds, not a model. Both travel back with the counts so the
+            // interface can say what the rule was instead of implying a judgement.
+            const int expiryWindowDays = 3;
+            const int stalledAfterDays = 7;
+
+            var now = DateTime.UtcNow;
+            var expirySoon = now.AddDays(expiryWindowDays);
+            var stalledBefore = now.AddDays(-stalledAfterDays);
+
             var pendingRequests = 0;
             var docRequestsToFill = 0;
             var approvedNotContacted = 0;
+            var requestsNearingExpiry = 0;
+            var paymentsDue = 0;
 
             if (isFounder)
             {
@@ -264,7 +275,40 @@ namespace MyAppApi.Controllers
                 // The relationship's most common stall: approved and then abandoned.
                 approvedNotContacted = await _db.Investments.CountAsync(i =>
                     i.Project.OwnerId == me && i.Stage == PipelineStages.Approved);
+
+                // An ask about to lapse is the founder's problem, not the investor's:
+                // when it expires the capacity returns to the round and the conversation
+                // restarts from nothing.
+                requestsNearingExpiry = await _db.FundingRequests.CountAsync(f =>
+                    f.Status == FundingRequestStatus.Open &&
+                    f.Investment.Project.OwnerId == me &&
+                    f.ExpiresAtUtc <= expirySoon);
             }
+            else
+            {
+                // The investor's one genuinely blocking obligation: money asked for and
+                // not sent.
+                paymentsDue = await _db.FundingRequests.CountAsync(f =>
+                    f.Status == FundingRequestStatus.Open && f.InvestorId == me);
+            }
+
+            // Both sides accept a term sheet separately, so "awaiting you" is specifically
+            // the acceptance this caller has not given.
+            var termSheetsAwaitingYou = await _db.TermSheets.CountAsync(s =>
+                s.Status == TermSheetStatus.Proposed &&
+                s.ProposedByUserId != me &&
+                (isFounder
+                    ? s.Investment.Project.OwnerId == me && s.FounderAcceptedAtUtc == null
+                    : s.Investment.InvestorId == me && s.InvestorAcceptedAtUtc == null));
+
+            // Live relationships that have not moved. Counted, not diagnosed.
+            var stalledDeals = await _db.Investments.CountAsync(i =>
+                (isFounder ? i.Project.OwnerId == me : i.InvestorId == me) &&
+                i.Status != "Declined" &&
+                i.Stage != PipelineStages.Closed &&
+                i.Stage != PipelineStages.Declined &&
+                i.StageUpdatedAt != null &&
+                i.StageUpdatedAt < stalledBefore);
 
             var searches = await _db.SavedSearches.AsNoTracking().Where(s => s.UserId == me).ToListAsync();
             var newFromSearches = 0;
@@ -272,11 +316,21 @@ namespace MyAppApi.Controllers
 
             return Ok(new ActionCenterDto
             {
-                NeedsAction = questionsToAnswer + pendingRequests + docRequestsToFill + approvedNotContacted,
+                NeedsAction = questionsToAnswer + pendingRequests + docRequestsToFill +
+                              approvedNotContacted + termSheetsAwaitingYou + paymentsDue +
+                              requestsNearingExpiry,
                 QuestionsToAnswer = questionsToAnswer,
                 PendingRequests = pendingRequests,
                 DocumentRequestsToFill = docRequestsToFill,
                 ApprovedAwaitingContact = approvedNotContacted,
+                TermSheetsAwaitingYou = termSheetsAwaitingYou,
+                PaymentsDue = paymentsDue,
+                RequestsNearingExpiry = requestsNearingExpiry,
+                ExpiryWindowDays = expiryWindowDays,
+                // Stalled is a fact worth surfacing but nobody is blocked on it, so it
+                // stays out of the badge count above.
+                StalledDeals = stalledDeals,
+                StalledAfterDays = stalledAfterDays,
                 UnreadMessages = unreadMessages,
                 UnreadNotifications = unreadNotifications,
                 NewFromSavedSearches = newFromSearches,

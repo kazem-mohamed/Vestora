@@ -96,7 +96,13 @@ namespace MyAppApi.Controllers
             _context.Users.Add(admin);
             await _context.SaveChangesAsync();
 
-            await LogAsync("CreateAdmin", "User", admin.Id, $"Created admin '{admin.UserName}'.");
+            // The only action here that cannot record itself in the same transaction as
+            // the change: the id being recorded does not exist until the row is written.
+            _context.Audit(GetCurrentUserId(), "CreateAdmin", "User", admin.Id,
+                details: $"Created admin '{admin.UserName}'.",
+                after: new { admin.UserName, admin.Email, UserType = "Admin" },
+                http: HttpContext);
+            await _context.SaveChangesAsync();
 
             return Ok(new { message = "Administrator account created.", userId = admin.Id });
         }
@@ -156,7 +162,7 @@ namespace MyAppApi.Controllers
         // the account is hidden (global query filter), not physically removed, so
         // it's reversible and never fails on related data (investments, messages).
         [HttpDelete("users/{userId}")]
-        public async Task<IActionResult> DeleteUser(int userId)
+        public async Task<IActionResult> DeleteUser(int userId, [FromBody] AdminReasonDto dto)
         {
             if (userId == GetCurrentUserId())
             {
@@ -174,9 +180,15 @@ namespace MyAppApi.Controllers
                 return BadRequest(new { message = "Administrators cannot be deleted from here." });
             }
 
+            var before = new { user.IsDeleted };
             user.IsDeleted = true;
+            _context.Audit(GetCurrentUserId(), "DeleteUser", "User", userId,
+                details: $"Deleted user '{user.UserName}' ({user.UserType}).",
+                reason: dto.Reason,
+                before: before,
+                after: new { user.IsDeleted },
+                http: HttpContext);
             await _context.SaveChangesAsync();
-            await LogAsync("DeleteUser", "User", userId, $"Deleted user '{user.UserName}' ({user.UserType}).");
 
             return Ok(new { message = "User deleted successfully." });
         }
@@ -185,7 +197,7 @@ namespace MyAppApi.Controllers
         // filter) but not physically removed, so it's reversible and there's no
         // manual cascade to keep in sync with the schema.
         [HttpDelete("projects/{projectId}")]
-        public async Task<IActionResult> DeleteProject(int projectId)
+        public async Task<IActionResult> DeleteProject(int projectId, [FromBody] AdminReasonDto dto)
         {
             var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId);
 
@@ -194,9 +206,15 @@ namespace MyAppApi.Controllers
                 return NotFound(new { message = "Project not found." });
             }
 
+            var before = new { project.IsDeleted };
             project.IsDeleted = true;
+            _context.Audit(GetCurrentUserId(), "DeleteProject", "Project", projectId,
+                details: $"Deleted project '{project.Name}'.",
+                reason: dto.Reason,
+                before: before,
+                after: new { project.IsDeleted },
+                http: HttpContext);
             await _context.SaveChangesAsync();
-            await LogAsync("DeleteProject", "Project", projectId, $"Deleted project '{project.Name}'.");
 
             return Ok(new { message = "Project deleted successfully." });
         }
@@ -204,7 +222,7 @@ namespace MyAppApi.Controllers
         // Suspension: the reversible step below deletion. The account keeps all
         // its data but is blocked from signing in (enforced in AuthService).
         [HttpPost("users/{userId}/suspend")]
-        public async Task<IActionResult> SuspendUser(int userId, [FromBody] SuspendUserDto? dto)
+        public async Task<IActionResult> SuspendUser(int userId, [FromBody] AdminReasonDto dto)
         {
             if (userId == GetCurrentUserId())
                 return BadRequest(new { message = "You cannot suspend your own account." });
@@ -214,11 +232,17 @@ namespace MyAppApi.Controllers
             if (user.UserType == "Admin")
                 return BadRequest(new { message = "Administrators cannot be suspended from here." });
 
+            var before = new { user.IsSuspended, user.SuspensionReason };
             user.IsSuspended = true;
             user.SuspendedAtUtc = DateTime.UtcNow;
-            user.SuspensionReason = dto?.Reason;
+            user.SuspensionReason = dto.Reason;
+            _context.Audit(GetCurrentUserId(), "SuspendUser", "User", userId,
+                details: $"Suspended '{user.UserName}'.",
+                reason: dto.Reason,
+                before: before,
+                after: new { user.IsSuspended, user.SuspensionReason },
+                http: HttpContext);
             await _context.SaveChangesAsync();
-            await LogAsync("SuspendUser", "User", userId, dto?.Reason ?? $"Suspended '{user.UserName}'.");
 
             return Ok(new { message = "User suspended." });
         }
@@ -231,12 +255,19 @@ namespace MyAppApi.Controllers
                 .FirstOrDefaultAsync(u => u.Id == userId);
             if (user == null) return NotFound(new { message = "User not found." });
 
+            // Captured before anything moves — the point of the pair is the difference.
+            var before = new { user.IsSuspended, user.IsDeleted, user.SuspensionReason };
+
             user.IsSuspended = false;
             user.SuspendedAtUtc = null;
             user.SuspensionReason = null;
             user.IsDeleted = false;
+            _context.Audit(GetCurrentUserId(), "RestoreUser", "User", userId,
+                details: $"Restored '{user.UserName}'.",
+                before: before,
+                after: new { user.IsSuspended, user.IsDeleted, user.SuspensionReason },
+                http: HttpContext);
             await _context.SaveChangesAsync();
-            await LogAsync("RestoreUser", "User", userId, $"Restored '{user.UserName}'.");
 
             return Ok(new { message = "User restored." });
         }
@@ -320,30 +351,121 @@ namespace MyAppApi.Controllers
             });
         }
 
-        private async Task LogAsync(string action, string targetType, int? targetId, string? details = null)
+        /// <summary>
+        /// Everything currently waiting on a human, counted against rules somebody chose.
+        /// <para>
+        /// This is the honest version of "anomaly detection". Vestora has fifty-odd
+        /// accounts and twenty-five ventures: there is no baseline here for a model to
+        /// deviate from, and a detector trained on nothing produces confident nonsense
+        /// that an administrator learns to ignore within a week. Every figure below is a
+        /// count against a stated threshold, and the thresholds travel with the response
+        /// so the screen can say <em>why</em> a venture is listed instead of asserting
+        /// that something is wrong with it.
+        /// </para>
+        /// </summary>
+        [HttpGet("alerts")]
+        public async Task<IActionResult> GetAlerts(CancellationToken ct)
         {
-            _context.AdminAuditLogs.Add(new AdminAuditLog
+            // Two independent people complaining about the same venture is a pattern.
+            // One is a data point. Three would never fire at this size, which is the
+            // failure mode that makes an alerts screen furniture.
+            const int reportThreshold = 2;
+
+            // Long enough that a confirmation still in flight is not mistaken for one
+            // that will never arrive; short enough that real money is not left in doubt
+            // for a working day.
+            const int staleEventHours = 24;
+
+            const int failedPaymentDays = 7;
+
+            var now = DateTime.UtcNow;
+            var staleBefore = now.AddHours(-staleEventHours);
+            var failedSince = now.AddDays(-failedPaymentDays);
+
+            var heavilyReported = await _context.Reports
+                .AsNoTracking()
+                .Where(r => r.Status == "Open")
+                .GroupBy(r => r.ProjectId)
+                .Where(g => g.Count() >= reportThreshold)
+                .Select(g => new { ProjectId = g.Key, Count = g.Count() })
+                .ToListAsync(ct);
+
+            var flaggedIds = heavilyReported.Select(x => x.ProjectId).ToList();
+            var flaggedNames = await _context.Projects
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(p => flaggedIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.Name, ct);
+
+            var dto = new AdminAlertsDto
             {
-                AdminUserId = GetCurrentUserId(),
-                Action = action,
-                TargetType = targetType,
-                TargetId = targetId,
-                Details = details,
-                CreatedAtUtc = DateTime.UtcNow
-            });
-            await _context.SaveChangesAsync();
+                PendingReview = await _context.Projects.CountAsync(p => p.ModerationStatus == "PendingReview", ct),
+                OpenReports = await _context.Reports.CountAsync(r => r.Status == "Open", ct),
+                LockedAccounts = await _context.Users
+                    .IgnoreQueryFilters()
+                    .CountAsync(u => u.LockoutEndUtc != null && u.LockoutEndUtc > now, ct),
+                SuspendedAccounts = await _context.Users
+                    .IgnoreQueryFilters()
+                    .CountAsync(u => u.IsSuspended, ct),
+                ReportThreshold = reportThreshold,
+                StaleEventHours = staleEventHours,
+                StaleUnappliedEvents = await _context.PaymentEvents
+                    .IgnoreQueryFilters()
+                    .CountAsync(e => !e.Applied && e.ReviewedAtUtc == null && e.ReceivedAtUtc < staleBefore, ct),
+                FailedPaymentDays = failedPaymentDays,
+                RecentFailedPayments = await _context.PaymentTransactions
+                    .IgnoreQueryFilters()
+                    .CountAsync(t => t.Status == PaymentStatus.Failed && t.FailedAtUtc >= failedSince, ct),
+                HeavilyReported = heavilyReported
+                    .OrderByDescending(x => x.Count)
+                    .Select(x => new AdminFlaggedVentureDto
+                    {
+                        ProjectId = x.ProjectId,
+                        Name = flaggedNames.TryGetValue(x.ProjectId, out var n) ? n : $"#{x.ProjectId}",
+                        OpenReports = x.Count,
+                    })
+                    .ToList(),
+            };
+
+            return Ok(dto);
         }
 
-        // Paged audit trail of admin actions (deletes, approvals, report resolutions).
+        /// <summary>
+        /// Paged, filterable audit trail of administrative actions.
+        /// <para>
+        /// The filters return the distinct actions and administrators actually present in
+        /// the table rather than a hard-coded list, so a new action type appears in the
+        /// filter the first time it is used instead of the next time somebody remembers
+        /// to add it here.
+        /// </para>
+        /// </summary>
         [HttpGet("audit-log")]
-        public async Task<IActionResult> GetAuditLog([FromQuery] int page = 1, [FromQuery] int pageSize = 30)
+        public async Task<IActionResult> GetAuditLog(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 30,
+            [FromQuery] int? adminId = null,
+            [FromQuery] string? action = null,
+            [FromQuery] string? targetType = null,
+            [FromQuery] DateTime? from = null,
+            [FromQuery] DateTime? to = null,
+            CancellationToken ct = default)
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
 
-            var query = _context.AdminAuditLogs.AsNoTracking().OrderByDescending(a => a.CreatedAtUtc);
-            var totalCount = await query.CountAsync();
+            var query = _context.AdminAuditLogs.AsNoTracking().AsQueryable();
+
+            if (adminId is int id) query = query.Where(a => a.AdminUserId == id);
+            if (!string.IsNullOrWhiteSpace(action)) query = query.Where(a => a.Action == action);
+            if (!string.IsNullOrWhiteSpace(targetType)) query = query.Where(a => a.TargetType == targetType);
+            if (from is DateTime f) query = query.Where(a => a.CreatedAtUtc >= f);
+            // Inclusive of the chosen day: a reader picking "to: the 3rd" means the whole
+            // of the 3rd, not everything up to the instant it began.
+            if (to is DateTime tt) query = query.Where(a => a.CreatedAtUtc < tt.Date.AddDays(1));
+
+            var totalCount = await query.CountAsync(ct);
             var items = await query
+                .OrderByDescending(a => a.CreatedAtUtc)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(a => new
@@ -358,11 +480,33 @@ namespace MyAppApi.Controllers
                     a.TargetType,
                     a.TargetId,
                     a.Details,
+                    a.Reason,
+                    a.BeforeJson,
+                    a.AfterJson,
+                    a.IpAddress,
                     a.CreatedAtUtc
                 })
-                .ToListAsync();
+                .ToListAsync(ct);
 
-            return Ok(new { Items = items, TotalCount = totalCount, Page = page, PageSize = pageSize });
+            var actions = await _context.AdminAuditLogs.AsNoTracking()
+                .Select(a => a.Action).Distinct().OrderBy(a => a).ToListAsync(ct);
+            var targetTypes = await _context.AdminAuditLogs.AsNoTracking()
+                .Select(a => a.TargetType).Distinct().OrderBy(a => a).ToListAsync(ct);
+            var adminIds = await _context.AdminAuditLogs.AsNoTracking()
+                .Select(a => a.AdminUserId).Distinct().ToListAsync(ct);
+            var admins = await _context.Users.AsNoTracking().IgnoreQueryFilters()
+                .Where(u => adminIds.Contains(u.Id))
+                .Select(u => new { u.Id, Name = u.UserName })
+                .ToListAsync(ct);
+
+            return Ok(new
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                Facets = new { Actions = actions, TargetTypes = targetTypes, Admins = admins },
+            });
         }
 
         // High-level platform analytics for the admin dashboard.

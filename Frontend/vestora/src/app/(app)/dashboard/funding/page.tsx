@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import {
-  ApprovedPendingDonut,
+  ApprovedPendingSplit,
   CommittedVsFundedChart,
   FundingByVentureChart,
 } from "@/components/dashboard/dashboard-charts";
@@ -91,28 +91,12 @@ export default function DashboardFundingPage() {
 
           <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
             <Panel title={t("dash.chart.approvedVsPending")}>
-              <div className="relative mx-auto h-48 w-48">
-                <ApprovedPendingDonut data={data.approvedVsPending} />
-                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
-                  <div>
-                    <p className="font-numeric text-lg leading-none">
-                      {compactUsd(data.approvedVsPending.approvedAmount + data.approvedVsPending.pendingAmount)}
-                    </p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">{t("dash.chart.total")}</p>
-                  </div>
-                </div>
-              </div>
+              <ApprovedPendingSplit data={data.approvedVsPending} />
             </Panel>
 
             <Panel title={t("dash.chart.fundingByVenture")}>
               <div className="h-56">
-                {data.fundingByVenture.length > 0 ? (
-                  <FundingByVentureChart data={data.fundingByVenture} />
-                ) : (
-                  <div className="grid h-full place-items-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
-                    {t("dash.chart.noData")}
-                  </div>
-                )}
+                <FundingByVentureChart data={data.fundingByVenture} />
               </div>
             </Panel>
           </div>

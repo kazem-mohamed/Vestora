@@ -108,7 +108,7 @@ questions and are written by three different actors.
     [`LifecycleStatus`], [Is the founder currently running this venture?],
       [Founder, or the system],
     [`Stage`], [How far has the venture progressed commercially?],
-      [The funding pipeline (Report 7)],
+      [The funding pipeline (Report 9)],
   ),
   caption: [Three columns, three writers, three questions. No column has two
     writers, and no writer touches two columns.],
@@ -356,7 +356,7 @@ Only the direct relationships are listed.
       [*Depends on this part.* Only ventures that are approved *and* active are
        listed; the composite index here is what makes that filter cheap.],
       [Discovery reads venture state. It never writes it.],
-    [7 · Commitment & Pipeline],
+    [9 · Commitment & Pipeline],
       [*Depends on this part.* A commitment attaches to a venture and reads its
        funding target.],
       [The funding pipeline writes `Stage` and nothing else.],

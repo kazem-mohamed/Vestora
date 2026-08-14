@@ -37,7 +37,7 @@ decision turns on.
 
 *Derive, never count.* Every figure reported here is computed from recorded
 events. No counter is maintained anywhere, for the same reason no funding total
-is stored in Report 7.
+is stored in Report 9.
 
 *Keep the money distinction visible at every scale.* Committed and settled stay
 separate on a founder's venture, in an investor's portfolio, and in the
@@ -105,7 +105,7 @@ would be wrong for two of the three.
   "/assets/screenshots/board-investor-ar-dark.png",
   [The investor's overview, shown for an account with no history. The tiles read
    zero *separately* rather than collapsing into a single zero, so the
-   distinction from Report 7 is legible before there is any data to disambiguate
+   distinction from Report 9 is legible before there is any data to disambiguate
    it. An empty state is where a design decision is easiest to see and easiest to
    get wrong.],
 )
@@ -148,7 +148,7 @@ would be wrong for two of the three.
   "/assets/screenshots/settled-revenue-en-light.png",
   "/assets/screenshots/settled-revenue-ar-dark.png",
   [Platform revenue after a single settled payment, derived from the fee stored
-   on that transaction in Report 8. Every figure on the surface — gross volume,
+   on that transaction in Report 10. Every figure on the surface — gross volume,
    revenue, net to founders, success rate, refunds, stuck attempts — is a sum or
    a count over transaction rows. There is no running total to reconcile
    against, and a refund would reduce revenue by leaving the settled set rather
@@ -190,7 +190,7 @@ Every figure in this report is *derived* from event rows.
   caption: [Every reported figure and the events it is computed from.],
 )
 
-This is the same argument as Report 7, applied one level up. *A counter can drift
+This is the same argument as Report 9, applied one level up. *A counter can drift
 and cannot be recomputed. An aggregation over rows is always correct and can be
 recomputed from history at any time.*
 
@@ -352,11 +352,11 @@ writes to none.
       [*Reads its output.* View and interaction rows recorded there are what
        these figures aggregate.],
       [Discovery writes the events; this report only groups them.],
-    [7 · Commitment & Pipeline],
+    [9 · Commitment & Pipeline],
       [*Depends on it.* Every funding figure on every dashboard comes from
        `FundingMath`.],
       [No dashboard computes a funding number of its own.],
-    [8 · Payments],
+    [10 · Payments],
       [*Reads it.* Revenue is the sum of stored fees on settled transactions.],
       [A refund reduces revenue by leaving the settled set, not by an
        adjustment.],

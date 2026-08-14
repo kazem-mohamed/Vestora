@@ -1225,15 +1225,11 @@ namespace MyAppApi.Services.Payments
         /// </summary>
         private async Task AuditAsync(int actorUserId, string action, string targetType, int targetId, string details, CancellationToken ct)
         {
-            _db.AdminAuditLogs.Add(new AdminAuditLog
-            {
-                AdminUserId = actorUserId,
-                Action = action,
-                TargetType = targetType,
-                TargetId = targetId,
-                Details = details.Length > 500 ? details[..500] : details,
-                CreatedAtUtc = DateTime.UtcNow,
-            });
+            // The save stays here rather than moving to the callers as it did in the admin
+            // controllers: a payment path's transaction boundaries are load-bearing, and
+            // widening one to swallow an audit write is not a refactor, it is a change to
+            // what commits together.
+            _db.Audit(actorUserId, action, targetType, targetId, details);
             await _db.SaveChangesAsync(ct);
         }
 

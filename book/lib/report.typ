@@ -11,10 +11,10 @@
   "Ventures & Lifecycle",
   "Review & Approval",
   "Discovery & Engagement",
-  "Commitment & Pipeline",
-  "Payments",
   "Messaging & Notifications",
   "The Deal Room",
+  "Commitment & Pipeline",
+  "Payments",
   "Dashboards & Analytics",
   "Administration & Evaluation",
 )

@@ -8,25 +8,16 @@ import { DashboardHero } from "@/components/dashboard/dashboard-hero";
 import { ActionCenter } from "@/components/signals/action-center";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
 import {
-  ApprovedPendingDonut,
+  ApprovedPendingSplit,
   CommittedVsFundedChart,
   FundingByVentureChart,
 } from "@/components/dashboard/dashboard-charts";
-import { AwaitingPaymentQueue } from "@/components/funding/founder-funding-ladder";
 import { Panel } from "@/components/dashboard/panel";
-import { PendingApprovals } from "@/components/dashboard/pending-approvals";
+import { ActivityTimeline, TopVenturesTable } from "@/components/dashboard/dashboard-panels";
 import {
-  ActivityTimeline,
-  AnalyticsTeaser,
-  TopVenturesTable,
-} from "@/components/dashboard/dashboard-panels";
-import {
-  FollowersPreview,
   ProfileCompletion,
   QuickActions,
   RecentMessagesWidget,
-  RecentNotificationsWidget,
-  SuggestedActions,
 } from "@/components/dashboard/dashboard-widgets";
 import { useFounderDashboard } from "@/lib/hooks/use-dashboard";
 import { useAuthStore } from "@/lib/auth/store";
@@ -80,52 +71,51 @@ export default function DashboardOverviewPage() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
         {/* ---- main column ---- */}
         <div className="min-w-0 space-y-5">
-          {/* Two curves, not one: agreed and arrived. The distance between them is
-              the founder's outstanding collection. */}
+          {/* Ventures first. A founder's own ventures were the fifth panel down, below
+              three charts of aggregates about them — the page described the portfolio
+              before showing what the portfolio was. Founder → ventures → deals is the
+              order the work happens in. */}
+          <Panel title={t("dash.nav.ventures")} href="/dashboard/ventures" elevated>
+            <TopVenturesTable ventures={data.topVentures} limit={5} />
+          </Panel>
+
+          {/* The four money figures on one line, in the order the money moves. Committed
+              is not funded and neither is the remainder — the words are the product's,
+              and none of these is computed here. */}
+          <Panel title={t("dash.fund.overview")} href="/dashboard/funding">
+            <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <MoneyFact label={t("fund.word.committed")} value={data.kpis.totalCommitted} tone="bronze" />
+              <MoneyFact label={t("fund.word.paymentDue")} value={data.kpis.awaitingPayment} />
+              <MoneyFact label={t("fund.word.funded")} value={data.kpis.totalFunded} tone="primary" />
+              <MoneyFact
+                label={t("fund.word.remaining")}
+                value={Math.max(0, data.kpis.totalGoal - data.kpis.totalFunded)}
+              />
+            </dl>
+          </Panel>
+
+          {/* Two curves, not one: agreed and arrived. The distance between them is the
+              founder's outstanding collection, read against the goal. */}
           <Panel title={t("dash.fund.chartBoth")} href="/dashboard/funding" elevated>
-            <div className="h-64">
-              {data.fundingOverTime.length > 0 || data.fundedOverTime.length > 0 ? (
-                <CommittedVsFundedChart
-                  committed={data.fundingOverTime}
-                  funded={data.fundedOverTime}
-                />
-              ) : (
-                <EmptyChart label={t("dash.chart.noData")} />
-              )}
+            <div className="h-72">
+              <CommittedVsFundedChart
+                committed={data.fundingOverTime}
+                funded={data.fundedOverTime}
+                goal={data.kpis.totalGoal}
+              />
             </div>
           </Panel>
 
-          {/* Requests sent and unpaid — the queue the funding system creates. */}
-          {data.awaitingPayment.length > 0 && (
-            <Panel title={t("dash.fund.awaiting")} href="/dashboard/funding" elevated>
-              <AwaitingPaymentQueue items={data.awaitingPayment.slice(0, 3)} />
-            </Panel>
-          )}
-
-          <Panel
-            title={t("dash.nav.requests")}
-            href="/dashboard/requests"
-            elevated={data.pendingApprovals.length > 0}
-          >
-            <PendingApprovals
-              items={data.pendingApprovals}
-              limit={3}
-              viewAllHref="/dashboard/requests"
-            />
-          </Panel>
+          {/* The pending-approvals and awaiting-payment queues used to live here as two
+              more panels, and SuggestedActions as a third in the rail. Four regions of
+              one page each said "something needs you", which is why none of them read as
+              urgent. They are all counted by the ActionCenter above now; these lists have
+              their own pages, reached from there. */}
 
           <Panel title={t("dash.chart.fundingByVenture")} href="/dashboard/funding">
-            <div className="h-52">
-              {data.fundingByVenture.length > 0 ? (
-                <FundingByVentureChart data={data.fundingByVenture} />
-              ) : (
-                <EmptyChart label={t("dash.chart.noData")} />
-              )}
+            <div className="h-56">
+              <FundingByVentureChart data={data.fundingByVenture} />
             </div>
-          </Panel>
-
-          <Panel title={t("dash.nav.ventures")} href="/dashboard/ventures">
-            <TopVenturesTable ventures={data.topVentures} limit={4} />
           </Panel>
 
           <Panel title={t("dash.activity.title")} href="/dashboard/activity">
@@ -140,66 +130,47 @@ export default function DashboardOverviewPage() {
              47px past 375px. */}
         <div className="min-w-0 space-y-5">
           <Panel title={t("dash.chart.approvedVsPending")} elevated>
-            <div className="relative mx-auto h-44 w-44">
-              <ApprovedPendingDonut data={data.approvedVsPending} />
-              <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
-                <div>
-                  <p className="font-numeric text-lg leading-none">
-                    {compactUsd(data.approvedVsPending.approvedAmount + data.approvedVsPending.pendingAmount)}
-                  </p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">{t("dash.chart.total")}</p>
-                </div>
-              </div>
-            </div>
-            <ul className="mt-4 space-y-2.5 text-sm">
-              <LegendRow
-                color="bg-primary"
-                label={t("dash.chart.approved")}
-                count={data.approvedVsPending.approvedCount}
-                amount={compactUsd(data.approvedVsPending.approvedAmount)}
-              />
-              <LegendRow
-                color="bg-bronze"
-                label={t("dash.chart.pending")}
-                count={data.approvedVsPending.pendingCount}
-                amount={compactUsd(data.approvedVsPending.pendingAmount)}
-              />
-            </ul>
+            <ApprovedPendingSplit data={data.approvedVsPending} />
           </Panel>
 
+          {/* Three, not seven. The rail held QuickActions, SuggestedActions,
+              ProfileCompletion, RecentNotifications, RecentMessages, FollowersPreview and
+              AnalyticsTeaser stacked in a 330px column — nothing with priority over
+              anything else, which is a drawer rather than a rail. SuggestedActions is now
+              part of the ActionCenter's job, and AnalyticsTeaser was an advert for
+              another page of the same product. */}
           <QuickActions />
-          <SuggestedActions data={data} />
           <ProfileCompletion />
-          <RecentNotificationsWidget />
           <RecentMessagesWidget />
-          <FollowersPreview followersCount={data.kpis.followersCount} />
-          <AnalyticsTeaser />
         </div>
       </div>
     </div>
   );
 }
 
-function LegendRow({
-  color,
+/** One figure, named with the product's word for it and nothing else. */
+function MoneyFact({
   label,
-  count,
-  amount,
+  value,
+  tone,
 }: {
-  color: string;
   label: string;
-  count: number;
-  amount: string;
+  value: number;
+  tone?: "bronze" | "primary";
 }) {
   return (
-    <li className="flex items-center justify-between gap-2">
-      <span className="flex items-center gap-2">
-        <span className={cn("size-2.5 rounded-full", color)} />
-        <span className="text-muted-foreground">{label}</span>
-        <span className="font-numeric text-xs text-muted-foreground/70">({count})</span>
-      </span>
-      <span className="font-numeric text-foreground">{amount}</span>
-    </li>
+    <div>
+      <dt className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{label}</dt>
+      <dd
+        className={cn(
+          "mt-1.5 font-numeric text-lg",
+          tone === "bronze" && "text-bronze",
+          tone === "primary" && "text-primary"
+        )}
+      >
+        {compactUsd(value)}
+      </dd>
+    </div>
   );
 }
 

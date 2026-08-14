@@ -286,7 +286,7 @@ Two further properties hold across every endpoint in this part:
   because an administrator's authority is not scoped to a particular venture.
   That makes this part the exception rather than the pattern, and it is stated
   here so that the pattern is not copied into a part where ownership does matter.
-  Reports 4, 7 and 8 all check both.
+  Reports 4, 9 and 10 all check both.
 ]
 
 = How This Fits With the Rest of the System

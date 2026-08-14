@@ -947,7 +947,20 @@ export interface AdminAuditEntry {
   targetType: string;
   targetId: number | null;
   details: string | null;
+  /** The justification the acting admin gave. Required on every destructive action. */
+  reason: string | null;
+  /** The changed fields only, as JSON — not a copy of the row. */
+  beforeJson: string | null;
+  afterJson: string | null;
+  ipAddress: string | null;
   createdAtUtc: string;
+}
+
+/** Built from the rows actually present, so a new action type appears the first time it is used. */
+export interface AdminAuditFacets {
+  actions: string[];
+  targetTypes: string[];
+  admins: { id: number; name: string }[];
 }
 
 export interface AdminAuditLogResponse {
@@ -955,6 +968,17 @@ export interface AdminAuditLogResponse {
   totalCount: number;
   page: number;
   pageSize: number;
+  facets: AdminAuditFacets;
+}
+
+export interface AdminAuditFilters {
+  page?: number;
+  pageSize?: number;
+  adminId?: number;
+  action?: string;
+  targetType?: string;
+  from?: string;
+  to?: string;
 }
 
 export interface SecurityEvent {
@@ -980,6 +1004,246 @@ export interface AdminGrowth {
   investorGrowth: TimePoint[];
   innovatorGrowth: TimePoint[];
   ventureGrowth: TimePoint[];
+}
+
+// ===== Admin: funnel, timings, revenue over time =====
+
+/** Cumulative — how many relationships ever got at least this far. */
+export interface AdminFunnelStep {
+  stage: string;
+  count: number;
+}
+
+/**
+ * A ratio as its two halves. The API deliberately never sends a percentage: at this
+ * size one event moves most of these by several points, so the counts lead and the
+ * percentage is the smaller, derived reading.
+ */
+export interface AdminConversion {
+  key: string;
+  numerator: number;
+  denominator: number;
+}
+
+/** Measured from InvestmentStageEvent, median rather than mean, with its sample size. */
+export interface AdminStageDwell {
+  stage: string;
+  samples: number;
+  medianMinutes: number;
+  longestMinutes: number;
+}
+
+export interface AdminRevenuePeriod {
+  /** "yyyy-MM". */
+  label: string;
+  transactions: number;
+  gross: number;
+  fees: number;
+}
+
+export interface AdminRevenueByVenture {
+  projectId: number;
+  name: string;
+  transactions: number;
+  gross: number;
+  fees: number;
+}
+
+export interface AdminInsights {
+  funnel: AdminFunnelStep[];
+  /** A side exit from the funnel, not a rung of it. */
+  declined: number;
+  conversions: AdminConversion[];
+  stageDwell: AdminStageDwell[];
+  revenueByMonth: AdminRevenuePeriod[];
+  revenueByVenture: AdminRevenueByVenture[];
+  /** Below totalRelationships, the dwell figures describe a subset. */
+  relationshipsWithHistory: number;
+  totalRelationships: number;
+}
+
+// ===== Admin: cross-entity search =====
+
+export interface AdminSearchHit {
+  id: number;
+  title: string;
+  subtitle: string | null;
+  /** Status, role or stage — whatever this kind of record is defined by. */
+  badge: string | null;
+  /** Removed or suspended. Shown rather than hidden — usually the reason for the search. */
+  muted: boolean;
+  href: string;
+}
+
+export interface AdminSearchResults {
+  query: string;
+  users: AdminSearchHit[];
+  ventures: AdminSearchHit[];
+  deals: AdminSearchHit[];
+  transactions: AdminSearchHit[];
+  reports: AdminSearchHit[];
+}
+
+// ===== Admin: what is waiting on a human =====
+
+export interface AdminFlaggedVenture {
+  projectId: number;
+  name: string;
+  openReports: number;
+}
+
+/** Counts against stated thresholds. Not anomaly detection — see AdminController.GetAlerts. */
+export interface AdminAlerts {
+  pendingReview: number;
+  openReports: number;
+  lockedAccounts: number;
+  suspendedAccounts: number;
+  heavilyReported: AdminFlaggedVenture[];
+  /** Echoed so the screen can state the rule instead of asserting a judgement. */
+  reportThreshold: number;
+  staleUnappliedEvents: number;
+  staleEventHours: number;
+  recentFailedPayments: number;
+  failedPaymentDays: number;
+}
+
+// ===== Admin: one account, everything attached to it =====
+
+export interface AdminAccount {
+  id: number;
+  userName: string;
+  email: string;
+  userType: UserType;
+  phone: string | null;
+  briefBio: string | null;
+  isEmailVerified: boolean;
+  emailVerifiedAtUtc: string | null;
+  createdAtUtc: string | null;
+  lastSeenAt: string | null;
+  onboardedAtUtc: string | null;
+  isSuspended: boolean;
+  suspendedAtUtc: string | null;
+  suspensionReason: string | null;
+  /** Removed by an administrator. */
+  isDeleted: boolean;
+  /** Set when the person closed their own account — a different fact from isDeleted. */
+  deletedAtUtc: string | null;
+}
+
+/** Narrower than {@link SecurityEvent}: this feed is already scoped to one account. */
+export interface AdminUserSecurityEvent {
+  id: number;
+  eventType: string;
+  ipAddress: string | null;
+  details: string | null;
+  createdAtUtc: string;
+}
+
+export interface AdminUserSecuritySnapshot {
+  failedLoginCount: number;
+  lockoutEndUtc: string | null;
+  lastFailedLoginAtUtc: string | null;
+  isLockedOut: boolean;
+  distinctIpCount: number;
+  recentEvents: AdminUserSecurityEvent[];
+}
+
+export interface AdminUserVenture {
+  projectId: number;
+  name: string;
+  category: string | null;
+  /** PendingReview | Approved | Rejected. */
+  moderationStatus: string;
+  moderationNote: string | null;
+  isDeleted: boolean;
+  createdDate: string;
+  goal: number;
+  /** Founder-approved commitments — never money received. */
+  committed: number;
+  /** Settled payments. The only figure that may be called funded. */
+  funded: number;
+  committedInvestors: number;
+  fundedInvestors: number;
+  openReports: number;
+}
+
+export interface AdminUserReportItem {
+  id: number;
+  projectId: number;
+  projectName: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+  /** True when this person filed it, false when it was filed about them. */
+  filedByThem: boolean;
+}
+
+export interface AdminUserReports {
+  againstThemOpen: number;
+  againstThemTotal: number;
+  filedByThemTotal: number;
+  recent: AdminUserReportItem[];
+}
+
+export interface AdminUserDeal {
+  investmentId: number;
+  projectId: number;
+  projectName: string;
+  counterpartyName: string;
+  counterpartyId: number | null;
+  /** Which side of the table this account is on. */
+  side: "investor" | "founder";
+  /** The commitment. Never the amount received. */
+  amount: number;
+  /** Settled across every tranche. */
+  settled: number;
+  status: string;
+  stage: PipelineStage;
+  date: string;
+  stageUpdatedAt: string | null;
+}
+
+export interface AdminUserTransaction {
+  id: number;
+  reference: string;
+  projectId: number;
+  projectName: string;
+  amount: number;
+  currency: string;
+  status: string;
+  createdAtUtc: string;
+  succeededAtUtc: string | null;
+  refundedAtUtc: string | null;
+  refundReason: string | null;
+  failureMessage: string | null;
+}
+
+export interface AdminUserPayments {
+  settledTotal: number;
+  refundedTotal: number;
+  succeededCount: number;
+  failedCount: number;
+  refundedCount: number;
+  recent: AdminUserTransaction[];
+}
+
+export interface AdminUserAuditEntry {
+  id: number;
+  adminName: string;
+  action: string;
+  details: string | null;
+  createdAtUtc: string;
+}
+
+export interface AdminUserOverview {
+  account: AdminAccount;
+  security: AdminUserSecuritySnapshot;
+  ventures: AdminUserVenture[];
+  reports: AdminUserReports;
+  deals: AdminUserDeal[];
+  payments: AdminUserPayments;
+  activity: AdminUserAuditEntry[];
+  unreadMessages: number;
 }
 
 // A listing awaiting admin review before it's visible on public browse/details.
@@ -1362,11 +1626,22 @@ export interface SavedSearch {
 
 /** "What needs me" kept strictly apart from "what changed". */
 export interface ActionCenter {
+  /** Sum of the blocking items — stalled is deliberately not in it. */
   needsAction: number;
   questionsToAnswer: number;
   pendingRequests: number;
   documentRequestsToFill: number;
   approvedAwaitingContact: number;
+  /** Proposed by the other side and awaiting specifically this caller's acceptance. */
+  termSheetsAwaitingYou: number;
+  /** Investor only: an open ask against them. */
+  paymentsDue: number;
+  /** Founder only: open asks about to lapse and release their capacity. */
+  requestsNearingExpiry: number;
+  expiryWindowDays: number;
+  /** Live relationships whose stage has not moved. Counted, not diagnosed. */
+  stalledDeals: number;
+  stalledAfterDays: number;
   unreadMessages: number;
   unreadNotifications: number;
   newFromSavedSearches: number;

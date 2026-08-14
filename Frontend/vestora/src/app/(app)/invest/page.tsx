@@ -8,7 +8,7 @@ import {
   Bookmark,
   Briefcase,
   CheckCircle2,
-  Clock,
+  Send,
   Compass,
   Hourglass,
   TrendingUp,
@@ -34,13 +34,21 @@ import { cn } from "@/lib/utils";
 import type { InvestorDashboard, PipelineItem } from "@/lib/types/api";
 
 /** Requests still waiting on a founder — the investor's "what's live" list. */
-function AwaitingPanel({ items }: { items: PipelineItem[] }) {
+/**
+ * Requests this investor has made that the founder has not answered.
+ *
+ * `New` and `Reviewing` are the founder's stages, not the investor's — so this panel is
+ * information, not a task, and it was previously titled and placed as though it were one:
+ * "awaiting", elevated, above the portfolio. What the investor is actually blocked on now
+ * lives in the ActionCenter; this sits lower and says whose move it is.
+ */
+function AwaitingFounderPanel({ items }: { items: PipelineItem[] }) {
   const { t } = useLocale();
   const waiting = items.filter((i) => i.stage === "New" || i.stage === "Reviewing").slice(0, 4);
   if (waiting.length === 0) return null;
 
   return (
-    <Panel title={t("inv.awaiting.title")} href="/invest/pipeline" elevated>
+    <Panel title={t("inv.awaiting.title")} href="/invest/pipeline">
       <ul className="space-y-2">
         {waiting.map((i, idx) => (
           <motion.li
@@ -97,7 +105,12 @@ function PortfolioPreview({ data }: { data: InvestorDashboard }) {
     <Panel title={t("inv.nav.portfolio")} href="/invest/portfolio">
       <ul className="divide-y divide-border/60">
         {rows.map((p, i) => {
-          const pct = p.goal > 0 ? Math.min(100, Math.round((p.totalCommitted / p.goal) * 100)) : 0;
+          // Two bands, not one. The bar used to fill to totalCommitted in a bronze-to-gold
+          // gradient, which showed an investor a venture "progressing" on the strength of
+          // promises. Funded is the solid part; committed-but-unpaid is the faint part
+          // behind it, and the difference is visible rather than averaged away.
+          const fundedPct = p.goal > 0 ? Math.min(100, Math.round((p.totalFunded / p.goal) * 100)) : 0;
+          const committedPct = p.goal > 0 ? Math.min(100, Math.round((p.totalCommitted / p.goal) * 100)) : 0;
           return (
             <motion.li
               key={p.projectId}
@@ -121,10 +134,17 @@ function PortfolioPreview({ data }: { data: InvestorDashboard }) {
                 >
                   {p.projectName}
                 </Link>
-                <p className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                <p
+                  className="relative mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary"
+                  title={`${fundedPct}% ${t("fund.word.funded")} · ${committedPct}% ${t("fund.word.committed")}`}
+                >
                   <span
-                    className="block h-full rounded-full bg-gradient-to-r from-bronze to-primary"
-                    style={{ width: `${pct}%` }}
+                    className="absolute inset-y-0 start-0 rounded-full bg-bronze/35"
+                    style={{ width: `${committedPct}%` }}
+                  />
+                  <span
+                    className="absolute inset-y-0 start-0 rounded-full bg-primary"
+                    style={{ width: `${fundedPct}%` }}
                   />
                 </p>
               </div>
@@ -244,9 +264,12 @@ export default function InvestOverviewPage() {
           sub={<span className="font-numeric">{k.approvedCount} {t("inv.kpi.commitments")}</span>}
           href="/invest/portfolio"
         />
+        {/* Send, not Clock. Hourglass two tiles over already means "waiting", and at this
+            size two waiting icons in one row are the same icon. This wait is different in
+            kind: a request that has gone out and not come back. */}
         <InvestKpi
           index={3}
-          icon={Clock}
+          icon={Send}
           label={t("inv.kpi.pending")}
           value={k.pendingAmount}
           format={compactUsd}
@@ -279,6 +302,30 @@ export default function InvestOverviewPage() {
         />
       </div>
 
+      {/* Two figures the API has always computed and this page threw away. Neither is
+          shown unless it is non-zero: a permanent "0 failed payments" tile trains the
+          reader to stop seeing the row it lives in. */}
+      {(k.failedPaymentCount > 0 || k.refundedAmount > 0) && (
+        <div className="flex flex-wrap gap-3">
+          {k.failedPaymentCount > 0 && (
+            <Link
+              href="/invest/payments"
+              data-cursor="hover"
+              className="inline-flex items-center gap-2 rounded-full border border-destructive/40 bg-destructive/[0.05] px-4 py-2 text-sm text-destructive transition-colors hover:bg-destructive/[0.09]"
+            >
+              <span className="font-numeric">{k.failedPaymentCount}</span>
+              {t("inv.kpi.failedPayments")}
+            </Link>
+          )}
+          {k.refundedAmount > 0 && (
+            <span className="inline-flex items-center gap-2 rounded-full border border-bronze/40 bg-bronze/[0.05] px-4 py-2 text-sm text-bronze">
+              <span className="font-numeric">{compactUsd(k.refundedAmount)}</span>
+              {t("inv.kpi.refunded")}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* ===== First-time investor ===== */}
       {nothingYet && (
         <Panel elevated>
@@ -296,8 +343,6 @@ export default function InvestOverviewPage() {
       {!nothingYet && (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
           <div className="min-w-0 space-y-5">
-            <AwaitingPanel items={data.pipeline} />
-
             <Panel title={t("dash.fund.chartBoth")} href="/invest/payments" elevated>
               <div className="h-64">
                 {data.commitmentsOverTime.length > 0 || data.fundedOverTime.length > 0 ? (
@@ -314,6 +359,9 @@ export default function InvestOverviewPage() {
             </Panel>
 
             <PortfolioPreview data={data} />
+
+            {/* Below the portfolio: whose move it is, not what to do. */}
+            <AwaitingFounderPanel items={data.pipeline} />
           </div>
 
           <div className="space-y-5">

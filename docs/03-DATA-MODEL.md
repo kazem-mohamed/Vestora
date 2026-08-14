@@ -344,7 +344,23 @@ Event types written by `AuthService` include login success/failure, lockout, and
 | `Report` | `ProjectId` · `ReporterId` · `Reason` (default `"Other"`) · `Details?` · `Status` (default `"Open"`) · `CreatedAt` · `ResolvedAt?` · `ResolvedByAdminId?` | cascade; index `(ProjectId, Status)` |
 | `SavedSearch` | `UserId` (cascade) · `Name` (80) · `Scope` (default `"ventures"`) · `Search?` · `Sector?` · `Location?` · `Stage?` · `Commitment?` · `CreatedAtUtc` · `LastSeenAtUtc` | index `(UserId, Scope)` |
 | `UserProjectInteraction` | `UserId` · `ProjectId` · `InteractionDate` | both FKs **restrict** |
-| `AdminAuditLog` | `AdminUserId` · `Action` · `TargetType` · `TargetId?` · `Details?` · `CreatedAtUtc` | index on `CreatedAtUtc` |
+| `AdminAuditLog` | `AdminUserId` · `Action` · `TargetType` · `TargetId?` · `Details?` · `Reason?` (500) · `BeforeJson?` · `AfterJson?` · `IpAddress?` (64) · `CreatedAtUtc` | index on `CreatedAtUtc` |
+
+**On `AdminAuditLog`.** Rows are written through `Services/AuditTrail.Audit`, an extension
+on `AppDbContext` that **adds and does not save** — same discipline as `StageLog`. The
+caller's existing `SaveChangesAsync` commits the action and its record together, so an
+action cannot land without one. The admin controllers used to save the change first and
+the record second; a failure in between left the act done and unrecorded.
+
+- `Reason` is its own column, not folded into `Details`: it is the field a support
+  conversation quotes back, and searching for it inside a prose string makes it
+  unfindable. Mandatory on every destructive action (see `AdminReasonDto`).
+- `BeforeJson` / `AfterJson` hold **the changed fields only** — `new { user.IsSuspended }`,
+  not the user. Storing whole rows would make the trail a second copy of the database;
+  the question it answers is what an action changed.
+- There is deliberately **no `Result` column**. The row commits with the change, so a row
+  that exists *is* the success record and a failure leaves no row. A column that could
+  only ever read `"ok"` would be furniture.
 
 ---
 
@@ -405,7 +421,7 @@ Applies to **every** LINQ query including `Find`. Opt out with `.IgnoreQueryFilt
 |---|---|---|
 | 1 | `initialCraete` *(sic)* | Users, Projects, Investments, Messages, Comments, Replies, Notifications |
 | 2 | `Phase4ProductionAuthSecurity` | RefreshTokens, SecurityLogs, email verification & lockout columns |
-| 3 | `Phase5SearchAndProjectImages` | SavedSearches, ProjectImages |
+| 3 | `Phase5SearchAndProjectImages` | ProjectImages, project search fields (Category/Industry/Location) |
 | 4 | `AddInvestmentApprovalStatus` | `Investment.Status` |
 | 5 | `AddBookmarks` | Bookmarks |
 | 6 | `AddUpdatesAndMilestones` | ProjectUpdates, ProjectUpdateImages, Milestones |
@@ -423,12 +439,13 @@ Applies to **every** LINQ query including `Find`. Opt out with `.IgnoreQueryFilt
 | 18 | `BrowseDiscoveryIndexes` | the browse/facet indexes |
 | 19 | `InvestorProfileThesisAndTicket` | `InvestmentThesis`, `TicketMin/Max`, `ListedInDirectory` |
 | 20 | `NotificationPrefsAndSelfDelete` | `NotifyOn*`, `DeletedAtUtc` |
-| 21 | `ExpansionRelationshipWorkspace` | DealQuestions, DocumentRequests, contextual messaging |
+| 21 | `ExpansionRelationshipWorkspace` | DealQuestions, DocumentRequests, contextual messaging, SavedSearches |
 | 22 | `FundingRequestsAndSandboxPayments` | FundingRequests, PaymentTransactions, PaymentEvents + all 4 integrity indexes |
 | 23 | `AddUserOnboardedAt` | `User.OnboardedAtUtc` |
 | 24 | `OneLiveInvestmentPerInvestor` | `UX_Investments_OneLivePerInvestor` |
 | 25 | `StageHistoryRemindersAndReconciliation` | InvestmentStageEvents, `FundingRequest.RemindersSent`, `PaymentEvent` review columns |
 | 26 | `TermSheetsCounterOffersAndTwoWayDocs` | TermSheets, `FundingRequest` counter-offer + tranche columns, `DocumentRequest` response columns, `DealQuestion.ParentQuestionId` |
+| 27 | `AuditTrailReasonDiffAndIp` | `AdminAuditLog.Reason/BeforeJson/AfterJson/IpAddress` — four nullable columns, no data movement |
 
 **Commands** (from `MyAppApi/MyAppApi`):
 

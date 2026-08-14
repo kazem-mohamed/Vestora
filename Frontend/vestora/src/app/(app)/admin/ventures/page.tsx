@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Check, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { ReasonDialog } from "@/components/admin/reason-dialog";
 import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import { ErrorState } from "@/components/ui/error-state";
@@ -45,9 +46,10 @@ function PendingRow({ p, index }: { p: PendingProject; index: number }) {
   });
 
   const reject = useMutation({
-    mutationFn: () => adminApi.rejectProject(p.id),
+    mutationFn: (reason: string) => adminApi.rejectProject(p.id, reason),
     onSuccess: () => {
       toast.success(t("admin.pending.rejected"));
+      setRejecting(false);
       invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -80,22 +82,7 @@ function PendingRow({ p, index }: { p: PendingProject; index: number }) {
           <Check className="size-3.5" />
           {t("admin.pending.approve")}
         </PillButton>
-        {rejecting ? (
-          <>
-            <button
-              type="button"
-              data-cursor="hover"
-              disabled={reject.isPending}
-              onClick={() => reject.mutate()}
-              className="rounded-full bg-destructive px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {t("admin.pending.confirmReject")}
-            </button>
-            <button type="button" data-cursor="hover" onClick={() => setRejecting(false)} className="grid size-8 place-items-center rounded-full border border-border text-muted-foreground hover:text-foreground">
-              <X className="size-3.5" />
-            </button>
-          </>
-        ) : (
+        {
           <button
             type="button"
             data-cursor="hover"
@@ -106,8 +93,18 @@ function PendingRow({ p, index }: { p: PendingProject; index: number }) {
           >
             <X className="size-4" />
           </button>
-        )}
+        }
       </span>
+
+      <ReasonDialog
+        open={rejecting}
+        onOpenChange={setRejecting}
+        title={t("admin.reason.rejectProject.title")}
+        body={t("admin.reason.rejectProject.body")}
+        confirmLabel={t("admin.pending.confirmReject")}
+        pending={reject.isPending}
+        onConfirm={(reason) => reject.mutate(reason)}
+      />
     </motion.li>
   );
 }
@@ -154,9 +151,10 @@ function Row({ p, index }: { p: ProjectCard; index: number }) {
   const pct = p.investmentNeeded > 0 ? Math.min(100, Math.round((p.committedAmount / p.investmentNeeded) * 100)) : 0;
 
   const del = useMutation({
-    mutationFn: () => adminApi.deleteProject(p.id),
+    mutationFn: (reason: string) => adminApi.deleteProject(p.id, reason),
     onSuccess: (r) => {
       toast.success(r.message || t("admin.ventures.deleted"));
+      setConfirming(false);
       qc.invalidateQueries({ queryKey: ["admin-ventures"] });
       qc.invalidateQueries({ queryKey: ["admin-analytics"] });
     },
@@ -195,32 +193,25 @@ function Row({ p, index }: { p: ProjectCard; index: number }) {
         <span className="text-muted-foreground/70"> · {pct}%</span>
       </span>
 
-      {confirming ? (
-        <span className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            data-cursor="hover"
-            disabled={del.isPending}
-            onClick={() => del.mutate()}
-            className="rounded-full bg-destructive px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {t("mine.delete")}
-          </button>
-          <button type="button" data-cursor="hover" onClick={() => setConfirming(false)} className="grid size-8 place-items-center rounded-full border border-border text-muted-foreground hover:text-foreground">
-            <X className="size-3.5" />
-          </button>
-        </span>
-      ) : (
-        <button
-          type="button"
-          data-cursor="hover"
-          aria-label={t("mine.delete")}
-          onClick={() => setConfirming(true)}
-          className="grid size-9 shrink-0 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive"
-        >
-          <Trash2 className="size-4" />
-        </button>
-      )}
+      <button
+        type="button"
+        data-cursor="hover"
+        aria-label={t("mine.delete")}
+        onClick={() => setConfirming(true)}
+        className="grid size-9 shrink-0 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive"
+      >
+        <Trash2 className="size-4" />
+      </button>
+
+      <ReasonDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={t("admin.reason.deleteProject.title")}
+        body={t("admin.reason.deleteProject.body")}
+        confirmLabel={t("admin.reason.deleteProject.confirm")}
+        pending={del.isPending}
+        onConfirm={(reason) => del.mutate(reason)}
+      />
     </motion.li>
   );
 }

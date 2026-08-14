@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { BadgeCheck, RotateCcw, Search, ShieldPlus, Trash2, UserMinus, X } from "lucide-react";
+import { BadgeCheck, RotateCcw, Search, ShieldPlus, Trash2, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ReasonDialog } from "@/components/admin/reason-dialog";
 import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import { ErrorState } from "@/components/ui/error-state";
@@ -48,7 +49,9 @@ function Avatar({ id, name }: { id: number; name: string }) {
 function Row({ u, index }: { u: AdminUser; index: number }) {
   const { t } = useLocale();
   const qc = useQueryClient();
-  const [confirming, setConfirming] = useState(false);
+  // Which justification is being asked for, if any. Both actions need one, and the
+  // dialog is the same — only the copy and the mutation differ.
+  const [prompt, setPrompt] = useState<null | "delete" | "suspend">(null);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["admin-users"] });
@@ -58,9 +61,10 @@ function Row({ u, index }: { u: AdminUser; index: number }) {
   };
 
   const del = useMutation({
-    mutationFn: () => adminApi.deleteUser(u.id),
+    mutationFn: (reason: string) => adminApi.deleteUser(u.id, reason),
     onSuccess: (r) => {
       toast.success(r.message || t("admin.users.deleted"));
+      setPrompt(null);
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -68,9 +72,10 @@ function Row({ u, index }: { u: AdminUser; index: number }) {
 
   // Suspension is the reversible middle ground between "leave alone" and delete.
   const suspend = useMutation({
-    mutationFn: () => adminApi.suspendUser(u.id),
+    mutationFn: (reason: string) => adminApi.suspendUser(u.id, reason),
     onSuccess: () => {
       toast.success(t("admin.users.suspended"));
+      setPrompt(null);
       refresh();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -97,7 +102,9 @@ function Row({ u, index }: { u: AdminUser; index: number }) {
       transition={{ duration: 0.4, delay: (index % 12) * 0.03, ease: EASE }}
       className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-foreground/[0.03]"
     >
-      <Link href={`/u/${u.id}`} data-cursor="hover" className="flex min-w-0 flex-1 items-center gap-3">
+      {/* The admin view, not the public profile: an administrator opening a row is
+          asking what is going on with the account, not what it looks like to visitors. */}
+      <Link href={`/admin/users/${u.id}`} data-cursor="hover" className="flex min-w-0 flex-1 items-center gap-3">
         <Avatar id={u.id} name={u.userName} />
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
@@ -128,26 +135,6 @@ function Row({ u, index }: { u: AdminUser; index: number }) {
         <span className="grid size-9 shrink-0 place-items-center text-muted-foreground/40" title={t("admin.users.protected")}>
           <Trash2 className="size-4" />
         </span>
-      ) : confirming ? (
-        <span className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            data-cursor="hover"
-            disabled={busy}
-            onClick={() => del.mutate()}
-            className="rounded-full bg-destructive px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {t("mine.delete")}
-          </button>
-          <button
-            type="button"
-            data-cursor="hover"
-            onClick={() => setConfirming(false)}
-            className="grid size-8 place-items-center rounded-full border border-border text-muted-foreground hover:text-foreground"
-          >
-            <X className="size-3.5" />
-          </button>
-        </span>
       ) : (
         <span className="flex shrink-0 items-center gap-1.5">
           {u.isSuspended ? (
@@ -167,7 +154,7 @@ function Row({ u, index }: { u: AdminUser; index: number }) {
               data-cursor="hover"
               disabled={busy}
               aria-label={t("admin.users.suspend")}
-              onClick={() => suspend.mutate()}
+              onClick={() => setPrompt("suspend")}
               className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:border-bronze/50 hover:text-bronze disabled:opacity-50"
             >
               <UserMinus className="size-4" />
@@ -177,13 +164,23 @@ function Row({ u, index }: { u: AdminUser; index: number }) {
             type="button"
             data-cursor="hover"
             aria-label={t("mine.delete")}
-            onClick={() => setConfirming(true)}
+            onClick={() => setPrompt("delete")}
             className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive"
           >
             <Trash2 className="size-4" />
           </button>
         </span>
       )}
+
+      <ReasonDialog
+        open={prompt !== null}
+        onOpenChange={(v) => !v && setPrompt(null)}
+        title={t(prompt === "suspend" ? "admin.reason.suspendUser.title" : "admin.reason.deleteUser.title")}
+        body={t(prompt === "suspend" ? "admin.reason.suspendUser.body" : "admin.reason.deleteUser.body")}
+        confirmLabel={t(prompt === "suspend" ? "admin.reason.suspendUser.confirm" : "admin.reason.deleteUser.confirm")}
+        pending={busy}
+        onConfirm={(reason) => (prompt === "suspend" ? suspend.mutate(reason) : del.mutate(reason))}
+      />
     </motion.li>
   );
 }

@@ -459,7 +459,7 @@ re-implements it.
        here.],
       [That part never decides identity or role; it reads the caller's role and
        acts on it.],
-    [7 · Commitment & Pipeline],
+    [9 · Commitment & Pipeline],
       [*Depends on this part.* The rule that a founder cannot back their own
        venture is a comparison between two identities.],
       [Money-adjacent endpoints re-check account state rather than trusting the
@@ -470,7 +470,7 @@ re-implements it.
       [Administrative power is itself recorded against the identity that used
        it.],
   ),
-  caption: [Direct relationships only. Reports 5, 6, 8 to 11 reach identity
+  caption: [Direct relationships only. Reports 5 to 8, 10 and 11 reach identity
     through one of the four above rather than directly.],
 )
 

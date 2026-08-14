@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Check, Stamp, X } from "lucide-react";
 import { toast } from "sonner";
+import { MIN_REASON_LENGTH } from "@/components/admin/reason-dialog";
 import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import { ErrorState } from "@/components/ui/error-state";
@@ -64,7 +65,7 @@ function Row({ p, index }: { p: PendingProject; index: number }) {
   });
 
   const reject = useMutation({
-    mutationFn: () => adminApi.rejectProject(p.id, reason.trim() || undefined),
+    mutationFn: () => adminApi.rejectProject(p.id, reason.trim()),
     onSuccess: (r) => {
       toast.success(r.message || t("admin.review.rejected"));
       refetch();
@@ -198,8 +199,9 @@ function Row({ p, index }: { p: PendingProject; index: number }) {
             <button
               type="button"
               data-cursor="hover"
-              disabled={busy}
+              disabled={busy || reason.trim().length < MIN_REASON_LENGTH}
               onClick={() => reject.mutate()}
+              title={reason.trim().length < MIN_REASON_LENGTH ? t("admin.reason.required") : undefined}
               className="rounded-full bg-destructive px-3.5 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {t("admin.review.reject")}

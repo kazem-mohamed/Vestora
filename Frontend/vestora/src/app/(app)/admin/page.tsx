@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
+  AlertTriangle,
   ArrowUpRight,
   Banknote,
   CheckCircle2,
   Flag,
+  Lightbulb,
   Rocket,
   ShieldAlert,
   ShieldCheck,
@@ -174,11 +176,12 @@ export default function AdminOverviewPage() {
   const openReports = useOpenReportsCount();
   const pendingReview = usePendingProjectsCount();
   const growthQ = useAdminGrowth(6);
-  const securityQ = useQuery({
-    queryKey: ["admin-security", 14],
-    queryFn: () => adminApi.security(14),
+  const alertsQ = useQuery({
+    queryKey: ["admin-alerts"],
+    queryFn: () => adminApi.alerts(),
   });
-  const lockedAccounts = securityQ.data?.lockedAccounts ?? 0;
+  const alerts = alertsQ.data;
+  const lockedAccounts = alerts?.lockedAccounts ?? 0;
 
   if (isLoading || !data) {
     return (
@@ -248,13 +251,63 @@ export default function AdminOverviewPage() {
               tone="danger"
             />
           )}
+          {(alerts?.staleUnappliedEvents ?? 0) > 0 && (
+            <AttentionTile
+              index={3}
+              href="/admin/reconciliation"
+              icon={AlertTriangle}
+              count={alerts!.staleUnappliedEvents}
+              label={t("admin.attention.staleEvents").replace("{hours}", String(alerts!.staleEventHours))}
+              tone="danger"
+            />
+          )}
+          {(alerts?.recentFailedPayments ?? 0) > 0 && (
+            <AttentionTile
+              index={4}
+              href="/admin/revenue"
+              icon={Banknote}
+              count={alerts!.recentFailedPayments}
+              label={t("admin.attention.failedPayments").replace("{days}", String(alerts!.failedPaymentDays))}
+              tone="warn"
+            />
+          )}
         </div>
+      )}
+
+      {/* Ventures carrying more than one open report.
+          The threshold travels with the data and is printed, because "two people
+          complained" is a fact and "this venture is a problem" would be a verdict. */}
+      {(alerts?.heavilyReported.length ?? 0) > 0 && (
+        <Panel
+          title={t("admin.alerts.heavilyReported").replace("{n}", String(alerts!.reportThreshold))}
+          icon={<Flag className="size-4" strokeWidth={1.7} />}
+          href="/admin/reports"
+        >
+          <ul className="divide-y divide-border/50">
+            {alerts!.heavilyReported.map((v) => (
+              <li key={v.projectId} className="flex items-center gap-3 py-2.5 text-sm">
+                <Link
+                  href={`/projects/${v.projectId}`}
+                  data-cursor="hover"
+                  className="min-w-0 flex-1 truncate font-medium transition-colors hover:text-primary"
+                >
+                  {v.name}
+                </Link>
+                <span className="shrink-0 rounded-full border border-destructive/40 px-2.5 py-0.5 text-[11px] leading-5 text-destructive">
+                  {v.openReports} {t("admin.u360.openReports")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
       )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
         <Stat index={0} icon={Users} label={t("admin.kpi.users")} value={data.totalUsers} format={(v) => String(v)} accent />
+        {/* One icon per meaning. Entrepreneurs and Ventures were both Rocket, side by
+            side in this row, so two different counts carried the same mark. */}
         <Stat index={1} icon={TrendingUp} label={t("admin.kpi.investors")} value={data.investors} format={(v) => String(v)} />
-        <Stat index={2} icon={Rocket} label={t("admin.kpi.innovators")} value={data.innovators} format={(v) => String(v)} />
+        <Stat index={2} icon={Lightbulb} label={t("admin.kpi.innovators")} value={data.innovators} format={(v) => String(v)} />
         <Stat index={3} icon={Rocket} label={t("admin.kpi.ventures")} value={data.totalProjects} format={(v) => String(v)} />
         <Stat index={4} icon={CheckCircle2} label={t("admin.kpi.funded")} value={data.fundedProjects} format={(v) => String(v)} />
         <Stat index={5} icon={Banknote} label={t("admin.kpi.invested")} value={data.totalInvestedAmount} format={compactUsd} bronze />
@@ -263,9 +316,12 @@ export default function AdminOverviewPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title={t("admin.overview.distribution")} icon={<Users className="size-4" strokeWidth={1.7} />} elevated>
           <div className="space-y-4">
-            <DistBar label={t("admin.kpi.investors")} value={data.investors} total={data.totalUsers} color="bg-gradient-to-r from-bronze to-primary" />
-            <DistBar label={t("admin.kpi.innovators")} value={data.innovators} total={data.totalUsers} color="bg-primary/70" />
-            <DistBar label={t("admin.kpi.admins")} value={data.admins} total={data.totalUsers} color="bg-bronze/70" />
+            {/* Three flat colours, one per group. The first of these used to be a
+                bronze-to-gold gradient, which made one of three equal categories look
+                like a scale of something. */}
+            <DistBar label={t("admin.kpi.investors")} value={data.investors} total={data.totalUsers} color="bg-primary" />
+            <DistBar label={t("admin.kpi.innovators")} value={data.innovators} total={data.totalUsers} color="bg-bronze" />
+            <DistBar label={t("admin.kpi.admins")} value={data.admins} total={data.totalUsers} color="bg-muted-foreground/50" />
           </div>
         </Panel>
 

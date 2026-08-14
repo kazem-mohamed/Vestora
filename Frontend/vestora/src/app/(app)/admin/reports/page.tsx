@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Flag, ShieldCheck, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { ReasonDialog } from "@/components/admin/reason-dialog";
 import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
@@ -68,9 +69,10 @@ function ReportCard({ r, index }: { r: Report; index: number }) {
     onError: (e: Error) => toast.error(e.message),
   });
   const delProject = useMutation({
-    mutationFn: () => adminApi.deleteProject(r.projectId),
+    mutationFn: (reason: string) => adminApi.deleteProject(r.projectId, reason),
     onSuccess: () => {
       toast.success(t("admin.ventures.deleted"));
+      setConfirmDelete(false);
       invalidate();
       qc.invalidateQueries({ queryKey: ["admin-analytics"] });
     },
@@ -134,33 +136,28 @@ function ReportCard({ r, index }: { r: Report; index: number }) {
             <X className="size-3.5" />
             {t("admin.reports.dismiss")}
           </button>
-          <AnimatePresence mode="wait" initial={false}>
-            {confirmDelete ? (
-              <motion.span key="c" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.2 }} className="inline-flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{t("admin.reports.confirmDelete")}</span>
-                <button type="button" data-cursor="hover" disabled={busy} onClick={() => delProject.mutate()} className="rounded-full bg-destructive px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50">
-                  {t("admin.reports.deleteVenture")}
-                </button>
-                <button type="button" data-cursor="hover" onClick={() => setConfirmDelete(false)} className="text-xs text-muted-foreground hover:text-foreground">
-                  {t("form.cancel")}
-                </button>
-              </motion.span>
-            ) : (
-              <button
-                key="d"
-                type="button"
-                data-cursor="hover"
-                disabled={busy}
-                onClick={() => setConfirmDelete(true)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 px-4 py-2 text-xs text-destructive transition-colors hover:bg-destructive/[0.06] disabled:opacity-50"
-              >
-                <Trash2 className="size-3.5" />
-                {t("admin.reports.deleteVenture")}
-              </button>
-            )}
-          </AnimatePresence>
+          <button
+            type="button"
+            data-cursor="hover"
+            disabled={busy}
+            onClick={() => setConfirmDelete(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 px-4 py-2 text-xs text-destructive transition-colors hover:bg-destructive/[0.06] disabled:opacity-50"
+          >
+            <Trash2 className="size-3.5" />
+            {t("admin.reports.deleteVenture")}
+          </button>
         </div>
       )}
+
+      <ReasonDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={t("admin.reason.deleteProject.title")}
+        body={t("admin.reason.deleteProject.body")}
+        confirmLabel={t("admin.reason.deleteProject.confirm")}
+        pending={delProject.isPending}
+        onConfirm={(reason) => delProject.mutate(reason)}
+      />
     </motion.li>
   );
 }

@@ -39,10 +39,20 @@ namespace MyAppApi.Data.Models.DTOs
         public string Password { get; set; } = string.Empty;
     }
 
-    public class SuspendUserDto
+    /// <summary>
+    /// The justification a destructive admin action has to carry.
+    /// <para>
+    /// Required, because the person on the other end of a suspension or a deletion will
+    /// ask why, and "an administrator did it" is not an answer. The reconciliation queue
+    /// already refuses an empty resolution note for the same reason; this applies the
+    /// same standard to the actions that affect someone's account rather than a ledger.
+    /// </para>
+    /// </summary>
+    public class AdminReasonDto
     {
-        [StringLength(500)]
-        public string? Reason { get; set; }
+        [Required(ErrorMessage = "Say why — an unexplained action is one nobody can answer for.")]
+        [StringLength(500, MinimumLength = 4, ErrorMessage = "Give a reason of at least 4 characters.")]
+        public string Reason { get; set; } = string.Empty;
     }
 
     public class AdminUserDto

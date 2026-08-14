@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Stamp,
+  TrendingUp,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -34,7 +35,12 @@ interface AdminSection {
 const GROUPS: { titleKey: string | null; items: AdminSection[] }[] = [
   {
     titleKey: null,
-    items: [{ href: "/admin", labelKey: "admin.nav.overview", icon: LayoutDashboard }],
+    items: [
+      { href: "/admin", labelKey: "admin.nav.overview", icon: LayoutDashboard },
+      // Beside the overview rather than under oversight: the overview says what is
+      // true now, this says how it got there. They are read together.
+      { href: "/admin/analytics", labelKey: "admin.nav.analytics", icon: TrendingUp },
+    ],
   },
   {
     // The queue: things waiting on a decision.

@@ -31,20 +31,6 @@ namespace MyAppApi.Controllers
         private int GetCurrentUserId() =>
             int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        private async Task LogAsync(string action, string targetType, int? targetId, string? details = null)
-        {
-            _context.AdminAuditLogs.Add(new AdminAuditLog
-            {
-                AdminUserId = GetCurrentUserId(),
-                Action = action,
-                TargetType = targetType,
-                TargetId = targetId,
-                Details = details,
-                CreatedAtUtc = DateTime.UtcNow
-            });
-            await _context.SaveChangesAsync();
-        }
-
         // ============ PROJECT MODERATION (listing review queue) ============
 
         [HttpGet("projects/pending")]
@@ -97,11 +83,16 @@ namespace MyAppApi.Controllers
             var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId);
             if (project == null) return NotFound(new { message = "Project not found." });
 
+            var before = new { project.ModerationStatus, project.ModerationNote };
             project.ModerationStatus = "Approved";
             project.ModeratedAtUtc = DateTime.UtcNow;
             project.ModerationNote = null;
+            _context.Audit(GetCurrentUserId(), "ApproveProject", "Project", projectId,
+                details: $"Approved '{project.Name}'.",
+                before: before,
+                after: new { project.ModerationStatus, project.ModerationNote },
+                http: HttpContext);
             await _context.SaveChangesAsync();
-            await LogAsync("ApproveProject", "Project", projectId, $"Approved '{project.Name}'.");
 
             // Now that the listing is actually visible, tell the founder's
             // followers about it (moved here from creation time — notifying
@@ -129,23 +120,28 @@ namespace MyAppApi.Controllers
         }
 
         [HttpPost("projects/{projectId}/reject")]
-        public async Task<IActionResult> RejectProject(int projectId, [FromBody] RejectProjectDto? dto)
+        public async Task<IActionResult> RejectProject(int projectId, [FromBody] AdminReasonDto dto)
         {
             var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == projectId);
             if (project == null) return NotFound(new { message = "Project not found." });
 
+            var before = new { project.ModerationStatus, project.ModerationNote };
             project.ModerationStatus = "Rejected";
             // Persist the reason so the founder (and any later admin) can read it
             // instead of it living only inside a one-off notification.
-            project.ModerationNote = dto?.Reason;
+            project.ModerationNote = dto.Reason;
             project.ModeratedAtUtc = DateTime.UtcNow;
+            _context.Audit(GetCurrentUserId(), "RejectProject", "Project", projectId,
+                details: $"Rejected '{project.Name}'.",
+                reason: dto.Reason,
+                before: before,
+                after: new { project.ModerationStatus, project.ModerationNote },
+                http: HttpContext);
             await _context.SaveChangesAsync();
-            await LogAsync("RejectProject", "Project", projectId, dto?.Reason);
 
             _fanOut.Enqueue(new FanOutNotification(
                 project.OwnerId,
-                $"Your listing '{project.Name}' was not approved for publishing." +
-                    (string.IsNullOrWhiteSpace(dto?.Reason) ? "" : $" Reason: {dto!.Reason}"),
+                $"Your listing '{project.Name}' was not approved for publishing. Reason: {dto.Reason}",
                 "ProjectRejected",
                 project.Id,
                 null,
@@ -226,18 +222,17 @@ namespace MyAppApi.Controllers
                 return NotFound(new { message = "Report not found." });
             }
 
+            var before = new { report.Status };
             report.Status = status;
             report.ResolvedAt = DateTime.UtcNow;
             report.ResolvedByAdminId = GetCurrentUserId();
+            _context.Audit(GetCurrentUserId(), $"{status}Report", "Report", id,
+                before: before,
+                after: new { report.Status },
+                http: HttpContext);
             await _context.SaveChangesAsync();
-            await LogAsync($"{status}Report", "Report", id);
 
             return Ok(new { message = $"Report marked {status.ToLowerInvariant()}." });
         }
-    }
-
-    public class RejectProjectDto
-    {
-        public string? Reason { get; set; }
     }
 }

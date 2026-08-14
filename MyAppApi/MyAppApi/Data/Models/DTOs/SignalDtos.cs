@@ -51,6 +51,33 @@ namespace MyAppApi.Data.Models.DTOs
         public int DocumentRequestsToFill { get; set; }
         public int ApprovedAwaitingContact { get; set; }
 
+        /// <summary>
+        /// Term sheets proposed by the other side and not yet accepted by this one.
+        /// <para>
+        /// Both parties accept separately, so "awaiting you" means specifically that this
+        /// caller's acceptance is the missing one — not that the sheet is unsettled.
+        /// </para>
+        /// </summary>
+        public int TermSheetsAwaitingYou { get; set; }
+
+        /// <summary>Investor only: an open ask against them, payable now.</summary>
+        public int PaymentsDue { get; set; }
+
+        /// <summary>Founder only: open asks close to lapsing, which would release the capacity.</summary>
+        public int RequestsNearingExpiry { get; set; }
+
+        /// <summary>Days before expiry that counts as "nearing" — stated, not inferred.</summary>
+        public int ExpiryWindowDays { get; set; }
+
+        /// <summary>
+        /// Live relationships that have not moved in a while. A stated threshold rather
+        /// than a health model: this is a count of rows whose stage has not changed, and
+        /// it is named as such.
+        /// </summary>
+        public int StalledDeals { get; set; }
+
+        public int StalledAfterDays { get; set; }
+
         // ---- Informational: changes, not obligations ----
         public int UnreadMessages { get; set; }
         public int UnreadNotifications { get; set; }

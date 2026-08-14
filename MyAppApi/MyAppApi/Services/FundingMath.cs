@@ -298,6 +298,36 @@ namespace MyAppApi.Services
                 .SumAsync(t => (decimal?)t.Amount, ct) ?? 0m;
 
         /// <summary>
+        /// The same figure as <see cref="SettledForInvestmentAsync"/>, for many
+        /// relationships at once.
+        /// <para>
+        /// Screens that list relationships need this per row, and calling the single
+        /// form in a loop is how an admin page turns into fifty queries. The definition
+        /// is deliberately not restated anywhere else: a caller tempted to write
+        /// <c>Where(Succeeded).Sum(Amount)</c> inline is writing the fifteenth copy this
+        /// file exists to prevent. Relationships with nothing settled are absent from
+        /// the result rather than present as zero — the caller reads through a default.
+        /// </para>
+        /// </summary>
+        public static async Task<Dictionary<int, decimal>> SettledByInvestmentAsync(
+            AppDbContext db, IReadOnlyCollection<int> investmentIds, CancellationToken ct = default)
+        {
+            if (investmentIds.Count == 0) return new Dictionary<int, decimal>();
+
+            var ids = investmentIds.Distinct().ToList();
+
+            var rows = await db.PaymentTransactions
+                .AsNoTracking()
+                .IgnoreQueryFilters()
+                .Where(t => ids.Contains(t.InvestmentId) && t.Status == PaymentStatus.Succeeded)
+                .GroupBy(t => t.InvestmentId)
+                .Select(g => new { InvestmentId = g.Key, Total = g.Sum(t => t.Amount) })
+                .ToListAsync(ct);
+
+            return rows.ToDictionary(r => r.InvestmentId, r => r.Total);
+        }
+
+        /// <summary>
         /// Where one relationship sits on the money axis, derived rather than stored.
         /// A stored column would be a fifth place for the numbers to disagree.
         /// <para>

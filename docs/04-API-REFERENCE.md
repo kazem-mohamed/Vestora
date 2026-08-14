@@ -328,33 +328,94 @@ Authenticated.
 
 ---
 
-## 20. `AdminController` — `/api/admin` · 11 endpoints
+## 20. `AdminController` — `/api/admin` · 12 endpoints
 **`Admin` only**, except `bootstrap`.
+
+> **`AdminReasonDto` is required on every destructive action.** `Reason` is mandatory
+> (4–500 characters); an empty one is a `400`. It is stored on the target where a column
+> exists (`User.SuspensionReason`, `Project.ModerationNote`) **and** in
+> `AdminAuditLog.Reason`. Same standard the reconciliation queue already applied to its
+> resolution notes — the person affected will ask why, and that answer has to survive.
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | POST | `/bootstrap` | **anonymous** · `PasswordReset` limit | Creates the first admin using `AdminBootstrap:SecretKey`. Constant-time secret comparison. |
 | POST | `/admins` | Admin | Create another admin. |
 | GET | `/users` | Admin | `search`, `userType`, `page=1`, `pageSize=20`. |
-| DELETE | `/users/{userId}` | Admin | **Soft** delete + audit log entry. |
-| DELETE | `/projects/{projectId}` | Admin | **Soft** delete + audit log entry. |
-| POST | `/users/{userId}/suspend` | Admin | `SuspendUserDto` (reason). Blocks login; logged in `SecurityLog` as `login_blocked_suspended` on attempt. |
-| POST | `/users/{userId}/restore` | Admin | Lifts the suspension. |
+| DELETE | `/users/{userId}` | Admin | **Body:** `AdminReasonDto`. **Soft** delete + audit row with before/after. |
+| DELETE | `/projects/{projectId}` | Admin | **Body:** `AdminReasonDto`. **Soft** delete + audit row with before/after. |
+| POST | `/users/{userId}/suspend` | Admin | `AdminReasonDto`. Blocks login; logged in `SecurityLog` as `login_blocked_suspended` on attempt. |
+| POST | `/users/{userId}/restore` | Admin | Lifts the suspension and an admin deletion. No reason required — this is the reversal, not the harm. |
 | GET | `/security` | Admin | `?days=14&take=40` — security events. |
 | GET | `/growth` | Admin | `?months=6` — signup/venture growth. |
-| GET | `/audit-log` | Admin | `?page=1&pageSize=30` — every admin action taken. |
+| GET | `/alerts` | Admin | What is waiting on a human, counted against **stated thresholds** (see below). |
+| GET | `/audit-log` | Admin | `?page=1&pageSize=30&adminId=&action=&targetType=&from=&to=`. Returns `facets` (distinct actions, target types, admins) built from the rows present. |
 | GET | `/analytics` | Admin | Platform KPIs. |
+
+### `/alerts` — thresholds, not detection
+
+There is deliberately **no anomaly detection**. At this size there is no baseline to
+deviate from, and a detector trained on nothing produces confident nonsense. Every figure
+is a count against a rule, and the rule travels with the response so the UI can state it:
+
+| Field | Threshold | Constant |
+|---|---|---|
+| `heavilyReported` | ventures with **≥ 2** open reports | `reportThreshold` |
+| `staleUnappliedEvents` | unapplied, unreviewed `PaymentEvent` older than **24h** | `staleEventHours` |
+| `recentFailedPayments` | failed transactions in the last **7 days** | `failedPaymentDays` |
+
+Also returns `pendingReview`, `openReports`, `lockedAccounts`, `suspendedAccounts`.
+
+---
+
+## 20a. `AdminUserOverviewController` — `/api/admin` · 1 endpoint
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/users/{userId}/overview` | One account and everything attached: `Account · Security · Ventures · Reports · Deals · Payments · Activity`. Ignores query filters throughout — a suspended or removed account is the one being looked at. Money comes from `FundingMath`; nothing is recomputed here. |
+
+## 20c. `AdminInsightsController` — `/api/admin` · 1 endpoint
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/insights` | Relationship funnel, conversions, time-in-stage, revenue by month and by venture. |
+
+**Every ratio is returned as `numerator` + `denominator`, never as a percentage.** At
+fifty accounts one decline moves an approval rate by several points, so a bare `44%`
+carries precision the counts cannot support. The interface leads with `21 / 48` and keeps
+the percentage as the smaller reading.
+
+- **Funnel is cumulative** — "ever reached at least this stage", taken from
+  `InvestmentStageEvent` where history exists and from the current stage otherwise. A
+  relationship approved and later declined still counts as approved, because it was.
+  `Declined` is reported separately: it is where relationships leave the funnel, not a
+  rung of it.
+- **Time in stage** comes from `InvestmentStageEvent.MinutesInPreviousStage`, written at
+  the moment of each move — measured, not estimated. The **median**, not the mean, and
+  `samples` travels with every figure so a number resting on three observations cannot
+  read as a fact about the platform. `relationshipsWithHistory` vs `totalRelationships`
+  says how much of the platform the timings actually cover.
+- **No retention or cohort analysis.** Sessions are not recorded, so any such figure
+  would be invented.
+
+## 20b. `AdminSearchController` — `/api/admin` · 1 endpoint
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/search?q=` | Minimum 2 characters. Matches users (name/email/id), ventures, relationships, transactions (`Reference`, provider ids), and reports. Results **grouped by kind, never ranked** — max 5 per group. Suspended/removed rows are returned with `muted: true`, not filtered out. |
 
 ---
 
 ## 21. `AdminModerationController` — `/api/admin` · 6 endpoints
-**`Admin` only.** Every action writes an `AdminAuditLog` row.
+**`Admin` only.** Every action writes an `AdminAuditLog` row **in the same
+`SaveChangesAsync` as the change it describes**, so an action cannot commit without its
+record.
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/projects/pending` | `?page=1&pageSize=20` — the review queue. |
 | POST | `/projects/{projectId}/approve` | Publishes the listing; notifies followers (`NewProject`). |
-| POST | `/projects/{projectId}/reject` | `RejectProjectDto` — **the reason is stored** on `Project.ModerationNote` and sent to the founder. |
+| POST | `/projects/{projectId}/reject` | `AdminReasonDto` — **required**. Stored on `Project.ModerationNote`, sent to the founder verbatim, and written to the audit row. |
 | GET | `/reports` | `?status=&page=&pageSize=20`. |
 | POST | `/reports/{id}/resolve` | |
 | POST | `/reports/{id}/dismiss` | |
