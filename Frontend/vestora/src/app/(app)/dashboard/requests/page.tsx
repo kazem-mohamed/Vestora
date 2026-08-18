@@ -10,6 +10,7 @@ import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   EASE,
   STAGE_LABEL_KEY,
@@ -201,22 +202,27 @@ function RelationshipRow({ item, index }: { item: FounderPipelineItem; index: nu
               </button>
             </>
           ) : (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="sr-only">{t("pipe.moveStage")}</span>
-              <select
-                value={item.stage}
+            <Select
+              value={item.stage}
+              onValueChange={(v) => setStage.mutate(v as PipelineStage)}
+            >
+              <SelectTrigger
+                size="sm"
                 disabled={busy}
-                onChange={(e) => setStage.mutate(e.target.value as PipelineStage)}
-                className="h-9 rounded-full border border-border bg-card/60 px-3 text-xs text-foreground outline-none transition-colors focus-visible:border-primary/60 disabled:opacity-60"
+                aria-label={t("pipe.moveStage")}
+                className="w-auto rounded-full px-3 text-xs"
               >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
                 {STAGE_ORDER.map((s) => (
-                  <option key={s} value={s}>
+                  <SelectItem key={s} value={s}>
                     {t(STAGE_LABEL_KEY[s])}
-                  </option>
+                  </SelectItem>
                 ))}
-                <option value="Declined">{t("stage.declined")}</option>
-              </select>
-            </label>
+                <SelectItem value="Declined">{t("stage.declined")}</SelectItem>
+              </SelectContent>
+            </Select>
           )}
 
           <Link

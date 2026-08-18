@@ -18,16 +18,32 @@ import type {
 export const adminApi = {
   analytics: () => api.get<AdminAnalytics>("/api/admin/analytics"),
 
-  users: (opts: { search?: string; userType?: string; page?: number; pageSize?: number }) => {
+  users: (opts: {
+    search?: string;
+    userType?: string;
+    isSuspended?: boolean;
+    page?: number;
+    pageSize?: number;
+  }) => {
     const q = new URLSearchParams();
     if (opts.search) q.set("search", opts.search);
     if (opts.userType) q.set("userType", opts.userType);
+    if (opts.isSuspended !== undefined) q.set("isSuspended", String(opts.isSuspended));
     q.set("page", String(opts.page ?? 1));
     q.set("pageSize", String(opts.pageSize ?? 20));
     return api.get<PagedResult<AdminUser>>(`/api/admin/users?${q.toString()}`);
   },
 
   userOverview: (id: number) => api.get<AdminUserOverview>(`/api/admin/users/${id}/overview`),
+
+  createUser: (dto: { userName: string; email: string; userType: "Investor" | "Innovator"; temporaryPassword: string }) =>
+    api.post<{ message: string; userId: number }>("/api/admin/users", dto),
+
+  editUser: (id: number, dto: { userName: string; email: string; phone?: string }) =>
+    api.put<{ message: string }>(`/api/admin/users/${id}`, dto),
+
+  makePrimaryAdmin: (id: number) =>
+    api.post<{ message: string }>(`/api/admin/admins/${id}/make-primary`, {}),
 
   alerts: () => api.get<AdminAlerts>("/api/admin/alerts"),
 

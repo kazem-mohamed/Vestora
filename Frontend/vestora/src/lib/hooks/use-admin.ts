@@ -18,11 +18,16 @@ export function useAdminAnalytics() {
   });
 }
 
-export function useAdminUsers(search: string, userType: string, page: number) {
+export function useAdminUsers(
+  search: string,
+  userType: string,
+  page: number,
+  isSuspended?: boolean
+) {
   const isAdmin = useIsAdmin();
   return useQuery({
-    queryKey: ["admin-users", search, userType, page],
-    queryFn: () => adminApi.users({ search, userType, page, pageSize: 12 }),
+    queryKey: ["admin-users", search, userType, page, isSuspended],
+    queryFn: () => adminApi.users({ search, userType, isSuspended, page, pageSize: 12 }),
     enabled: isAdmin,
     placeholderData: (prev) => prev,
   });

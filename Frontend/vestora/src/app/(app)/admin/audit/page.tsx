@@ -9,6 +9,7 @@ import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { adminApi } from "@/lib/api/admin";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
@@ -134,42 +135,50 @@ export default function AdminAuditPage() {
           <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
             {t("admin.audit.filter.admin")}
           </span>
-          <select
-            value={adminId ?? ""}
-            onChange={(e) => {
-              setAdminId(e.target.value ? Number(e.target.value) : undefined);
+          <Select
+            value={adminId != null ? String(adminId) : ""}
+            onValueChange={(v) => {
+              setAdminId(v ? Number(v) : undefined);
               setPage(1);
             }}
-            className="h-9 rounded-lg border border-input bg-card/60 px-3 text-sm outline-none focus-visible:border-primary/60"
           >
-            <option value="">{t("admin.audit.filter.any")}</option>
-            {facets?.admins.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">{t("admin.audit.filter.any")}</SelectItem>
+              {facets?.admins.map((a) => (
+                <SelectItem key={a.id} value={String(a.id)}>
+                  {a.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
 
         <label className="flex min-w-40 flex-col gap-1.5">
           <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
             {t("admin.audit.filter.action")}
           </span>
-          <select
+          <Select
             value={action ?? ""}
-            onChange={(e) => {
-              setAction(e.target.value || undefined);
+            onValueChange={(v) => {
+              setAction(v || undefined);
               setPage(1);
             }}
-            className="h-9 rounded-lg border border-input bg-card/60 px-3 text-sm outline-none focus-visible:border-primary/60"
           >
-            <option value="">{t("admin.audit.filter.any")}</option>
-            {facets?.actions.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">{t("admin.audit.filter.any")}</SelectItem>
+              {facets?.actions.map((a) => (
+                <SelectItem key={a} value={a}>
+                  {a}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
 
         <label className="flex flex-col gap-1.5">

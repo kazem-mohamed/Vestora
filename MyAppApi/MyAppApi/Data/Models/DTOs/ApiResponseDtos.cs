@@ -48,6 +48,10 @@ namespace MyAppApi.Data.Models.DTOs
         // with the login response so the client can route to onboarding without a
         // second round trip on the one request where latency is most visible.
         public bool HasOnboarded { get; set; }
+
+        // Sent the same way HasOnboarded is: a routing hint the client acts on
+        // immediately rather than a second round trip after landing on the dashboard.
+        public bool MustChangePassword { get; set; }
     }
 
     public class MessageResponseDto

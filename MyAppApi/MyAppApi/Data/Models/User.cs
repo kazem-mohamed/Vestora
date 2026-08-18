@@ -107,6 +107,12 @@
         [StringLength(500)]
         public string? SuspensionReason { get; set; }
 
+        // Set when an admin creates the account and picks the initial password
+        // themselves — the admin's choice is a placeholder the real owner never chose,
+        // so login succeeds but the client routes to a forced change before anything
+        // else. False for every self-registered account, which never needs it.
+        public bool MustChangePassword { get; set; }
+
         // Self-deletion. Distinct from IsDeleted (which an admin sets) so the two
         // can be told apart in the audit trail and in support conversations.
         public DateTime? DeletedAtUtc { get; set; }

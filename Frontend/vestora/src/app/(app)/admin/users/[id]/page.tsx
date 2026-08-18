@@ -1,18 +1,24 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   ArrowUpRight,
   Banknote,
   Flag,
   Handshake,
   Mail,
+  RotateCcw,
   Rocket,
   ScrollText,
   ShieldAlert,
+  Trash2,
+  UserMinus,
 } from "lucide-react";
+import { ReasonDialog } from "@/components/admin/reason-dialog";
 import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import { StagePill } from "@/components/invest/invest-primitives";
@@ -54,13 +60,19 @@ export default function AdminUserOverviewPage({ params }: { params: Promise<{ id
         sub={account.email}
         eyebrowKey="admin.sidebar.label"
         action={
-          <Link
-            href="/admin/users"
-            data-cursor="hover"
-            className="inline-flex items-center gap-1.5 rounded-full border border-border/70 px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {t("admin.nav.users")}
-          </Link>
+          <div className="flex items-center gap-2">
+            {/* Reaching this page by search and then finding nothing to act on was the
+                exact complaint this row answers — every action the list row offers is
+                offered here too, on the same account the reader is already looking at. */}
+            {account.userType !== "Admin" && <AccountActions account={account} />}
+            <Link
+              href="/admin/users"
+              data-cursor="hover"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border/70 px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {t("admin.nav.users")}
+            </Link>
+          </div>
         }
       />
 
@@ -292,6 +304,107 @@ export default function AdminUserOverviewPage({ params }: { params: Promise<{ id
         </Panel>
       )}
     </div>
+  );
+}
+
+/**
+ * The same three actions the users list offers, reachable from the account itself.
+ * Restore covers both a suspension and a deletion — the backend clears both flags
+ * together, so one control is the honest shape rather than two that overlap.
+ */
+function AccountActions({ account }: { account: AdminUserOverview["account"] }) {
+  const { t } = useLocale();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [prompt, setPrompt] = useState<null | "delete" | "suspend">(null);
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["admin-user-overview", account.id] });
+    qc.invalidateQueries({ queryKey: ["admin-users"] });
+    qc.invalidateQueries({ queryKey: ["admin-analytics"] });
+  };
+
+  const del = useMutation({
+    mutationFn: (reason: string) => adminApi.deleteUser(account.id, reason),
+    onSuccess: (r) => {
+      toast.success(r.message || t("admin.users.deleted"));
+      // The account just left the platform's normal view — the overview page is no
+      // longer where a reader would expect to land.
+      router.push("/admin/users");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const suspend = useMutation({
+    mutationFn: (reason: string) => adminApi.suspendUser(account.id, reason),
+    onSuccess: () => {
+      toast.success(t("admin.users.suspended"));
+      setPrompt(null);
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const restore = useMutation({
+    mutationFn: () => adminApi.restoreUser(account.id),
+    onSuccess: () => {
+      toast.success(t("admin.users.restored"));
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const busy = del.isPending || suspend.isPending || restore.isPending;
+  const needsRestore = account.isSuspended || account.isDeleted;
+
+  return (
+    <>
+      {needsRestore ? (
+        <button
+          type="button"
+          data-cursor="hover"
+          disabled={busy}
+          onClick={() => restore.mutate()}
+          className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/[0.08] px-4 py-2 text-sm text-primary transition-colors hover:bg-primary/[0.14] disabled:opacity-50"
+        >
+          <RotateCcw className="size-3.5" />
+          {t("admin.users.restore")}
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            data-cursor="hover"
+            disabled={busy}
+            onClick={() => setPrompt("suspend")}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-bronze/50 hover:text-bronze disabled:opacity-50"
+          >
+            <UserMinus className="size-3.5" />
+            {t("admin.users.suspend")}
+          </button>
+          <button
+            type="button"
+            data-cursor="hover"
+            disabled={busy}
+            onClick={() => setPrompt("delete")}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:opacity-50"
+          >
+            <Trash2 className="size-3.5" />
+            {t("mine.delete")}
+          </button>
+        </>
+      )}
+
+      <ReasonDialog
+        open={prompt !== null}
+        onOpenChange={(v) => !v && setPrompt(null)}
+        title={t(prompt === "suspend" ? "admin.reason.suspendUser.title" : "admin.reason.deleteUser.title")}
+        body={t(prompt === "suspend" ? "admin.reason.suspendUser.body" : "admin.reason.deleteUser.body")}
+        confirmLabel={t(prompt === "suspend" ? "admin.reason.suspendUser.confirm" : "admin.reason.deleteUser.confirm")}
+        pending={busy}
+        onConfirm={(reason) => (prompt === "suspend" ? suspend.mutate(reason) : del.mutate(reason))}
+      />
+    </>
   );
 }
 

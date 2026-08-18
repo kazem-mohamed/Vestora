@@ -95,7 +95,12 @@ export default function LoginPage() {
           : res.userType === "Admin"
             ? "/admin"
             : "/dashboard";
-      router.replace(needsOnboarding ? "/onboarding" : home);
+      // A temporary password an admin chose comes before onboarding — picking
+      // industries to follow is pointless on an account whose password isn't
+      // really theirs yet.
+      router.replace(
+        res.mustChangePassword ? "/settings/account" : needsOnboarding ? "/onboarding" : home
+      );
     } catch (err) {
       const f = classify(err);
       setFailure(f);

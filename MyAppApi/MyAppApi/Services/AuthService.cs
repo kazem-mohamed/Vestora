@@ -379,6 +379,9 @@ namespace MyAppApi.Services
             }
 
             user.Password = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            // Clears whether or not it was set — a self-registered account never had it,
+            // so this is a no-op for the overwhelming majority of callers.
+            user.MustChangePassword = false;
             RevokeActiveRefreshTokens(user, "Password changed.");
             AddSecurityEvent("password_changed", user, user.Email, "Password changed and active refresh tokens revoked.");
             await _dbContext.SaveChangesAsync();
@@ -478,7 +481,8 @@ namespace MyAppApi.Services
                 UserType = user.UserType,
                 UserName = user.UserName,
                 UserEmail = user.Email,
-                HasOnboarded = user.OnboardedAtUtc != null
+                HasOnboarded = user.OnboardedAtUtc != null,
+                MustChangePassword = user.MustChangePassword
             };
         }
 

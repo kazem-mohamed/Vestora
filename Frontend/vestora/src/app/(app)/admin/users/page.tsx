@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { BadgeCheck, RotateCcw, Search, ShieldPlus, Trash2, UserMinus } from "lucide-react";
+import { BadgeCheck, Pencil, RotateCcw, Search, ShieldPlus, Trash2, UserMinus, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -52,6 +52,7 @@ function Row({ u, index }: { u: AdminUser; index: number }) {
   // Which justification is being asked for, if any. Both actions need one, and the
   // dialog is the same — only the copy and the mutation differ.
   const [prompt, setPrompt] = useState<null | "delete" | "suspend">(null);
+  const [editing, setEditing] = useState(false);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["admin-users"] });
@@ -132,11 +133,27 @@ function Row({ u, index }: { u: AdminUser; index: number }) {
       </span>
 
       {u.userType === "Admin" ? (
-        <span className="grid size-9 shrink-0 place-items-center text-muted-foreground/40" title={t("admin.users.protected")}>
-          <Trash2 className="size-4" />
+        <span className="flex shrink-0 items-center gap-1.5">
+          {u.isPrimaryAdmin && (
+            <span className="rounded-full border border-bronze/40 px-2.5 py-0.5 text-[10px] text-bronze">
+              {t("admin.users.primary")}
+            </span>
+          )}
+          <span className="grid size-9 place-items-center text-muted-foreground/40" title={t("admin.users.protected")}>
+            <Trash2 className="size-4" />
+          </span>
         </span>
       ) : (
         <span className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            data-cursor="hover"
+            aria-label={t("admin.users.edit")}
+            onClick={() => setEditing(true)}
+            className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+          >
+            <Pencil className="size-3.5" />
+          </button>
           {u.isSuspended ? (
             <button
               type="button"
@@ -181,7 +198,96 @@ function Row({ u, index }: { u: AdminUser; index: number }) {
         pending={busy}
         onConfirm={(reason) => (prompt === "suspend" ? suspend.mutate(reason) : del.mutate(reason))}
       />
+
+      <EditUserDialog user={u} open={editing} onOpenChange={setEditing} onSaved={refresh} />
     </motion.li>
+  );
+}
+
+function EditUserDialog({
+  user,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  user: AdminUser;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSaved: () => void;
+}) {
+  const { t } = useLocale();
+  const [userName, setUserName] = useState(user.userName);
+  const [email, setEmail] = useState(user.email);
+  const [phone, setPhone] = useState("");
+
+  // Re-seed from the row whenever the dialog opens, not on every render — otherwise
+  // an in-progress edit resets itself the moment an unrelated refetch lands.
+  useEffect(() => {
+    if (open) {
+      setUserName(user.userName);
+      setEmail(user.email);
+    }
+  }, [open, user.userName, user.email]);
+
+  const save = useMutation({
+    mutationFn: () =>
+      adminApi.editUser(user.id, {
+        userName: userName.trim(),
+        email: email.trim(),
+        phone: phone.trim() || undefined,
+      }),
+    onSuccess: (r) => {
+      toast.success(r.message || t("admin.users.edited"));
+      onOpenChange(false);
+      onSaved();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const canSubmit = userName.trim().length >= 2 && /\S+@\S+\.\S+/.test(email);
+  const inputCls =
+    "w-full rounded-xl border border-input bg-card/60 px-4 py-2.5 text-sm outline-none backdrop-blur-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/25";
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !save.isPending && onOpenChange(o)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("admin.users.edit.title")}</DialogTitle>
+          <DialogDescription>{t("admin.users.edit.sub")}</DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-2 space-y-3">
+          <input value={userName} onChange={(e) => setUserName(e.target.value)} maxLength={100} className={inputCls} />
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} dir="ltr" className={inputCls} />
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder={t("admin.users.edit.phonePlaceholder")}
+            dir="ltr"
+            className={inputCls}
+          />
+        </div>
+
+        <div className="mt-4 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {t("form.cancel")}
+          </button>
+          <button
+            type="button"
+            disabled={!canSubmit || save.isPending}
+            onClick={() => save.mutate()}
+            className="gold-cta rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50"
+          >
+            {save.isPending ? t("admin.users.edit.saving") : t("admin.users.edit.submit")}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -276,13 +382,134 @@ function CreateAdminDialog() {
   );
 }
 
+function CreateUserDialog() {
+  const { t } = useLocale();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [email, setEmail] = useState("");
+  const [userType, setUserType] = useState<"Investor" | "Innovator">("Investor");
+  const [password, setPassword] = useState("");
+
+  const canSubmit = userName.trim().length >= 2 && /\S+@\S+\.\S+/.test(email) && password.length >= 10;
+
+  const create = useMutation({
+    mutationFn: () =>
+      adminApi.createUser({
+        userName: userName.trim(),
+        email: email.trim(),
+        userType,
+        temporaryPassword: password,
+      }),
+    onSuccess: (r) => {
+      toast.success(r.message || t("admin.users.createUser.done"));
+      qc.invalidateQueries({ queryKey: ["admin-users"] });
+      qc.invalidateQueries({ queryKey: ["admin-analytics"] });
+      setOpen(false);
+      setUserName("");
+      setEmail("");
+      setPassword("");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const inputCls =
+    "w-full rounded-xl border border-input bg-card/60 px-4 py-2.5 text-sm outline-none backdrop-blur-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/25";
+
+  return (
+    <>
+      <PillButton size="sm" showArrow={false} onClick={() => setOpen(true)}>
+        <UserPlus className="size-4" strokeWidth={1.8} />
+        {t("admin.users.createUser.cta")}
+      </PillButton>
+
+      <Dialog open={open} onOpenChange={(o) => !create.isPending && setOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("admin.users.createUser.title")}</DialogTitle>
+            <DialogDescription>{t("admin.users.createUser.sub")}</DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-2 space-y-3">
+            <div className="flex gap-2">
+              {(["Investor", "Innovator"] as const).map((ty) => (
+                <button
+                  key={ty}
+                  type="button"
+                  data-cursor="hover"
+                  onClick={() => setUserType(ty)}
+                  className={cn(
+                    "flex-1 rounded-xl border px-3 py-2.5 text-sm transition-colors",
+                    userType === ty
+                      ? "border-primary/50 bg-primary/[0.08] text-foreground"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {t(ty === "Investor" ? "profile.role.investor" : "profile.role.innovator")}
+                </button>
+              ))}
+            </div>
+            <input
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              placeholder={t("admin.users.createAdmin.name")}
+              maxLength={100}
+              className={inputCls}
+            />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={t("admin.users.createAdmin.email")}
+              dir="ltr"
+              className={inputCls}
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t("admin.users.createUser.passwordPlaceholder")}
+              dir="ltr"
+              minLength={10}
+              className={inputCls}
+            />
+            <p className="text-[11px] text-muted-foreground">{t("admin.users.createUser.passwordHint")}</p>
+          </div>
+
+          <div className="mt-4 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {t("form.cancel")}
+            </button>
+            <button
+              type="button"
+              disabled={!canSubmit || create.isPending}
+              onClick={() => create.mutate()}
+              className="gold-cta rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50"
+            >
+              {create.isPending ? t("admin.users.createAdmin.creating") : t("admin.users.createAdmin.submit")}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** Undefined = both. Any status filter is orthogonal to the role filter beside it. */
+const STATUSES = [undefined, false, true] as const;
+
 export default function AdminUsersPage() {
   const { t } = useLocale();
   const [search, setSearch] = useState("");
   const [type, setType] = useState("");
+  const [status, setStatus] = useState<boolean | undefined>(undefined);
   const [page, setPage] = useState(1);
   const debounced = useDebouncedValue(search, 300);
-  const { data, isLoading, isError, refetch } = useAdminUsers(debounced, type, page);
+  const { data, isLoading, isError, refetch } = useAdminUsers(debounced, type, page, status);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.totalCount / data.pageSize)) : 1;
 
@@ -292,7 +519,12 @@ export default function AdminUsersPage() {
         title={t("admin.users.title")}
         sub={t("admin.users.sub")}
         eyebrowKey="admin.sidebar.label"
-        action={<CreateAdminDialog />}
+        action={
+          <div className="flex gap-2">
+            <CreateUserDialog />
+            <CreateAdminDialog />
+          </div>
+        }
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -324,6 +556,25 @@ export default function AdminUsersPage() {
               )}
             >
               {ty === "" ? t("proj.filter.all") : t(ty === "Innovator" ? "profile.role.innovator" : ty === "Admin" ? "profile.role.admin" : "profile.role.investor")}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          {STATUSES.map((s) => (
+            <button
+              key={String(s)}
+              type="button"
+              data-cursor="hover"
+              onClick={() => {
+                setStatus(s);
+                setPage(1);
+              }}
+              className={cn(
+                "rounded-full border px-3.5 py-2 text-xs transition-colors",
+                status === s ? "border-primary/50 bg-primary/[0.08] text-foreground" : "border-border/70 text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {s === undefined ? t("proj.filter.all") : s ? t("admin.users.suspendedBadge") : t("admin.users.active")}
             </button>
           ))}
         </div>

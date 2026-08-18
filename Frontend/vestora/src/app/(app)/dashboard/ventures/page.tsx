@@ -12,6 +12,7 @@ import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
 import { CloseRoundDialog } from "@/components/projects/close-round-dialog";
 import { PillButton } from "@/components/ui/pill-button";
 import { ErrorState } from "@/components/ui/error-state";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -273,23 +274,25 @@ export default function DashboardVenturesPage() {
                         and became a deliberate action with a confirmation. */}
                     {p.moderationStatus === "Approved" && !p.roundClosedAtUtc && (
                       <>
-                        <label>
-                          <span className="sr-only">{t("life.change")}</span>
-                          <select
-                            value={p.lifecycleStatus === "Paused" ? "Paused" : "Active"}
+                        <Select
+                          value={p.lifecycleStatus === "Paused" ? "Paused" : "Active"}
+                          onValueChange={(v) =>
+                            lifecycle.mutate({ id: p.id, status: v as "Active" | "Paused" })
+                          }
+                        >
+                          <SelectTrigger
+                            size="sm"
                             disabled={lifecycle.isPending}
-                            onChange={(e) =>
-                              lifecycle.mutate({
-                                id: p.id,
-                                status: e.target.value as "Active" | "Paused",
-                              })
-                            }
-                            className="h-9 rounded-full border border-border bg-card/60 px-3 text-xs text-foreground outline-none transition-colors focus-visible:border-primary/60 disabled:opacity-60"
+                            aria-label={t("life.change")}
+                            className="w-auto rounded-full px-3 text-xs"
                           >
-                            <option value="Active">{t("life.active")}</option>
-                            <option value="Paused">{t("life.paused")}</option>
-                          </select>
-                        </label>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Active">{t("life.active")}</SelectItem>
+                            <SelectItem value="Paused">{t("life.paused")}</SelectItem>
+                          </SelectContent>
+                        </Select>
 
                         <button
                           type="button"

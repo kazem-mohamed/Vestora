@@ -262,9 +262,13 @@ function InvestorFunnel({ items }: { items: PipelineItem[] }) {
     }).length;
   };
 
-  const steps = FUNNEL_STAGES.map((stage) => ({ stage, count: reachedAtLeast(stage) }));
+  // "Funded" is a step in this funnel, not a PipelineStage — it has no entry in
+  // STAGE_LABEL_KEY, so it carries its own label key rather than falling through
+  // that lookup's "stage.new" default and silently mislabelling the last row.
+  const steps: { stage: PipelineStage | "Funded"; count: number; labelKey?: string }[] =
+    FUNNEL_STAGES.map((stage) => ({ stage, count: reachedAtLeast(stage) }));
   const funded = items.filter((i) => (i.fundedAmount ?? 0) > 0).length;
-  steps.push({ stage: "Funded" as PipelineStage, count: funded });
+  steps.push({ stage: "Funded", count: funded, labelKey: "fund.word.funded" });
 
   const widest = Math.max(1, ...steps.map((s) => s.count));
   if (widest === 0) return null;
@@ -277,7 +281,9 @@ function InvestorFunnel({ items }: { items: PipelineItem[] }) {
           return (
             <li key={s.stage}>
               <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="font-medium">{t(STAGE_LABEL_KEY[s.stage] ?? "stage.new")}</span>
+                <span className="font-medium">
+                  {t(s.labelKey ?? STAGE_LABEL_KEY[s.stage as PipelineStage] ?? "stage.new")}
+                </span>
                 <span className="flex items-baseline gap-2">
                   <span className="font-numeric text-foreground">{s.count}</span>
                   {lost > 0 && (
@@ -289,7 +295,7 @@ function InvestorFunnel({ items }: { items: PipelineItem[] }) {
                 <span
                   className={cn(
                     "block h-full rounded-full",
-                    s.stage === ("Funded" as PipelineStage) ? "bg-primary" : "bg-bronze"
+                    s.stage === "Funded" ? "bg-primary" : "bg-bronze"
                   )}
                   style={{ width: `${Math.round((s.count / widest) * 100)}%` }}
                 />

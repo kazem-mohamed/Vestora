@@ -33,6 +33,16 @@ namespace MyAppApi.Controllers
             return int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         }
 
+        /// <summary>
+        /// Whether the caller is the one admin allowed to create or remove other admins.
+        /// Read fresh rather than from the JWT, so revoking primary status takes effect
+        /// on the caller's very next request instead of waiting for their token to expire.
+        /// </summary>
+        private async Task<bool> IsPrimaryAdminAsync() =>
+            await _context.Users.AsNoTracking()
+                .OfType<Admin>()
+                .AnyAsync(a => a.Id == GetCurrentUserId() && a.IsPrimaryAdmin);
+
         // One-time creation of the first administrator, guarded by a configured secret.
         // Becomes permanently unavailable once any administrator exists.
         [HttpPost("bootstrap")]
@@ -70,17 +80,25 @@ namespace MyAppApi.Controllers
             }
 
             var admin = CreateAdminUser(dto.UserName, normalizedEmail, dto.Password);
+            // The very first admin has nobody above them to grant the flag — it can only
+            // start here.
+            admin.IsPrimaryAdmin = true;
             _context.Users.Add(admin);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("First administrator account created via bootstrap (user {UserId}).", admin.Id);
+            _logger.LogInformation("First administrator account created via bootstrap (user {UserId}), set as primary.", admin.Id);
             return Ok(new { message = "Administrator account created. You can now log in." });
         }
 
-        // Create additional administrators (authenticated administrators only).
+        // Create additional administrators. Restricted to the primary admin: any admin
+        // being able to mint more admins meant the actual membership of "who can do
+        // anything on this platform" was decided by whoever happened to click first.
         [HttpPost("admins")]
         public async Task<IActionResult> CreateAdmin([FromBody] CreateAdminDto dto)
         {
+            if (!await IsPrimaryAdminAsync())
+                return Forbid();
+
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
@@ -107,11 +125,127 @@ namespace MyAppApi.Controllers
             return Ok(new { message = "Administrator account created.", userId = admin.Id });
         }
 
+        /// <summary>
+        /// Hands the primary flag to another admin. Only the current primary may do this,
+        /// and it moves rather than copies — exactly one admin holds it at a time, the
+        /// same invariant the migration establishes when the column is first added.
+        /// </summary>
+        [HttpPost("admins/{userId}/make-primary")]
+        public async Task<IActionResult> MakePrimaryAdmin(int userId)
+        {
+            if (!await IsPrimaryAdminAsync())
+                return Forbid();
+
+            var target = await _context.Users.OfType<Admin>().FirstOrDefaultAsync(a => a.Id == userId);
+            if (target == null)
+                return NotFound(new { message = "Administrator not found." });
+
+            var current = await _context.Users.OfType<Admin>()
+                .FirstOrDefaultAsync(a => a.Id == GetCurrentUserId());
+
+            var before = new { Previous = current?.UserName, New = target.UserName };
+            if (current != null) current.IsPrimaryAdmin = false;
+            target.IsPrimaryAdmin = true;
+
+            _context.Audit(GetCurrentUserId(), "TransferPrimaryAdmin", "User", target.Id,
+                details: $"Primary admin moved to '{target.UserName}'.",
+                before: before,
+                after: new { Primary = target.UserName },
+                http: HttpContext);
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = $"'{target.UserName}' is now the primary admin." });
+        }
+
+        /// <summary>
+        /// Creates an Investor or Innovator account on someone's behalf, with a
+        /// temporary password the admin sets. The account can sign in immediately — the
+        /// forced change on first login is what stops the temporary password from
+        /// becoming the permanent one.
+        /// </summary>
+        [HttpPost("users")]
+        public async Task<IActionResult> CreateUser([FromBody] AdminCreateUserDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+            if (await _context.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail))
+                return BadRequest(new { message = "A user with this email already exists." });
+
+            User user = dto.UserType.Trim().ToLowerInvariant() switch
+            {
+                "investor" => new Investor { UserType = "Investor" },
+                "innovator" => new Innovator { UserType = "Innovator" },
+                _ => null!,
+            };
+            if (user == null)
+                return BadRequest(new { message = "UserType must be 'Investor' or 'Innovator'. Admins are created through /admins." });
+
+            user.UserName = dto.UserName.Trim();
+            user.Email = normalizedEmail;
+            user.Password = BCrypt.Net.BCrypt.HashPassword(dto.TemporaryPassword);
+            user.UniqueNumber = Guid.NewGuid().ToString("N")[..10];
+            user.CreatedAtUtc = DateTime.UtcNow;
+            // An admin vouching for the account stands in for the email-verification
+            // step a self-registered one goes through.
+            user.IsEmailVerified = true;
+            user.EmailVerifiedAtUtc = DateTime.UtcNow;
+            user.MustChangePassword = true;
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            _context.Audit(GetCurrentUserId(), "CreateUser", "User", user.Id,
+                details: $"Created {user.UserType.ToLowerInvariant()} '{user.UserName}'.",
+                after: new { user.UserName, user.Email, user.UserType },
+                http: HttpContext);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Account created.", userId = user.Id });
+        }
+
+        /// <summary>
+        /// Corrects a user's own details. Never their role — see AdminEditUserDto.
+        /// </summary>
+        [HttpPut("users/{userId}")]
+        public async Task<IActionResult> EditUser(int userId, [FromBody] AdminEditUserDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
+                return NotFound(new { message = "User not found." });
+
+            var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+            if (!string.Equals(normalizedEmail, user.Email.ToLowerInvariant(), StringComparison.Ordinal) &&
+                await _context.Users.AnyAsync(u => u.Id != userId && u.Email.ToLower() == normalizedEmail))
+            {
+                return BadRequest(new { message = "That email is already in use." });
+            }
+
+            var before = new { user.UserName, user.Email, user.Phone };
+            user.UserName = dto.UserName.Trim();
+            user.Email = normalizedEmail;
+            user.Phone = string.IsNullOrWhiteSpace(dto.Phone) ? null : dto.Phone.Trim();
+
+            _context.Audit(GetCurrentUserId(), "EditUser", "User", userId,
+                details: $"Edited '{user.UserName}'.",
+                before: before,
+                after: new { user.UserName, user.Email, user.Phone },
+                http: HttpContext);
+
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Account updated." });
+        }
+
         // Paged, searchable list of all users for moderation.
         [HttpGet("users")]
         public async Task<IActionResult> GetUsers(
             [FromQuery] string? search,
             [FromQuery] string? userType,
+            [FromQuery] bool? isSuspended,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
@@ -132,6 +266,9 @@ namespace MyAppApi.Controllers
                 query = query.Where(u => u.UserType == type);
             }
 
+            if (isSuspended is bool suspended)
+                query = query.Where(u => u.IsSuspended == suspended);
+
             var totalCount = await query.CountAsync();
             var items = await query
                 .OrderBy(u => u.Id)
@@ -142,6 +279,7 @@ namespace MyAppApi.Controllers
                     Id = u.Id,
                     UserName = u.UserName,
                     Email = u.Email,
+                    IsPrimaryAdmin = (u as Admin) != null && (u as Admin)!.IsPrimaryAdmin,
                     UserType = u.UserType,
                     IsEmailVerified = u.IsEmailVerified,
                     IsSuspended = u.IsSuspended,
@@ -177,7 +315,13 @@ namespace MyAppApi.Controllers
 
             if (user.UserType == "Admin")
             {
-                return BadRequest(new { message = "Administrators cannot be deleted from here." });
+                // TPH already materialised this row as an Admin — the discriminator
+                // decided the CLR type, not this cast.
+                if ((user as Admin)?.IsPrimaryAdmin == true)
+                    return BadRequest(new { message = "The primary admin cannot be deleted. Transfer primary status first." });
+
+                if (!await IsPrimaryAdminAsync())
+                    return Forbid();
             }
 
             var before = new { user.IsDeleted };

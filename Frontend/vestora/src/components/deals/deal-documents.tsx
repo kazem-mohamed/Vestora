@@ -50,12 +50,15 @@ const TEMPLATES: Record<"ToFounder" | "ToInvestor", string[]> = {
  */
 export function DealDocuments({
   investmentId,
+  projectId,
   documents,
   requests,
   canRequest,
   viewerRole,
 }: {
   investmentId: number;
+  /** Where a founder's new upload is filed — the venture's own data room. */
+  projectId: number;
   documents: DealDocument[];
   requests: DealDocumentRequest[];
   /** Either party may ask, once the founder has accepted the request. */
@@ -119,6 +122,23 @@ export function DealDocuments({
       dealsApi.uploadDocumentResponse(input.id, input.file),
     onSuccess: () => {
       toast.success(t("deal.doc.attached"));
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // The founder's answer is a link into the data room, not a file on the request — so a
+  // brand-new document goes to the venture's library first. It lands there as a real
+  // document (visible on future requests too), then this same upload auto-selects it,
+  // so a founder with nothing published yet is never stuck looking at an empty picker.
+  const [uploadingNew, setUploadingNew] = useState(false);
+  const uploadToLibrary = useMutation({
+    mutationFn: (file: File) =>
+      storyApi.uploadDocument(projectId, file, file.name.replace(/\.[^.]+$/, ""), "Backers"),
+    onSuccess: (r) => {
+      toast.success(t("deal.doc.attached"));
+      setPickedDoc(r.documentId);
+      setUploadingNew(false);
       invalidate();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -374,11 +394,11 @@ export function DealDocuments({
                             {t("deal.doc.pickDocument")}
                           </p>
 
-                          {documents.length === 0 ? (
+                          {documents.length === 0 && !uploadingNew ? (
                             <p className="mt-2 text-xs italic text-muted-foreground/70">
                               {t("deal.doc.noneToAttach")}
                             </p>
-                          ) : (
+                          ) : documents.length > 0 ? (
                             <div className="mt-2 flex flex-wrap gap-2">
                               {documents.map((d) => (
                             <button
@@ -399,6 +419,32 @@ export function DealDocuments({
                             </button>
                               ))}
                             </div>
+                          ) : null}
+
+                          {/* Nothing in the library matches, or nothing is there yet — the
+                              founder was previously stuck here with no way forward besides
+                              leaving to publish a document first and coming back. */}
+                          {uploadingNew ? (
+                            <input
+                              type="file"
+                              disabled={uploadToLibrary.isPending}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) uploadToLibrary.mutate(file);
+                              }}
+                              aria-label={t("deal.doc.uploadNew")}
+                              className="mt-2 block w-full text-xs text-muted-foreground file:me-3 file:rounded-full file:border file:border-border file:bg-transparent file:px-4 file:py-1.5 file:text-xs file:text-foreground"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              data-cursor="hover"
+                              onClick={() => setUploadingNew(true)}
+                              className="mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-full border border-dashed border-border px-3 text-[11.5px] text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                            >
+                              <Plus className="size-3" strokeWidth={2.2} />
+                              {t("deal.doc.uploadNew")}
+                            </button>
                           )}
                         </>
                       )}

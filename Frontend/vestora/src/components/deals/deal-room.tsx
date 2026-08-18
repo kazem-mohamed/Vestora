@@ -337,21 +337,17 @@ export function DealRoom({ investmentId }: { investmentId: number }) {
                 {t("deal.viewProfile")}
               </Link>
 
-              {/* Only the founder advances the relationship, and only forward. */}
+              {/* Only the founder advances the relationship, and only forward.
+                  Committed specifically claims "both sides agreed terms" — the button is
+                  disabled rather than hidden when that isn't true yet, so the founder sees
+                  the requirement instead of wondering where the control went. */}
               {isFounder && !terminal && nextStage && (
-                <button
-                  type="button"
-                  data-cursor="hover"
-                  disabled={setStage.isPending}
+                <NextStageButton
+                  nextStage={nextStage}
+                  blocked={nextStage === "Committed" && !deal.agreedTerms}
+                  pending={setStage.isPending}
                   onClick={() => setStage.mutate(nextStage)}
-                  className={cn(
-                    "gold-cta inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground",
-                    "transition-opacity duration-300 hover:opacity-90 disabled:opacity-50"
-                  )}
-                >
-                  <CheckCircle2 className="size-4" strokeWidth={1.9} />
-                  {t("deal.advanceTo").replace("{stage}", t(STAGE_LABEL_KEY[nextStage as PipelineStage] ?? "stage.new"))}
-                </button>
+                />
               )}
             </div>
           </div>
@@ -383,6 +379,7 @@ export function DealRoom({ investmentId }: { investmentId: number }) {
 
           <DealDocuments
             investmentId={investmentId}
+            projectId={deal.projectId}
             documents={deal.documents}
             requests={deal.documentRequests}
             canRequest={
@@ -406,7 +403,7 @@ export function DealRoom({ investmentId }: { investmentId: number }) {
             >
               {t("deal.history")}
             </h2>
-            <div className="mt-5 max-h-[32rem] overflow-y-auto pe-1">
+            <div className="themed-scroll mt-5 max-h-[32rem] overflow-y-auto pe-1">
               <DealTimeline events={deal.timeline} />
             </div>
           </section>
@@ -549,6 +546,59 @@ function NextSteps({ steps }: { steps: DealNextStep[] }) {
         </ul>
       </div>
     </motion.section>
+  );
+}
+
+/**
+ * Advances the relationship, or explains why it can't yet.
+ *
+ * A disabled button with no reason reads as broken. `blocked` is currently only true for
+ * the one stage the product makes a specific claim about — Committed means terms were
+ * agreed, and TermSheet exists to make that provable rather than self-reported.
+ */
+function NextStageButton({
+  nextStage,
+  blocked,
+  pending,
+  onClick,
+}: {
+  nextStage: string;
+  blocked: boolean;
+  pending: boolean;
+  onClick: () => void;
+}) {
+  const { t } = useLocale();
+  const label = t("deal.advanceTo").replace(
+    "{stage}",
+    t(STAGE_LABEL_KEY[nextStage as PipelineStage] ?? "stage.new")
+  );
+
+  if (blocked) {
+    return (
+      <span
+        title={t("deal.advance.needsTerms")}
+        className="inline-flex min-h-11 cursor-not-allowed items-center gap-2 rounded-full border border-border px-5 text-sm text-muted-foreground/70"
+      >
+        <CheckCircle2 className="size-4" strokeWidth={1.9} />
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      data-cursor="hover"
+      disabled={pending}
+      onClick={onClick}
+      className={cn(
+        "gold-cta inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground",
+        "transition-opacity duration-300 hover:opacity-90 disabled:opacity-50"
+      )}
+    >
+      <CheckCircle2 className="size-4" strokeWidth={1.9} />
+      {label}
+    </button>
   );
 }
 

@@ -14,6 +14,8 @@ export interface LoginResponse {
   userEmail: string;
   /** Account-level, not per-browser: false sends the user to /onboarding. */
   hasOnboarded: boolean;
+  /** Set when an admin created this account and chose its first password. */
+  mustChangePassword: boolean;
 }
 
 export interface ApiMessage {
@@ -610,6 +612,8 @@ export interface AdminUser {
   isEmailVerified: boolean;
   isSuspended: boolean;
   suspensionReason: string | null;
+  /** Only meaningful when userType is "Admin". */
+  isPrimaryAdmin: boolean;
 }
 
 export interface AdminAnalytics {

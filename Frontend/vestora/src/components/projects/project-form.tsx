@@ -9,6 +9,7 @@ import { z } from "zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Combobox } from "@/components/ui/combobox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PillButton } from "@/components/ui/pill-button";
 import { SectionLabel } from "@/components/ui/section-label";
 import { ImageDropzone, type StagedFile } from "@/components/projects/image-dropzone";
@@ -435,14 +436,24 @@ export function ProjectForm({
             </Field>
             <div className="grid gap-6 sm:grid-cols-2">
               <Field label={t("form.stage")} htmlFor="stage" error={errors.stage?.message}>
-                <select id="stage" className={inputCls} {...register("stage")}>
-                  <option value="">{t("form.combo.ph")}</option>
-                  {STAGES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+                <Controller
+                  control={control}
+                  name="stage"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="stage" className="h-12 rounded-xl bg-card/60 px-4">
+                        <SelectValue placeholder={t("form.combo.ph")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STAGES.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </Field>
               <Field label={t("form.valuation")} htmlFor="valuation" error={errors.valuation?.message}>
                 <input

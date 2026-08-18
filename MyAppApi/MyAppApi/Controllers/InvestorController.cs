@@ -498,6 +498,21 @@ namespace MyAppApi.Controllers
                     return BadRequest(new { Message = "This investment has been funded and cannot be declined. Request a refund instead." });
             }
 
+            // Committed is documented as "both sides agreed terms" — TermSheet exists
+            // specifically to make that claim provable instead of self-reported. A
+            // founder could previously reach this stage by clicking through from New six
+            // times with nothing on the table; the button worked, the claim was empty.
+            if (dto.Stage == PipelineStages.Committed)
+            {
+                var hasAgreedTerms = await _context.TermSheets
+                    .AnyAsync(s => s.InvestmentId == investment.Id && s.Status == TermSheetStatus.Accepted);
+                if (!hasAgreedTerms)
+                    return BadRequest(new
+                    {
+                        Message = "Committed means both sides agreed terms. Propose and accept a term sheet first."
+                    });
+            }
+
             // Moving a pending relationship past Approved commits its amount, so the
             // round's capacity is checked here for the same reason it is checked on the
             // approve endpoint: several requests can each fit an empty round, and

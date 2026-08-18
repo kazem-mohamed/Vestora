@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import { ErrorState } from "@/components/ui/error-state";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -350,22 +351,25 @@ export default function AdminRevenuePage() {
               />
             </div>
 
-            <select
+            <Select
               value={status}
-              onChange={(e) => {
-                setStatus(e.target.value as PaymentStatus | "");
+              onValueChange={(v) => {
+                setStatus((v as PaymentStatus | "") ?? "");
                 setPage(1);
               }}
-              aria-label={t("pay.col.status")}
-              className="min-h-10 rounded-full border border-input bg-card/50 px-4 text-xs outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/25"
             >
-              <option value="">{t("adm.rev.filterAll")}</option>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {t(`pay.status.${s}`)}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label={t("pay.col.status")} className="min-h-10 w-auto rounded-full px-4 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">{t("adm.rev.filterAll")}</SelectItem>
+                {STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {t(`pay.status.${s}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
