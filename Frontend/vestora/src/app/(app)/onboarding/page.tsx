@@ -9,16 +9,15 @@ import {
   useReducedMotion,
   useSpring,
 } from "framer-motion";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Camera, Check, Link2 } from "lucide-react";
 import { LinkedinIcon } from "@/components/brand/social-icons";
 import { PillButton } from "@/components/ui/pill-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DepthLayer, DepthScene, useSpecular } from "@/components/motion/depth-scene";
-import { projectsApi } from "@/lib/api/projects";
+import { PROJECT_CATEGORIES, categoryLabelKey } from "@/lib/config/categories";
 import { usersApi, type UpdateProfileInput } from "@/lib/api/users";
 import { useAuthStore } from "@/lib/auth/store";
 import { useLocale } from "@/lib/i18n/locale";
@@ -67,13 +66,6 @@ export default function OnboardingPage() {
   const sx = useSpring(px, { stiffness: 70, damping: 22, mass: 0.7 });
   const sy = useSpring(py, { stiffness: 70, damping: 22, mass: 0.7 });
   const specular = useSpecular(sx, sy);
-
-  const filtersQuery = useQuery({
-    queryKey: ["project-filters"],
-    queryFn: () => projectsApi.filters(),
-    enabled: isInvestor,
-    staleTime: 5 * 60 * 1000,
-  });
 
   useEffect(() => {
     return () => {
@@ -183,15 +175,12 @@ export default function OnboardingPage() {
                     {step === 1 &&
                       (isInvestor ? (
                         <InterestsStep
-                          industries={filtersQuery.data?.industries ?? []}
-                          loading={filtersQuery.isPending}
-                          failed={filtersQuery.isError}
                           selected={selected}
-                          onToggle={(industry) =>
+                          onToggle={(category) =>
                             setSelected((prev) =>
-                              prev.includes(industry)
-                                ? prev.filter((i) => i !== industry)
-                                : [...prev, industry]
+                              prev.includes(category)
+                                ? prev.filter((i) => i !== category)
+                                : [...prev, category]
                             )
                           }
                           t={t}
@@ -377,18 +366,12 @@ function WelcomeStep({
 }
 
 function InterestsStep({
-  industries,
-  loading,
-  failed,
   selected,
   onToggle,
   t,
 }: {
-  industries: string[];
-  loading: boolean;
-  failed: boolean;
   selected: string[];
-  onToggle: (industry: string) => void;
+  onToggle: (category: string) => void;
   t: (k: string) => string;
 }) {
   return (
@@ -398,39 +381,31 @@ function InterestsStep({
         {t("onboard.investor.why")}
       </p>
 
+      {/* The same closed category list a founder picks from — sourced statically
+          rather than from live project data, which used to mean the list an
+          investor saw here was whatever happened to already exist in the
+          database (empty for a platform with nothing in it yet). */}
       <div className="mt-7 flex flex-wrap gap-2.5">
-        {loading &&
-          Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-28 rounded-full" />
-          ))}
-
-        {!loading &&
-          industries.map((industry) => {
-            const active = selected.includes(industry);
-            return (
-              <button
-                key={industry}
-                type="button"
-                data-cursor="hover"
-                aria-pressed={active}
-                onClick={() => onToggle(industry)}
-                className={cn(
-                  "rounded-full border px-4 py-2 text-sm font-medium transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                  active
-                    ? "border-primary bg-primary/12 text-foreground shadow-[0_6px_18px_-12px_var(--primary)]"
-                    : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                )}
-              >
-                {industry}
-              </button>
-            );
-          })}
-
-        {!loading && industries.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            {failed ? t("onboard.investor.failed") : t("onboard.investor.empty")}
-          </p>
-        )}
+        {PROJECT_CATEGORIES.map((key) => {
+          const active = selected.includes(key);
+          return (
+            <button
+              key={key}
+              type="button"
+              data-cursor="hover"
+              aria-pressed={active}
+              onClick={() => onToggle(key)}
+              className={cn(
+                "rounded-full border px-4 py-2 text-sm font-medium transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                active
+                  ? "border-primary bg-primary/12 text-foreground shadow-[0_6px_18px_-12px_var(--primary)]"
+                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              )}
+            >
+              {t(categoryLabelKey(key))}
+            </button>
+          );
+        })}
       </div>
 
       <p className="mt-6 text-sm text-muted-foreground">

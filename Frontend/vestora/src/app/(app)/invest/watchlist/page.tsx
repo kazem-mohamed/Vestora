@@ -10,8 +10,9 @@ import { ErrorState } from "@/components/ui/error-state";
 import { BookmarkButton } from "@/components/projects/bookmark-button";
 import { EASE, VentureThumb, compactUsd } from "@/components/invest/invest-primitives";
 import { bookmarksApi } from "@/lib/api/bookmarks";
-import { useInvestorDashboard } from "@/lib/hooks/use-investor-dashboard";
 import { useAuthStore } from "@/lib/auth/store";
+import { categoryLabelKey } from "@/lib/config/categories";
+import { useInvestorDashboard } from "@/lib/hooks/use-investor-dashboard";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 
@@ -93,7 +94,7 @@ export default function InvestWatchlistPage() {
                     )}
                   </div>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                    {p.category && <span>{p.category}</span>}
+                    {p.category && <span>{t(categoryLabelKey(p.category))}</span>}
                     {p.category && p.location && <span aria-hidden>·</span>}
                     {p.location && <span>{p.location}</span>}
                   </p>

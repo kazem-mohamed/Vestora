@@ -140,7 +140,7 @@ export const SPOTLIGHT_REASON_KEY: Record<"closing" | "watched" | "fresh", strin
   fresh: "browse.spotlight.fresh",
 };
 
-/** Sector shown on a card: the more specific of the two the founder filled in. */
+/** The category shown on a card. */
 export function sectorOf(p: ProjectCard): string | null {
-  return p.category || p.industry || null;
+  return p.category || null;
 }

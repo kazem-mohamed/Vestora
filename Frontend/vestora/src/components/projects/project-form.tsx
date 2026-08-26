@@ -14,7 +14,7 @@ import { PillButton } from "@/components/ui/pill-button";
 import { SectionLabel } from "@/components/ui/section-label";
 import { ImageDropzone, type StagedFile } from "@/components/projects/image-dropzone";
 import { projectImageUrl, projectsApi, type ProjectInput } from "@/lib/api/projects";
-import { mergeCategories } from "@/lib/config/categories";
+import { PROJECT_CATEGORIES, categoryLabelKey } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/types/api";
@@ -28,7 +28,6 @@ function useSchema() {
         description: z.string().trim().min(1, t("valid.min")),
         topic: z.string().trim().max(100, t("valid.max100")),
         category: z.string().trim().max(100, t("valid.max100")),
-        industry: z.string().trim().max(100, t("valid.max100")),
         location: z.string().trim().max(150, t("valid.max150")),
         videoUrl: z.union([z.literal(""), z.string().trim().url(t("valid.url"))]),
         investmentNeeded: z
@@ -56,7 +55,6 @@ type FormValues = {
   description: string;
   topic: string;
   category: string;
-  industry: string;
   location: string;
   videoUrl: string;
   investmentNeeded: string;
@@ -74,7 +72,6 @@ function toProjectInput(values: FormValues): ProjectInput {
     description: values.description,
     topic: values.topic || null,
     category: values.category || null,
-    industry: values.industry || null,
     location: values.location || null,
     videoUrl: values.videoUrl || null,
     investmentNeeded: Number(values.investmentNeeded),
@@ -235,7 +232,6 @@ export function ProjectForm({
       description: project?.description ?? "",
       topic: project?.topic ?? "",
       category: project?.category ?? "",
-      industry: project?.industry ?? "",
       location: project?.location ?? "",
       videoUrl: project?.videoUrl ?? "",
       investmentNeeded: project?.investmentNeeded != null ? String(project.investmentNeeded) : "",
@@ -375,49 +371,46 @@ export function ProjectForm({
           <section className="space-y-6">
             <SectionLabel index={2}>{t("form.section.classification")}</SectionLabel>
             <div className="grid gap-6 sm:grid-cols-2">
+              {/* A closed list, not a Combobox: Category used to be free text, which
+                  let three founders type the same business three different ways
+                  ("Fashion", "Apparel", "Clothing") and rendered as raw English on
+                  an Arabic screen regardless. One list, translated, replaces both
+                  the old Category and Industry fields. */}
               <Field label={t("form.category")} error={errors.category?.message}>
                 <Controller
                   control={control}
                   name="category"
                   render={({ field }) => (
-                    <Combobox
-                      value={field.value}
-                      onChange={field.onChange}
-                      options={mergeCategories(filtersQuery.data?.categories)}
-                      placeholder={t("form.combo.ph")}
-                    />
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="category" className="h-12 rounded-xl bg-card/60 px-4">
+                        <SelectValue placeholder={t("form.category.ph")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROJECT_CATEGORIES.map((key) => (
+                          <SelectItem key={key} value={key}>
+                            {t(categoryLabelKey(key))}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
                 />
               </Field>
-              <Field label={t("form.industry")} error={errors.industry?.message}>
+              <Field label={t("form.location")} error={errors.location?.message}>
                 <Controller
                   control={control}
-                  name="industry"
+                  name="location"
                   render={({ field }) => (
                     <Combobox
                       value={field.value}
                       onChange={field.onChange}
-                      options={filtersQuery.data?.industries ?? []}
+                      options={filtersQuery.data?.locations ?? []}
                       placeholder={t("form.combo.ph")}
                     />
                   )}
                 />
               </Field>
             </div>
-            <Field label={t("form.location")} error={errors.location?.message}>
-              <Controller
-                control={control}
-                name="location"
-                render={({ field }) => (
-                  <Combobox
-                    value={field.value}
-                    onChange={field.onChange}
-                    options={filtersQuery.data?.locations ?? []}
-                    placeholder={t("form.combo.ph")}
-                  />
-                )}
-              />
-            </Field>
           </section>
 
           <section className="space-y-6">

@@ -64,7 +64,6 @@ namespace MyAppApi.Controllers
                                          VideoUrl = p.VideoUrl,
                                          Topic = p.Topic,
                                          Category = p.Category,
-                                         Industry = p.Industry,
                                          Location = p.Location,
                                          InvestmentNeeded = p.InvestmentNeeded,
                                          // Money fields are filled by ApplyFundingAsync below —
@@ -158,7 +157,7 @@ namespace MyAppApi.Controllers
             var current = await _dbContext.Projects
                 .AsNoTracking()
                 .Where(p => p.Id == projectId)
-                .Select(p => new { p.OwnerId, p.Category, p.Industry })
+                .Select(p => new { p.OwnerId, p.Category })
                 .FirstOrDefaultAsync();
 
             if (current == null) return NotFound(new { message = "Project not found." });
@@ -180,8 +179,7 @@ namespace MyAppApi.Controllers
                 var exclude = byFounder.Select(c => c.Id).ToList();
                 bySector = await pool
                     .Where(p => !exclude.Contains(p.Id) &&
-                                ((current.Category != null && p.Category == current.Category) ||
-                                 (current.Industry != null && p.Industry == current.Industry)))
+                                current.Category != null && p.Category == current.Category)
                     .OrderByDescending(p => p.Investments.Where(i => i.Status == "Approved").Select(i => i.InvestorId).Distinct().Count())
                     .ThenByDescending(p => p.CreatedDate)
                     .Take(take - byFounder.Count)
@@ -223,8 +221,8 @@ namespace MyAppApi.Controllers
 
         /// <summary>
         /// Applies the browse filters shared by the feed and the facet counts.
-        /// "sector" spans Category and Industry: the two are one concept to the
-        /// person browsing, even though the founder fills them in separately.
+        /// "sector" is the Category — Category and Industry used to be separate
+        /// fields the founder filled in independently; they are now one field.
         /// </summary>
         private static IQueryable<Project> ApplyBrowseFilters(
             IQueryable<Project> query, string? search, string? sector, string? location,
@@ -250,7 +248,6 @@ namespace MyAppApi.Controllers
                     " " + p.Name +
                     " " + (p.Topic ?? "") +
                     " " + (p.Category ?? "") +
-                    " " + (p.Industry ?? "") +
                     " " + (p.Location ?? "") +
                     " " + p.Owner.UserName + " ",
                     pattern, "\\"));
@@ -258,7 +255,7 @@ namespace MyAppApi.Controllers
 
             if (!string.IsNullOrWhiteSpace(sector))
             {
-                query = query.Where(p => p.Category == sector || p.Industry == sector);
+                query = query.Where(p => p.Category == sector);
             }
 
             if (!string.IsNullOrWhiteSpace(location))
@@ -376,15 +373,11 @@ namespace MyAppApi.Controllers
                 .Where(p => p.Category != null && p.Category != "")
                 .Select(p => p.Category!).Distinct().OrderBy(c => c).ToListAsync();
 
-            var industries = await _dbContext.Projects.AsNoTracking()
-                .Where(p => p.Industry != null && p.Industry != "")
-                .Select(p => p.Industry!).Distinct().OrderBy(i => i).ToListAsync();
-
             var locations = await _dbContext.Projects.AsNoTracking()
                 .Where(p => p.Location != null && p.Location != "")
                 .Select(p => p.Location!).Distinct().OrderBy(l => l).ToListAsync();
 
-            return Ok(new { categories, industries, locations });
+            return Ok(new { categories, locations });
         }
 
         /// <summary>
@@ -410,27 +403,13 @@ namespace MyAppApi.Controllers
 
             var forSector = ApplyBrowseFilters(VisibleProjects(), search, null, location, stage, commitment);
 
-            var categories = await forSector
+            var sectors = await forSector
                 .Where(p => p.Category != null && p.Category != "")
                 .GroupBy(p => p.Category!)
                 .Select(g => new FacetValueDto { Value = g.Key, Count = g.Count() })
-                .ToListAsync();
-
-            var industries = await forSector
-                .Where(p => p.Industry != null && p.Industry != "")
-                .GroupBy(p => p.Industry!)
-                .Select(g => new FacetValueDto { Value = g.Key, Count = g.Count() })
-                .ToListAsync();
-
-            // Category and Industry are one "sector" list to the browser; a venture
-            // tagged in both must not be counted twice.
-            var sectors = categories
-                .Concat(industries)
-                .GroupBy(f => f.Value)
-                .Select(g => new FacetValueDto { Value = g.Key, Count = g.Max(x => x.Count) })
                 .OrderByDescending(f => f.Count)
                 .ThenBy(f => f.Value)
-                .ToList();
+                .ToListAsync();
 
             var locations = await ApplyBrowseFilters(VisibleProjects(), search, sector, null, stage, commitment)
                 .Where(p => p.Location != null && p.Location != "")
@@ -470,7 +449,6 @@ namespace MyAppApi.Controllers
                     VideoUrl = p.VideoUrl,
                     Topic = p.Topic,
                     Category = p.Category,
-                    Industry = p.Industry,
                     Location = p.Location,
                     InvestmentNeeded = p.InvestmentNeeded,
                     // Funding figures are applied below, from FundingMath.
@@ -587,6 +565,11 @@ namespace MyAppApi.Controllers
                 return BadRequest(ModelState);
             }
 
+            if (!string.IsNullOrWhiteSpace(projectDto.Category) && !ProjectCategories.IsValid(projectDto.Category))
+            {
+                return BadRequest(new { message = "Unknown category." });
+            }
+
             if (!User.IsInRole("Innovator"))
             {
                 return Forbid();
@@ -602,7 +585,6 @@ namespace MyAppApi.Controllers
                     VideoUrl = projectDto.VideoUrl,
                     Topic = projectDto.Topic,
                     Category = projectDto.Category,
-                    Industry = projectDto.Industry,
                     Location = projectDto.Location,
                     InvestmentNeeded = projectDto.InvestmentNeeded,
                     Stage = projectDto.Stage,
@@ -654,12 +636,22 @@ namespace MyAppApi.Controllers
                 return Forbid();
             }
 
+            // Only enforce the closed key set when the category is actually changing.
+            // Projects created before this taxonomy existed carry old free-text values
+            // (e.g. "HealthTech") that are not valid keys — an edit to the description
+            // or the ask must not be blocked just because the category was never
+            // migrated. Picking a genuinely new value, though, has to be a real key.
+            if (projectDto.Category != project.Category &&
+                !string.IsNullOrWhiteSpace(projectDto.Category) && !ProjectCategories.IsValid(projectDto.Category))
+            {
+                return BadRequest(new { message = "Unknown category." });
+            }
+
             project.Name = projectDto.Name;
             project.Description = projectDto.Description;
             project.VideoUrl = projectDto.VideoUrl;
             project.Topic = projectDto.Topic;
             project.Category = projectDto.Category;
-            project.Industry = projectDto.Industry;
             project.Location = projectDto.Location;
             project.InvestmentNeeded = projectDto.InvestmentNeeded;
             project.Stage = projectDto.Stage;

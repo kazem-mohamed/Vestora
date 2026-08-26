@@ -194,11 +194,10 @@ namespace MyAppApi.Controllers
                 v = v.Where(p =>
                     EF.Functions.Like(p.Name, $"%{term}%") ||
                     (p.Topic != null && EF.Functions.Like(p.Topic, $"%{term}%")) ||
-                    (p.Category != null && EF.Functions.Like(p.Category, $"%{term}%")) ||
-                    (p.Industry != null && EF.Functions.Like(p.Industry, $"%{term}%")));
+                    (p.Category != null && EF.Functions.Like(p.Category, $"%{term}%")));
             }
             if (!string.IsNullOrWhiteSpace(s.Sector))
-                v = v.Where(p => p.Category == s.Sector || p.Industry == s.Sector);
+                v = v.Where(p => p.Category == s.Sector);
             if (!string.IsNullOrWhiteSpace(s.Location))
                 v = v.Where(p => p.Location == s.Location);
             if (!string.IsNullOrWhiteSpace(s.Stage))

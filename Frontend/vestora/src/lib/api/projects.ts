@@ -25,7 +25,6 @@ export interface ProjectListParams {
 /** Plain value lists for authoring surfaces (project form, onboarding). */
 export interface ProjectFilters {
   categories: string[];
-  industries: string[];
   locations: string[];
 }
 
@@ -35,7 +34,6 @@ export interface ProjectInput {
   videoUrl?: string | null;
   topic?: string | null;
   category?: string | null;
-  industry?: string | null;
   location?: string | null;
   investmentNeeded: number;
   stage?: string | null;

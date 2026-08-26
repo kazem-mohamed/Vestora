@@ -12,6 +12,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
+import { categoryLabelKey } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { DashboardActivity, TopVenture } from "@/lib/types/api";
@@ -105,7 +106,9 @@ export function TopVenturesTable({
                     </span>
                   )}
                 </span>
-                {v.category && <span className="text-[11px] text-muted-foreground">{v.category}</span>}
+                {v.category && (
+                  <span className="text-[11px] text-muted-foreground">{t(categoryLabelKey(v.category))}</span>
+                )}
               </Link>
 
               {/* Two layers on one track: settled money in front, commitments as

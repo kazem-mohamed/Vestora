@@ -23,6 +23,7 @@ import { FollowButton } from "@/components/profile/follow-button";
 import { FollowListModal, type FollowMode } from "@/components/profile/follow-list-modal";
 import { MessageLauncher } from "@/components/messages/message-launcher";
 import { avatarUrl, coverUrl } from "@/lib/api/users";
+import { categoryOrRawLabel } from "@/lib/config/categories";
 import { useAuthStore } from "@/lib/auth/store";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
@@ -416,7 +417,7 @@ export function ProfileHero({ profile }: { profile: PublicProfileDetail }) {
                       key={industry}
                       className="rounded-full border border-primary/30 bg-primary/[0.06] px-3 py-1 text-xs text-primary/90"
                     >
-                      {industry}
+                      {categoryOrRawLabel(industry, t)}
                     </span>
                   ))}
               </div>

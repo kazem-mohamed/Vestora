@@ -12,6 +12,7 @@ import {
 } from "framer-motion";
 import { ArrowUpRight, Check, Layers } from "lucide-react";
 import { avatarUrl } from "@/lib/api/users";
+import { categoryOrRawLabel } from "@/lib/config/categories";
 import { compactUsd } from "@/lib/format/money";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
@@ -244,7 +245,7 @@ export function InvestorPlate({
                   className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/[0.06] px-2.5 py-1 text-[11px] text-primary/90"
                 >
                   <Layers className="size-2.5" strokeWidth={2.2} />
-                  {s}
+                  {categoryOrRawLabel(s, t)}
                 </span>
               ))}
               {stated
@@ -256,7 +257,7 @@ export function InvestorPlate({
                     title={t("cap.sector.stated")}
                     className="rounded-full border border-dashed border-border px-2.5 py-1 text-[11px] text-muted-foreground"
                   >
-                    {s}
+                    {categoryOrRawLabel(s, t)}
                   </span>
                 ))}
             </div>

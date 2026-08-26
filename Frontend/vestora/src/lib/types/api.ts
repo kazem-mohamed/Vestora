@@ -386,7 +386,6 @@ export interface ProjectCard {
   name: string;
   topic: string | null;
   category: string | null;
-  industry: string | null;
   location: string | null;
   stage: string | null;
   investmentNeeded: number;
@@ -439,7 +438,6 @@ export interface Project {
   videoUrl: string | null;
   topic: string | null;
   category: string | null;
-  industry: string | null;
   location: string | null;
   investmentNeeded: number;
   /**
@@ -873,7 +871,6 @@ export interface BackedVenture {
   projectId: number;
   projectName: string;
   category: string | null;
-  industry: string | null;
   stage: string | null;
   founderId: number;
   founderName: string;
@@ -1257,7 +1254,6 @@ export interface PendingProject {
   description: string;
   topic: string | null;
   category: string | null;
-  industry: string | null;
   location: string | null;
   stage: string | null;
   investmentNeeded: number;

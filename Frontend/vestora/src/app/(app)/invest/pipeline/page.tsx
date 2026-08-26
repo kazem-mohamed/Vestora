@@ -20,8 +20,9 @@ import {
 } from "@/components/invest/invest-primitives";
 import { FundingStatePill } from "@/components/funding/funding-primitives";
 import { pipelineApi } from "@/lib/api/dashboard";
-import { useInvestorDashboard } from "@/lib/hooks/use-investor-dashboard";
 import { useAuthStore } from "@/lib/auth/store";
+import { categoryLabelKey } from "@/lib/config/categories";
+import { useInvestorDashboard } from "@/lib/hooks/use-investor-dashboard";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { PipelineItem, PipelineStage } from "@/lib/types/api";
@@ -115,7 +116,7 @@ function PipelineRow({ item, index }: { item: PipelineItem; index: number }) {
             {item.category && (
               <>
                 <span aria-hidden>·</span>
-                <span>{item.category}</span>
+                <span>{t(categoryLabelKey(item.category))}</span>
               </>
             )}
             <span aria-hidden>·</span>

@@ -12,6 +12,7 @@ import { Panel } from "@/components/dashboard/panel";
 import { ErrorState } from "@/components/ui/error-state";
 import { adminApi } from "@/lib/api/admin";
 import { projectImageUrl } from "@/lib/api/projects";
+import { categoryLabelKey } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { PendingProject } from "@/lib/types/api";
@@ -121,7 +122,7 @@ function Row({ p, index }: { p: PendingProject; index: number }) {
               <Link href={`/u/${p.ownerId}`} data-cursor="hover" className="hover:text-foreground">
                 {p.ownerName}
               </Link>
-              {p.category && <span> · {p.category}</span>}
+              {p.category && <span> · {t(categoryLabelKey(p.category))}</span>}
               {p.location && <span> · {p.location}</span>}
               {p.stage && <span> · {p.stage}</span>}
             </p>

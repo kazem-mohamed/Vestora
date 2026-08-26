@@ -5,7 +5,8 @@
     public class Investor : User
     {
         // Free-text, comma-separated (e.g. "FinTech, Healthcare, Climate Tech") —
-        // same convention as Project.Category/Industry, no separate tags table.
+        // unlike Project.Category (a closed key set), an investor's stated interests
+        // stay free text so a preference is never blocked by a missing category.
         [StringLength(500)]
         public string? PreferredIndustries { get; set; }
 

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { projectsApi, projectImageUrl } from "@/lib/api/projects";
 import { useAuthStore } from "@/lib/auth/store";
+import { categoryLabelKey } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/types/api";
@@ -207,7 +208,7 @@ export default function DashboardVenturesPage() {
                       <LifecycleBadge status={p.lifecycleStatus} />
                     </span>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                      {p.category && <span>{p.category}</span>}
+                      {p.category && <span>{t(categoryLabelKey(p.category))}</span>}
                       {p.category && <span aria-hidden>·</span>}
                       <span className="font-numeric">
                         {p.numberOfInvestors} {t("proj.card.investors")}

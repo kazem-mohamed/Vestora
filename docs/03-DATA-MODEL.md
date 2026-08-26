@@ -90,7 +90,7 @@ Discriminator column: **`UserType`** → `"Investor"` | `"Innovator"` | `"Admin"
 
 | Column | Type | Notes |
 |---|---|---|
-| `PreferredIndustries` | nvarchar(500)? | free-text CSV, same convention as `Project.Category` |
+| `PreferredIndustries` | nvarchar(500)? | free-text CSV; unlike `Project.Category` (a closed key set), an investor's stated interests stay free text |
 | `InvestmentThesis` | nvarchar(500)? | shown on profile and beside their request in the founder's pipeline |
 | `TicketMin` · `TicketMax` | decimal(18,2)? | both optional and independent |
 | `ListedInDirectory` | bool (default true) | **indexed**; false hides them from `/investors` but keeps the profile reachable by link |
@@ -130,7 +130,8 @@ Event types written by `AuthService` include login success/failure, lockout, and
 | `Name` | nvarchar(100) | required |
 | `Description` | nvarchar(max) | required |
 | `VideoUrl` | string? | `[Url]` |
-| `Topic` · `Category` · `Industry` | nvarchar(100)? | free text |
+| `Topic` | nvarchar(100)? | free text |
+| `Category` | nvarchar(100)? | closed key set — see `ProjectCategories.cs` (backend) / `categories.ts` (frontend), mirrored. Replaced the old free-text Category + Industry pair; `Industry` was dropped by the `RemoveProjectIndustry` migration |
 | `Location` | nvarchar(150)? | |
 | `InvestmentNeeded` | **decimal(18,2)** required | the round goal |
 | `CreatedDate` | datetime2 | |

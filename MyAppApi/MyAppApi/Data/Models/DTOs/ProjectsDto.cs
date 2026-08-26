@@ -14,8 +14,6 @@ namespace MyAppApi.Data.Models.DTOs
 
         public string? Category { get; set; }
 
-        public string? Industry { get; set; }
-
         public string? Location { get; set; }
 
         public decimal InvestmentNeeded { get; set; }

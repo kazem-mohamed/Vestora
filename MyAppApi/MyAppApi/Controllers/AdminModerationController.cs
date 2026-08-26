@@ -54,7 +54,6 @@ namespace MyAppApi.Controllers
                     p.Description,
                     p.Topic,
                     p.Category,
-                    p.Industry,
                     p.Location,
                     p.Stage,
                     p.InvestmentNeeded,

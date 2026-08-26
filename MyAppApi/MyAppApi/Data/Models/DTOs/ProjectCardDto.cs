@@ -19,8 +19,6 @@ namespace MyAppApi.Data.Models.DTOs
 
         public string? Category { get; set; }
 
-        public string? Industry { get; set; }
-
         public string? Location { get; set; }
 
         /// <summary>Idea / Pre-seed / Seed / Series A / Growth — the investor's first filter.</summary>

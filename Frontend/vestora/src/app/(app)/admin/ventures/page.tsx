@@ -14,6 +14,7 @@ import { PillButton } from "@/components/ui/pill-button";
 import { SectionLabel } from "@/components/ui/section-label";
 import { adminApi } from "@/lib/api/admin";
 import { projectsApi, projectImageUrl } from "@/lib/api/projects";
+import { categoryLabelKey } from "@/lib/config/categories";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
@@ -66,7 +67,7 @@ function PendingRow({ p, index }: { p: PendingProject; index: number }) {
         <p className="truncate text-sm font-semibold">{p.name}</p>
         <p className="truncate text-xs text-muted-foreground">
           <Link href={`/u/${p.ownerId}`} data-cursor="hover" className="hover:text-foreground">{p.ownerName}</Link>
-          {p.category && <span> · {p.category}</span>}
+          {p.category && <span> · {t(categoryLabelKey(p.category))}</span>}
           {p.stage && <span> · {p.stage}</span>}
           <span> · {compactUsd(p.investmentNeeded)}</span>
         </p>
@@ -184,7 +185,7 @@ function Row({ p, index }: { p: ProjectCard; index: number }) {
         </Link>
         <p className="truncate text-xs text-muted-foreground">
           <Link href={`/u/${p.ownerId}`} data-cursor="hover" className="hover:text-foreground">{p.ownerName}</Link>
-          {p.category && <span> · {p.category}</span>}
+          {p.category && <span> · {t(categoryLabelKey(p.category))}</span>}
         </p>
       </div>
 

@@ -29,6 +29,7 @@ import {
 } from "@/components/invest/invest-primitives";
 import { useInvestorDashboard } from "@/lib/hooks/use-investor-dashboard";
 import { useAuthStore } from "@/lib/auth/store";
+import { categoryOrRawLabel } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { InvestorDashboard, PipelineItem } from "@/lib/types/api";
@@ -367,7 +368,9 @@ export default function InvestOverviewPage() {
           <div className="space-y-5">
             {data.byIndustry.length > 0 && (
               <Panel title={t("inv.alloc.industry")} icon={<TrendingUp className="size-4" strokeWidth={1.7} />} elevated>
-                <AllocationBars slices={data.byIndustry} />
+                <AllocationBars
+                  slices={data.byIndustry.map((s) => ({ ...s, label: categoryOrRawLabel(s.label, t) }))}
+                />
               </Panel>
             )}
             {data.byStage.length > 0 && (

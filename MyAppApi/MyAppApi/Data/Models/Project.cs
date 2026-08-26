@@ -22,9 +22,6 @@ namespace MyAppApi.Data.Models
         [StringLength(100)]
         public string? Category { get; set; }
 
-        [StringLength(100)]
-        public string? Industry { get; set; }
-
         [StringLength(150)]
         public string? Location { get; set; }
 

@@ -78,8 +78,7 @@ namespace MyAppApi.Controllers
                 // cares about demonstrated appetite at least as much as a declared one.
                 q = q.Where(i =>
                     (i.PreferredIndustries != null && EF.Functions.Like(i.PreferredIndustries, $"%{sector}%")) ||
-                    i.Investments.Any(inv => inv.Status == "Approved" &&
-                        (inv.Project.Category == sector || inv.Project.Industry == sector)));
+                    i.Investments.Any(inv => inv.Status == "Approved" && inv.Project.Category == sector));
             }
 
             q = ApplyBand(q, band);

@@ -7,6 +7,7 @@ import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import { ProfileEmptyState } from "@/components/profile/profile-empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { categoryLabelKey, categoryOrRawLabel } from "@/lib/config/categories";
 import {
   AllocationBars,
   EASE,
@@ -90,10 +91,10 @@ export default function InvestPortfolioPage() {
                           <Link href={`/u/${p.founderId}`} data-cursor="hover" className="hover:text-foreground">
                             {p.founderName}
                           </Link>
-                          {p.industry && (
+                          {p.category && (
                             <>
                               <span aria-hidden>·</span>
-                              <span>{p.industry}</span>
+                              <span>{t(categoryLabelKey(p.category))}</span>
                             </>
                           )}
                           {p.stage && (
@@ -190,7 +191,9 @@ export default function InvestPortfolioPage() {
             <div className="space-y-5">
               {data!.byIndustry.length > 0 && (
                 <Panel title={t("inv.alloc.industry")} elevated>
-                  <AllocationBars slices={data!.byIndustry} />
+                  <AllocationBars
+                    slices={data!.byIndustry.map((s) => ({ ...s, label: categoryOrRawLabel(s.label, t) }))}
+                  />
                 </Panel>
               )}
               {data!.byStage.length > 0 && (

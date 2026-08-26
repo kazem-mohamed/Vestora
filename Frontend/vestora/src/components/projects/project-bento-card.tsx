@@ -7,6 +7,7 @@ import { ArrowUpRight } from "lucide-react";
 import { BookmarkButton } from "@/components/projects/bookmark-button";
 import { Tilt } from "@/components/motion/tilt";
 import { projectImageUrl } from "@/lib/api/projects";
+import { categoryLabelKey } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/types/api";
@@ -124,7 +125,7 @@ export function ProjectBentoCard({
             <div className="flex flex-wrap items-center gap-2">
               {project.category && (
                 <span className="rounded-full bg-black/30 px-3 py-1 text-[11px] backdrop-blur-sm">
-                  {project.category}
+                  {t(categoryLabelKey(project.category))}
                 </span>
               )}
               {project.location && (

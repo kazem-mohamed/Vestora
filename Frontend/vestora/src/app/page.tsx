@@ -3,6 +3,7 @@
 import { ReactLenis } from "lenis/react";
 import { CustomCursor } from "@/components/motion/cursor";
 import { LandingNav } from "@/components/landing/landing-nav";
+import { LandingSplash } from "@/components/landing/landing-splash";
 import { LandingHero } from "@/components/landing/landing-hero";
 import { StatsSection } from "@/components/landing/stats-section";
 import { AboutSection } from "@/components/landing/about-section";
@@ -16,6 +17,9 @@ export default function Home() {
   return (
     <ReactLenis root>
       <div className="cursor-showpiece relative bg-background text-foreground">
+        {/* Held over the fold until the footage and the webfont have both
+            landed, so the page arrives once instead of assembling on screen. */}
+        <LandingSplash />
         <CustomCursor />
         {/* Fixed at page level (not inside the hero) so it stays viewport-pinned
             past the hero's scale/round transform, which would otherwise become

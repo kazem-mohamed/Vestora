@@ -20,9 +20,6 @@ namespace MyAppApi.Data.Models.DTOs
         [StringLength(100)]
         public string? Category { get; set; }
 
-        [StringLength(100)]
-        public string? Industry { get; set; }
-
         [StringLength(150)]
         public string? Location { get; set; }
 

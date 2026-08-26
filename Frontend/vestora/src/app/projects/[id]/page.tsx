@@ -30,6 +30,7 @@ import { projectImageUrl, projectsApi } from "@/lib/api/projects";
 import { engagementApi } from "@/lib/api/engagement";
 import { tagVentureMorphTarget } from "@/lib/browse/view-transition";
 import { ApiError } from "@/lib/api/client";
+import { categoryLabelKey } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import type { Project } from "@/lib/types/api";
 
@@ -71,7 +72,7 @@ function DetailHero({
   const contentOpacity = useTransform(scrollYProgress, [0, 0.75], [1, 0]);
 
   const cover = project.imageIds[0];
-  const metaLine = [project.category, project.industry, project.location]
+  const metaLine = [project.category && t(categoryLabelKey(project.category)), project.location]
     .filter(Boolean)
     .join(" · ");
 

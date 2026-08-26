@@ -22,6 +22,7 @@ import {
 import { commitmentPct, fundedPct, primarySignal, sectorOf } from "@/lib/browse/signals";
 import { rememberVisited } from "@/lib/browse/use-browse-state";
 import { navigateWithVentureMorph } from "@/lib/browse/view-transition";
+import { categoryLabelKey } from "@/lib/config/categories";
 import { compactUsd } from "@/lib/format/money";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
@@ -160,7 +161,7 @@ export function VentureCard({
           </div>
 
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground/85">
-            {sector && <span className="truncate">{sector}</span>}
+            {sector && <span className="truncate">{t(categoryLabelKey(sector))}</span>}
             {sector && project.location && <span aria-hidden>·</span>}
             {project.location && <span className="truncate">{project.location}</span>}
           </p>

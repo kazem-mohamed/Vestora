@@ -50,7 +50,6 @@ namespace MyAppApi.Controllers
                     i.DeclinedReason,
                     ProjectName = i.Project.Name,
                     i.Project.Category,
-                    i.Project.Industry,
                     ProjectStage = i.Project.Stage,
                     Goal = i.Project.InvestmentNeeded,
                     FounderId = i.Project.OwnerId,
@@ -176,7 +175,6 @@ namespace MyAppApi.Controllers
                         ProjectId = g.Key,
                         ProjectName = first.ProjectName,
                         Category = first.Category,
-                        Industry = first.Industry,
                         Stage = first.ProjectStage,
                         FounderId = first.FounderId,
                         FounderName = first.FounderName,
@@ -197,8 +195,11 @@ namespace MyAppApi.Controllers
                 .ToList();
 
             // --- allocation (approved commitments only) ---
+            // Grouped by Category — Industry no longer exists as a separate field.
+            // "other" (lowercase) matches the ProjectCategories.Other key so the
+            // frontend can translate the fallback bucket like any real category.
             var byIndustry = approved
-                .GroupBy(a => string.IsNullOrWhiteSpace(a.Industry) ? "Other" : a.Industry!)
+                .GroupBy(a => string.IsNullOrWhiteSpace(a.Category) ? "other" : a.Category!)
                 .Select(g => new AllocationSliceDto
                 {
                     Label = g.Key,

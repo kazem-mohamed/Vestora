@@ -55,7 +55,6 @@ namespace MyAppApi.Controllers
                     VideoUrl = p.VideoUrl,
                     Topic = p.Topic,
                     Category = p.Category,
-                    Industry = p.Industry,
                     Location = p.Location,
                     InvestmentNeeded = p.InvestmentNeeded,
                     // Money is filled by the shared loader below.

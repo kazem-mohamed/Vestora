@@ -35,7 +35,6 @@ namespace MyAppApi.Data.Models.DTOs
             Name = p.Name,
             Topic = p.Topic,
             Category = p.Category,
-            Industry = p.Industry,
             Location = p.Location,
             Stage = p.Stage,
             InvestmentNeeded = p.InvestmentNeeded,
