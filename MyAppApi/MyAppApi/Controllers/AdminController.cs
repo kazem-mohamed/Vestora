@@ -279,13 +279,31 @@ namespace MyAppApi.Controllers
                     Id = u.Id,
                     UserName = u.UserName,
                     Email = u.Email,
-                    IsPrimaryAdmin = (u as Admin) != null && (u as Admin)!.IsPrimaryAdmin,
                     UserType = u.UserType,
                     IsEmailVerified = u.IsEmailVerified,
                     IsSuspended = u.IsSuspended,
                     SuspensionReason = u.SuspensionReason
                 })
                 .ToListAsync();
+
+            // IsPrimaryAdmin is Admin-only and NULL in the DB for Investor/Innovator
+            // rows. EF cannot translate a read of it through a base-User query (the
+            // property isn't declared on User), and forcing the column read another
+            // way throws on the NULLs — so it's looked up separately, through a
+            // properly-typed Admin query, and merged in afterwards.
+            var adminIds = items.Where(i => i.UserType == "Admin").Select(i => i.Id).ToList();
+            if (adminIds.Count > 0)
+            {
+                var primaryAdminIds = await _context.Users.AsNoTracking()
+                    .OfType<Admin>()
+                    .Where(a => adminIds.Contains(a.Id) && a.IsPrimaryAdmin)
+                    .Select(a => a.Id)
+                    .ToListAsync();
+                foreach (var item in items)
+                {
+                    item.IsPrimaryAdmin = primaryAdminIds.Contains(item.Id);
+                }
+            }
 
             return Ok(new PagedResult<AdminUserDto>
             {
