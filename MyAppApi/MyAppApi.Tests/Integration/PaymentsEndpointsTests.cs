@@ -221,5 +221,63 @@ namespace MyAppApi.Tests.Integration
 
             Assert.Equal(HttpStatusCode.BadRequest, secondCheckout.StatusCode);
         }
+
+        /// <summary>
+        /// A reference is issued once and never again, including after the row that held
+        /// it is gone. Deriving the sequence from a row count broke that: deleting a
+        /// request walked the counter back onto a number another row already carried, the
+        /// unique index rejected the insert, and every funding request on the platform
+        /// failed until the table grew past its own high-water mark.
+        /// <para>
+        /// The assertion is on the value rather than on the refusal on purpose. The
+        /// InMemory provider does not enforce unique indexes, so a test that waited for
+        /// an exception would have passed against the defect — which is exactly what the
+        /// suite did until this was found in the running system.
+        /// </para>
+        /// </summary>
+        [Fact]
+        public async Task FundingRequestReference_IsNotReissuedAfterAnEarlierRequestIsDeleted()
+        {
+            var (firstFounder, _, _, firstInvestment) = await SeedApprovedRelationshipAsync();
+            var (secondFounder, _, _, secondInvestment) = await SeedApprovedRelationshipAsync();
+            var (thirdFounder, _, _, thirdInvestment) = await SeedApprovedRelationshipAsync();
+
+            var first = await IssueFundingRequestAsync(firstFounder, firstInvestment);
+            var second = await IssueFundingRequestAsync(secondFounder, secondInvestment);
+            Assert.NotEqual(first.Reference, second.Reference);
+
+            // The row goes; the number it was given does not come back.
+            using (var db = Db())
+            {
+                db.FundingRequests.Remove(
+                    await db.FundingRequests.SingleAsync(f => f.Id == first.Id));
+                await db.SaveChangesAsync();
+            }
+
+            var third = await IssueFundingRequestAsync(thirdFounder, thirdInvestment);
+
+            Assert.NotEqual(second.Reference, third.Reference);
+            Assert.NotEqual(first.Reference, third.Reference);
+
+            using var check = Db();
+            var carrying = await check.FundingRequests
+                .IgnoreQueryFilters()
+                .CountAsync(f => f.Reference == third.Reference);
+            Assert.Equal(1, carrying);
+        }
+
+        private async Task<(int Id, string Reference)> IssueFundingRequestAsync(
+            HttpClient founder, int investmentId)
+        {
+            var response = await founder.PostAsJsonAsync(
+                $"/api/payments/investments/{investmentId}/funding-request",
+                new { amount = 1_000m, note = (string?)null });
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+            var body = await response.ReadAsAsync<System.Text.Json.JsonDocument>();
+            return (
+                body!.RootElement.GetProperty("id").GetInt32(),
+                body.RootElement.GetProperty("reference").GetString()!);
+        }
     }
 }

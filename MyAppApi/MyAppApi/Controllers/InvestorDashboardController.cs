@@ -221,31 +221,18 @@ namespace MyAppApi.Controllers
                 .ToList();
 
             // --- cumulative approved commitments by month ---
-            var commitmentsOverTime = new List<TimePointDto>();
-            double running = 0;
-            foreach (var g in approved
-                         .GroupBy(a => new DateTime(a.Date.Year, a.Date.Month, 1))
-                         .OrderBy(g => g.Key))
-            {
-                running += (double)g.Sum(x => x.Amount);
-                commitmentsOverTime.Add(new TimePointDto
-                {
-                    Label = g.Key.ToString("yyyy-MM"),
-                    Value = running
-                });
-            }
+            // Both curves run month by month through to the present rather than stopping
+            // at their last event, so they share an x axis and the gap between them is
+            // read at the same instant on both. See MonthlySeries for the reasoning.
+            var now = DateTime.UtcNow;
+
+            var commitmentsOverTime = MonthlySeries.Cumulative(
+                approved.Select(a => (a.Date, (double)a.Amount)), now);
 
             // --- cumulative settled capital by month ---
-            var fundedOverTime = new List<TimePointDto>();
-            double runningFunded = 0;
-            foreach (var g in settled
-                         .Where(t => t.SucceededAtUtc.HasValue)
-                         .GroupBy(t => new DateTime(t.SucceededAtUtc!.Value.Year, t.SucceededAtUtc.Value.Month, 1))
-                         .OrderBy(g => g.Key))
-            {
-                runningFunded += (double)g.Sum(x => x.Amount);
-                fundedOverTime.Add(new TimePointDto { Label = g.Key.ToString("yyyy-MM"), Value = runningFunded });
-            }
+            var fundedOverTime = MonthlySeries.Cumulative(
+                settled.Where(t => t.SucceededAtUtc.HasValue)
+                       .Select(t => (t.SucceededAtUtc!.Value, (double)t.Amount)), now);
 
             // --- recent activity: my requests + payments + updates from ventures I back ---
             var activity = new List<InvestorActivityDto>();

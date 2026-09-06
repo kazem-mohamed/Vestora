@@ -56,6 +56,15 @@ and the reason, and including everything that was not built.
       who took it.],
     [Platform activity], [Platform-wide events, and the same rows filtered to
       what each viewer may see.],
+    [Primary administrator], [One administrator is marked primary and cannot be
+      removed by another — the platform cannot be left with nobody in charge.],
+    [Forced password change], [An account created by an administrator must set
+      its own password before it can do anything else.],
+    [Platform search], [One query across users, ventures and relationships.],
+    [User overview], [Everything the platform knows about one account, on one
+      page.],
+    [Growth and alerts], [Derived platform trends, and the conditions worth
+      waking someone for.],
   ),
   caption: [Features delivered in this part. The moderation queues these powers
     act through are Report 5.],
@@ -97,9 +106,11 @@ Two durable records exist, and neither of them is a log line.
     align: (left + top, left + top, left + top),
     table.header([Record], [What it holds], [Why a table and not a log]),
     [`AdminAuditLog`], [Every administrative action — approval, rejection,
-      suspension — attributed to the administrator who took it.],
+      suspension — attributed to the administrator who took it, with the stated
+      *reason*, the *before* and *after* of what changed, and the *IP address* it
+      came from.],
       [Evidence must be queryable, retained, and presentable. A log stream is
-       none of the three.],
+       none of the three — and a diff is not something a log line can hold.],
     [`SecurityLog`], [Authentication and security events, indexed on user and
       time.],
       [Audit questions are always per-user and time-ordered; the index matches
@@ -134,16 +145,30 @@ Two durable records exist, and neither of them is a log line.
 
 #figure(
   ```cs
-  // The audit record is written inside the same unit of work as the action, so
-  // an administrative action cannot exist without its record. A separate
-  // SaveChanges would permit a decision with no evidence behind it.
-  project.ModerationStatus  = ModerationStatus.Approved;
-  await _audit.RecordAsync(adminId, AdminAction.ApproveProject, project.Id, ct);
+  // Nothing is saved here, for the same reason StageLog saves nothing: the entry
+  // is added beside the change it describes, so the caller's existing
+  // SaveChangesAsync commits both or neither. The controllers used to save the
+  // action first and the record of it second, which meant a failure in between
+  // left the act done and unrecorded — the one state an audit trail exists to
+  // prevent.
+  project.ModerationStatus = ModerationStatus.Approved;
+  AuditTrail.Record(_db, adminId, "ApproveProject", "Project", project.Id,
+                    reason: dto.Reason, before: snapshot, after: project, ip: CallerIp);
   await _db.SaveChangesAsync(ct);          // one transaction, both rows
   ```,
-  caption: [Attribution. The `SaveChangesAsync` placement is the whole
-    mechanism — one call, so both writes commit or neither does.],
+  caption: [Attribution, through the single writer. The `SaveChangesAsync`
+    placement is the whole mechanism — one call, so both writes commit or neither
+    does.],
 )
+
+#delivered[
+  *The single writer exists because three copies disagreed.* Both administrative
+  controllers and the payment service each built this row by hand, each with its
+  own truncation rule and its own idea of what "the actor" meant. They agreed only
+  because whoever wrote one copied the last — and the first divergence would have
+  been invisible, because *a log with one field quietly missing still looks like a
+  log.*
+]
 
 #figure(
   ```cs
@@ -169,11 +194,16 @@ Two durable records exist, and neither of them is a log line.
     [`GET`], [`api/admin/users`], [Account listing for administration.],
     [`POST`], [`api/admin/users/{id}/suspend`], [Suspend an account; writes the
       audit log.],
-    [`POST`], [`api/admin/users/{id}/reinstate`], [Reverse a suspension.],
-    [`GET`], [`api/admin/audit`], [The audit log.],
-    [`GET`], [`api/admin/security`], [The security log, per user and in time.],
-    [`GET`], [`api/admin/activity`], [Platform-wide activity.],
+    [`POST`], [`api/admin/users/{id}/restore`], [Reverse a suspension.],
     [`POST`], [`api/admin/admins`], [Create a further administrator.],
+    [`POST`], [`api/admin/admins/{id}/make-primary`], [Transfer the primary role.
+      There is always exactly one.],
+    [`GET`], [`api/admin/audit-log`], [The audit trail, with reasons and diffs.],
+    [`GET`], [`api/admin/security`], [The security log, per user and in time.],
+    [`GET`], [`api/admin/analytics`], [Platform totals and distribution.],
+    [`GET`], [`api/admin/growth`], [Derived trends over time.],
+    [`GET`], [`api/admin/alerts`], [Conditions the platform thinks are worth
+      attention.],
   ),
   caption: [Principal endpoints in this part. Every one is role-gated on the
     server and every write is attributed.],
@@ -228,31 +258,63 @@ figures are the distribution over thirty warm requests.
 
 = Verification
 
-Forty-one automated tests pass against the domain layer — the components that
-carry rules and perform no I/O — in *16 milliseconds*. They cover the funding and
-stage rules directly: that an approved but unsettled commitment contributes zero,
-that a refunded transaction is removed from a total, that capacity is measured
-against commitments, and that a moderation change leaves commercial stage
-untouched.
+*Eighty-five automated tests pass, in 29 seconds.* They fall into two groups that
+prove different things, and the difference matters more than the total.
 
 #figure(
   table(
-    columns: (1fr, 22mm, 22mm),
-    align: (left, right, right),
-    table.header([Scope], [Line], [Branch]),
-    [Stage transition rules], [*100%*], [*100%*],
-    [Funding calculations], [25.8%], [*80%*],
+    columns: (46mm, 16mm, 1fr),
+    align: (left + top, center + top, left + top),
+    table.header([Suite], [Tests], [What it proves]),
+    [`FundingMathTests`], [23],
+      [That an approved but unsettled commitment contributes zero, that a
+       refunded transaction leaves a total, that capacity is measured against
+       commitments, and that a tranche does not close an ask early.],
+    [`PipelineStagesTests`], [25],
+      [Every permitted and forbidden stage transition, and that a moderation
+       change leaves commercial stage untouched.],
+    [`ProjectCategoriesTests`], [9],
+      [That the category vocabulary is closed, and that it matches the list the
+       client ships.],
+    [`AuthEndpointsTests`], [9],
+      [Registration, verification, sign-in, refresh and lockout, over HTTP.],
+    [`PaymentsEndpointsTests`], [6],
+      [Checkout, settlement and duplicate confirmation, over HTTP.],
+    [`ProjectsEndpointsTests`], [6],
+      [Creation, submission and the visibility rule, over HTTP.],
+    [`SecurityBoundaryTests`], [7],
+      [That a caller cannot reach what their role and ownership do not permit.],
   ),
-  caption: [Coverage over the rule components. The uncovered lines in the funding
-    component are its database loaders, which cannot execute without a database;
-    every decision the component makes is exercised.],
+  caption: [The suite by subject. Fifty-seven domain tests and twenty-eight
+    integration tests.],
 )
 
-*Beyond the domain layer, verification is by inspection and by manual exercise of
-the journeys described across these twelve reports.* There are no integration,
-authorisation, payment or end-to-end tests. A green run proves the arithmetic and
-the stage vocabulary, and nothing else — and every claim in this series that rests
-on a test rather than on inspection says so where it is made.
+The domain tests exercise components that hold no I/O — arithmetic over rows and
+a transition table — which is why they can run without a database at all.
+
+The integration tests start the real application and drive it over HTTP, which is
+what makes them able to prove an *authorisation* claim rather than an arithmetic
+one. `SecurityBoundaryTests` is the one that matters most to this series: every
+report that says *a role check is not an ownership check* is asserted there
+rather than merely stated here.
+
+#note[
+  *What the integration suite does not prove.* It runs against EF Core's InMemory
+  provider rather than SQL Server, and the choice is deliberate — several queries
+  in this codebase build LINQ predicates that InMemory evaluates client-side and
+  a real provider would have to translate to SQL.
+
+  The consequence is precise and worth stating: these tests prove *endpoint
+  behaviour, status codes and authorisation*. They do not prove that every query
+  translates, and they cannot catch a predicate that works in memory and fails
+  against the database. That class of defect is caught only by running the
+  application against the real one.
+]
+
+*Beyond these two suites, verification is by inspection and by manual exercise of
+the journeys described across these twelve reports.* There is no end-to-end
+browser suite, no load test, and no continuous integration — the eighty-five
+tests pass because somebody ran them.
 
 #note[
   *One journey was exercised end to end while this series was written*, and the
@@ -282,7 +344,7 @@ on a test rather than on inspection says so where it is made.
        exclusions, three personas, 43 functional and 16 non-functional
        requirements, nine scored technology decisions.],
     [2 · Foundation & Design System],
-      [Four-container architecture, 22 controllers with a uniform service seam,
+      [Four-container architecture, 25 controllers with a uniform service seam,
        55 client routes, seven colour and five typographic tokens across two
        languages and two themes.],
     [3 · Identity & Sessions],
@@ -317,8 +379,10 @@ on a test rather than on inspection says so where it is made.
       [Three dashboards, venture analytics, platform overview, revenue, activity
        — every figure derived from event rows.],
     [12 · Administration & Evaluation],
-      [Account administration, suspension, security log, audit log, and this
-       evaluation.],
+      [Account administration, suspension and restore, a primary-administrator
+       role, forced password change, platform search, per-user overview, growth
+       and alerts, a security log, an audit trail carrying reasons and diffs, and
+       this evaluation.],
   ),
   caption: [What the twelve parts delivered.],
 )
@@ -328,12 +392,12 @@ on a test rather than on inspection says so where it is made.
     columns: (1fr, 26mm),
     align: (left, right),
     table.header([Measure], [Figure]),
-    [API controllers], [22],
-    [API endpoints], [150],
-    [Entity sets in the data context], [32],
-    [Versioned migrations], [22],
-    [Frontend routes], [55],
-    [Automated tests, all passing], [41],
+    [API controllers], [25],
+    [API endpoints], [169],
+    [Entity sets in the data context], [34],
+    [Versioned migrations], [30],
+    [Frontend routes], [58],
+    [Automated tests, all passing], [85],
     [Languages · themes], [2 · 2],
   ),
   caption: [The delivered system in numbers. Every figure counted from the source
@@ -441,9 +505,9 @@ This report reads from every other and writes almost nothing.
   scales, filtered to what each viewer is entitled to see. All of it in two
   languages and two themes.
 
-  *And the evaluation of the whole.* Twelve parts delivered, 22 controllers, 150
-  endpoints, 32 entity sets, 22 migrations, 55 client routes, 41 passing tests in
-  16 ms, and one non-functional requirement measured, missed, and diagnosed
+  *And the evaluation of the whole.* Twelve parts delivered, 25 controllers, 169
+  endpoints, 34 entity sets, 30 migrations, 58 client routes, 85 passing tests in
+  29 seconds, and one non-functional requirement measured, missed, and diagnosed
   rather than quietly restated.
 ]
 
@@ -451,7 +515,7 @@ This report reads from every other and writes almost nothing.
 set of permissions: an administrator who can approve can also suspend. The audit
 log is readable but not exportable, and nothing alerts on it — oversight requires
 someone to look. And the platform has no continuous integration, so the
-forty-one tests pass because someone ran them.
+eighty-five tests pass because somebody ran them.
 
 *What this closes.* The series began in Report 1 with four failures of the
 current arrangement and forty-three requirements written against them. Eleven

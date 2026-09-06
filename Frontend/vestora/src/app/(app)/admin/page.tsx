@@ -21,7 +21,8 @@ import {
 import { AnimatedNumber } from "@/components/motion/animated-number";
 import { Panel } from "@/components/dashboard/panel";
 import { DashPageHeader } from "@/components/dashboard/page-header";
-import { ViewsAreaChart } from "@/components/dashboard/dashboard-charts";
+import { PerPeriodBarsChart } from "@/components/dashboard/dashboard-charts";
+import { DeltaBadge, periodDelta, toPerPeriod } from "@/components/dashboard/chart-kit";
 import { adminApi } from "@/lib/api/admin";
 import {
   useAdminAnalytics,
@@ -31,6 +32,7 @@ import {
 } from "@/lib/hooks/use-admin";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
+import type { TimePoint } from "@/lib/types/api";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -349,35 +351,25 @@ export default function AdminOverviewPage() {
         </Panel>
       </div>
 
-      {/* Growth over time — derived from real signup / creation dates. */}
+      {/* Arrivals per month — derived from real signup / creation dates.
+          These were cumulative area charts, which meant both of them could only
+          ever slope upward: a month with no signups looked identical to a strong
+          one. Differenced, the same data reports the month that actually
+          happened, and the delta beside the title says whether it beat the last. */}
       <div className="grid gap-5 lg:grid-cols-2">
-        <Panel title={t("admin.growth.users")} icon={<Users className="size-4" strokeWidth={1.7} />} elevated>
-          <div className="h-56">
-            {growthQ.isLoading ? (
-              <div className="skeleton-shimmer h-full rounded-xl" />
-            ) : (growthQ.data?.userGrowth.length ?? 0) > 0 ? (
-              <ViewsAreaChart data={growthQ.data!.userGrowth} />
-            ) : (
-              <div className="grid h-full place-items-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
-                {t("dash.chart.noData")}
-              </div>
-            )}
-          </div>
-        </Panel>
-
-        <Panel title={t("admin.growth.ventures")} icon={<Rocket className="size-4" strokeWidth={1.7} />}>
-          <div className="h-56">
-            {growthQ.isLoading ? (
-              <div className="skeleton-shimmer h-full rounded-xl" />
-            ) : (growthQ.data?.ventureGrowth.length ?? 0) > 0 ? (
-              <ViewsAreaChart data={growthQ.data!.ventureGrowth} />
-            ) : (
-              <div className="grid h-full place-items-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
-                {t("dash.chart.noData")}
-              </div>
-            )}
-          </div>
-        </Panel>
+        <GrowthPanel
+          title={t("admin.growth.users")}
+          icon={<Users className="size-4" strokeWidth={1.7} />}
+          series={growthQ.data?.userGrowth ?? []}
+          loading={growthQ.isLoading}
+          elevated
+        />
+        <GrowthPanel
+          title={t("admin.growth.ventures")}
+          icon={<Rocket className="size-4" strokeWidth={1.7} />}
+          series={growthQ.data?.ventureGrowth ?? []}
+          loading={growthQ.isLoading}
+        />
       </div>
     </div>
   );
@@ -393,5 +385,49 @@ function QuickLink({ href, label }: { href: string; label: string }) {
       {label}
       <ArrowUpRight className="size-3.5 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 rtl:-scale-x-100" />
     </Link>
+  );
+}
+
+/**
+ * A growth panel: the month's arrivals, with the change against last month
+ * stated in the header rather than left for the reader to infer off the bars.
+ */
+function GrowthPanel({
+  title,
+  icon,
+  series,
+  loading,
+  elevated,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  series: TimePoint[];
+  loading: boolean;
+  elevated?: boolean;
+}) {
+  const { t } = useLocale();
+  const perPeriod = toPerPeriod(series);
+  const delta = periodDelta(perPeriod);
+
+  return (
+    <Panel title={title} icon={icon} elevated={elevated}>
+      {perPeriod.length > 0 && (
+        <p className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span className="font-numeric text-base text-foreground">
+            {perPeriod[perPeriod.length - 1].value}
+          </span>
+          <span>{t("chart.newThisPeriod")}</span>
+          <DeltaBadge delta={delta} />
+          <span>{t("chart.vsPrev")}</span>
+        </p>
+      )}
+      <div className="h-52">
+        {loading ? (
+          <div className="skeleton-shimmer h-full rounded-xl" />
+        ) : (
+          <PerPeriodBarsChart data={series} />
+        )}
+      </div>
+    </Panel>
   );
 }

@@ -114,18 +114,21 @@ below is the actual shape of the codebase, counted from it.
     columns: (36mm, 12mm, 1fr),
     align: (left + top, center + top, left + top),
     table.header([Group], [Count], [What it holds]),
-    [Controllers], [22],
+    [Controllers], [25],
       [One per resource area — authentication, projects, investments, payments,
        messages, notifications, follows, bookmarks, reports, admin moderation,
-       admin revenue, the three dashboards, insights.],
-    [Domain services], [5],
-      [`AuthService` owns identity; `PaymentService` owns the payment
-       lifecycle; `FundingMath` owns what a venture has raised; `PipelineStages`
-       owns valid stage transitions; `AccountRules` owns what an account may be.],
-    [Infrastructure services], [8],
+       admin revenue, admin search, admin user overview, the three dashboards,
+       venture and platform insights.],
+    [Domain services], [7],
+      [`AuthService` owns identity; `PaymentService` owns the payment lifecycle;
+       `FundingMath` owns what a venture has raised; `PipelineStages` owns valid
+       stage transitions; `AccountRules` owns what an account may be;
+       `ProjectCategories` owns the category vocabulary; `TermSheetService` owns
+       what two parties may agree.],
+    [Infrastructure services], [12],
       [Upload validation, presence tracking, the notification fan-out queue and
        its worker, mail, the UTC serialisation converters, the payment expiry
-       sweeper.],
+       sweeper, the webhook verifier, the stage log and the audit trail.],
     [Data], [1],
       [`AppDbContext` and the entity model.],
   ),
@@ -135,15 +138,15 @@ below is the actual shape of the codebase, counted from it.
 The separation between the two service groups is the one that matters.
 `FundingMath` is arithmetic over rows and `PipelineStages` is a transition
 table; neither performs I/O, which is what makes them testable without a
-database. The whole automated test suite exists against those two for exactly
-that reason.
+database. Fifty-seven of the platform's eighty-five automated tests exist against
+that group for exactly that reason — Report 12 reports the split.
 
 == The layering, and where it stops
 
 A controller binds the request, checks authorisation, does the work, and shapes
 the result. The last of those is handled uniformly rather than per-controller: a
 shared extension translates a service result into an HTTP response, so the
-mapping from "not found" to `404` exists once rather than twenty-two times.
+mapping from "not found" to `404` exists once rather than twenty-five times.
 
 #figure(
   ```cs
@@ -161,14 +164,14 @@ exceptional condition — it is an ordinary answer, and modelling it as an
 exception both costs performance and obscures the control flow.
 
 #note[
-  *Where the seam is not applied, and why.* Of twenty-two controllers, exactly
+  *Where the seam is not applied, and why.* Of twenty-five controllers, exactly
   one — `AuthController` — reaches the database only through a service. The
-  other twenty-one query `AppDbContext` directly.
+  other twenty-four query `AppDbContext` directly.
 
   This is a deliberate boundary rather than an oversight. A service layer was
   introduced where the rules are dangerous to get wrong — identity and money —
   and not where a controller is a thin read against a table. Adding one
-  everywhere would have produced twenty-one services whose bodies were a single
+  everywhere would have produced twenty-four services whose bodies were a single
   query, which is indirection without a corresponding problem.
 
   The cost is stated rather than hidden: the discipline is not uniform, and a
@@ -179,7 +182,7 @@ exception both costs performance and obscures the control flow.
 
 = The Web Application
 
-*Routing.* Fifty-five route files, grouped into segments that correspond to
+*Routing.* Fifty-eight route files, grouped into segments that correspond to
 *access level* rather than to feature: public pages, authentication pages, and
 an authenticated application group holding the dashboards, investment surfaces,
 messages, settings and the administrative area.
@@ -483,7 +486,7 @@ consequences are entirely positive has not been written honestly.
 
 #challenge("A layered architecture that is only layered in two places")[
   The intended discipline was that controllers delegate and never query. In
-  practice only `AuthController` does; twenty-one of twenty-two reach
+  practice only `AuthController` does; twenty-four of twenty-five reach
   `AppDbContext` directly.
 
   *Resolution, and its cost.* The boundary was drawn at danger rather than at
@@ -553,10 +556,10 @@ one; none of them amends it.
 
 #delivered[
   *Shape.* A four-container architecture in which the API owns every rule and
-  the web application owns none. Twenty-two controllers, five domain services,
+  the web application owns none. Twenty-five controllers, seven domain services,
   eight infrastructure services and one data context, grouped by responsibility
   and counted from the source. A uniform controller-to-service seam so outcome
-  mapping exists once. Fifty-five client routes grouped by access level, server
+  mapping exists once. Fifty-eight client routes grouped by access level, server
   rendering for public pages, and no global client state store.
 
   *Appearance.* Seven colour tokens and five typographic tokens with one

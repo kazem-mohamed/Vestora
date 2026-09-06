@@ -166,7 +166,7 @@ export function AdminMobileNav() {
   const openReports = useOpenReportsCount();
 
   return (
-    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden [scrollbar-width:none]">
+    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:hidden [scrollbar-width:none]">
       {SECTIONS.map((s) => {
         const on = isActive(pathname, s.href);
         return (

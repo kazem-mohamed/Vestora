@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cinzel, Karla, Spectral, Aref_Ruqaa, Cairo } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
@@ -49,6 +49,23 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
  */
 const description =
   "Founders raising real rounds and investors who state what they back. Every listing is reviewed before it goes public, and every commitment is recorded on both sides.";
+
+/**
+ * `viewport-fit=cover` is what lets `env(safe-area-inset-*)` return anything
+ * other than zero. Without it a notched phone silently ignores every safe-area
+ * rule in the stylesheet, so fixed bars sit under the status bar and the home
+ * indicator. Zoom is deliberately left enabled — capping it is an accessibility
+ * failure, not a design decision.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0a0908" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f4ee" },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

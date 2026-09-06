@@ -189,6 +189,30 @@ exercises a configuration real users also use rather than a synthetic one.
 state that is genuinely not yet true, and the correct response is to remove the
 nondeterminism rather than to add a wait.
 
+== Three Copies of the Audit Row
+
+*Symptom.* Nothing visible. That is what made this one worth recording.
+
+*Diagnosis.* The audit row was constructed by hand in three places — both
+administrative controllers and the payment service — and each kept its own
+truncation rule and its own idea of what "the actor" meant. They agreed only
+because whoever wrote one had copied the last. The first divergence would have
+been invisible, because *a log with one field quietly missing still looks like a
+log*.
+
+A second fault sat underneath it. The controllers saved the action first and the
+record of it second, in separate calls. A failure between the two left the act
+done and unrecorded — the one state an audit trail exists to prevent.
+
+*Solution.* One writer, `AuditTrail`, which builds the row and adds it to the
+change set *without saving*. The caller's existing `SaveChangesAsync` then
+commits the action and its record together, or neither. Saving nothing is the
+whole design: it is what removes the window.
+
+*What generalises.* A duplicated write path fails silently by construction,
+because every copy still produces output that looks correct. The defect is not
+in any one copy — it is in there being more than one.
+
 == Process Challenges
 
 Not every problem was technical.

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
+import type { TimePoint } from "@/lib/types/api";
 
 /**
  * The one specification every chart in Vestora is drawn to.
@@ -212,15 +213,161 @@ export const MIN_POINTS_FOR_A_LINE = 3;
 
 /* ---------- legend ---------- */
 
-export function ChartLegend({ items }: { items: { color: string; label: string }[] }) {
+/**
+ * `variant="line"` draws each swatch as the stroke the chart actually uses, dashed
+ * where the series is dashed.
+ *
+ * A dot cannot distinguish two line series that differ by dash pattern, so the
+ * committed-versus-funded chart used to carry two legends: this one for the colours
+ * and a second, hand-built one on the funding screen for the stroke styles. One legend
+ * that shows both is the whole job.
+ */
+export function ChartLegend({
+  items,
+  variant = "dot",
+}: {
+  items: { color: string; label: string; dashed?: boolean }[];
+  variant?: "dot" | "line";
+}) {
   return (
     <ul className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
       {items.map((i) => (
         <li key={i.label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="size-2 rounded-full" style={{ background: i.color }} />
+          {variant === "line" ? (
+            <span
+              aria-hidden
+              className="h-0.5 w-4 shrink-0 rounded-full"
+              style={
+                i.dashed
+                  ? {
+                      backgroundImage: `repeating-linear-gradient(90deg, ${i.color} 0 4px, transparent 4px 7px)`,
+                    }
+                  : { background: i.color }
+              }
+            />
+          ) : (
+            <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: i.color }} />
+          )}
           {i.label}
         </li>
       ))}
     </ul>
+  );
+}
+
+/* ---------- derived series ---------- */
+
+/**
+ * Turns a cumulative series into per-period arrivals.
+ *
+ * A running total can only ever rise, so a line drawn from one is guaranteed to
+ * slope up no matter what actually happened — a month where nothing was created
+ * and a month with fifty new ventures both bend it upward. Differencing it gives
+ * a figure that can fall, which is the only version worth plotting: the reader
+ * can finally see a bad month as a bad month.
+ *
+ * The first point is dropped rather than reported as its own arrival count. The
+ * series starts at whatever had already accumulated before the window opened,
+ * and calling that "new this month" would invent a spike that never happened.
+ */
+export function toPerPeriod(points: TimePoint[]): TimePoint[] {
+  if (points.length < 2) return [];
+  const out: TimePoint[] = [];
+  for (let i = 1; i < points.length; i++) {
+    out.push({
+      label: points[i].label,
+      value: Math.max(0, points[i].value - points[i - 1].value),
+    });
+  }
+  return out;
+}
+
+/**
+ * A round number at or above `value`, for the top of a value axis.
+ *
+ * Recharts, left alone, ends the axis exactly at the largest number in the data.
+ * That is the one place a line must never be drawn: it lands on the frame, where
+ * it reads as the border rather than as a measurement. On the committed-versus-funded
+ * chart the casualty was always the same series, because committed is by definition
+ * the larger of the two — the founder's promised capital was the one line they could
+ * not see.
+ *
+ * Anything a chart must be able to *show* rather than merely contain — a goal it has
+ * not reached yet — has to be passed in here too, or the axis stops below it and the
+ * reference line is silently dropped off the top.
+ *
+ * The ceiling is the next whole multiple of a round tick step, rather than the next
+ * round number outright. Rounding $336K straight up to a 1/2/5 mantissa reaches $500K
+ * and leaves the top third of the plot empty — headroom is meant to lift the highest
+ * line off the frame, not to shrink the data into the lower half. Sizing the step for
+ * roughly four gridlines and rounding up to a multiple of it gives $400K here: clean
+ * ticks, and the data still fills the chart.
+ */
+export function niceCeil(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const step = niceStep(value / 4);
+  return Math.ceil(value / step) * step;
+}
+
+/** The nearest round 1/2/2.5/5 × 10ⁿ step at or above `rough` — one gridline interval. */
+function niceStep(rough: number): number {
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const normalized = rough / magnitude;
+  const step = [1, 2, 2.5, 5, 10].find((s) => normalized <= s) ?? 10;
+  return step * magnitude;
+}
+
+/** Mean of a series, for the reference line a bar chart needs to be readable. */
+export function meanOf(points: TimePoint[]): number {
+  if (points.length === 0) return 0;
+  return points.reduce((s, p) => s + p.value, 0) / points.length;
+}
+
+/**
+ * Change between the last two periods.
+ *
+ * A single figure cannot be judged — "29 users" is neither good nor bad until it
+ * is placed against what came before. Returns null when there is nothing to
+ * compare against, so the caller renders nothing rather than a fake "0%".
+ */
+export function periodDelta(points: TimePoint[]): { abs: number; pct: number | null } | null {
+  if (points.length < 2) return null;
+  const last = points[points.length - 1].value;
+  const prev = points[points.length - 2].value;
+  const abs = last - prev;
+  return { abs, pct: prev === 0 ? null : (abs / prev) * 100 };
+}
+
+/** A signed change, coloured by direction and never by hue alone. */
+export function DeltaBadge({
+  delta,
+  invert,
+  suffix,
+}: {
+  delta: { abs: number; pct: number | null } | null;
+  /** For figures where down is the good direction (time-to-close, drop-off). */
+  invert?: boolean;
+  suffix?: string;
+}) {
+  const { t } = useLocale();
+  if (!delta || delta.abs === 0) {
+    return <span className="text-xs text-muted-foreground">{t("chart.delta.flat")}</span>;
+  }
+  const up = delta.abs > 0;
+  const good = invert ? !up : up;
+  return (
+    <span
+      className={cn(
+        "font-numeric inline-flex items-center gap-1 text-xs",
+        good ? "text-primary" : "text-bronze"
+      )}
+    >
+      {/* An arrow as well as the colour: direction must survive a colourblind
+          reader and a greyscale print of the report. */}
+      <span aria-hidden>{up ? "▲" : "▼"}</span>
+      {up ? "+" : ""}
+      {delta.pct != null ? `${Math.round(delta.pct)}%` : delta.abs}
+      {suffix ? ` ${suffix}` : ""}
+    </span>
   );
 }

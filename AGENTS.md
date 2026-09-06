@@ -64,12 +64,19 @@ docs/                  the documentation set
 
 ## Working style expected here
 
-- **Match the surrounding code.** No Clean Architecture, no repositories — controllers talk to `AppDbContext` directly. Services exist only for auth and payments. Do not introduce new patterns.
+- **Match the surrounding code.** No Clean Architecture, no repositories — controllers talk to `AppDbContext` directly (24 of the 25 do; only `AuthController` does not). Do not introduce new patterns.
+  - **Injected services** exist where a lifecycle is dangerous to get wrong: `AuthService`, `PaymentService`, `TermSheetService`, plus infrastructure (`MailKitEmailService`, `FileUploadSecurityService`, `PresenceTracker`, `NotificationFanOutQueue`/`Worker`, `PaymentExpirySweeper`, the payment providers).
+  - **Static rule holders** own a definition and perform no I/O: `FundingMath`, `PipelineStages`, `AccountRules`, `ProjectCategories`, plus the write helpers `AuditTrail` and `StageLog` (which add a row beside your change and deliberately do **not** call `SaveChangesAsync`).
+  - Do not add a service that only wraps one query.
 - **Surgical changes.** Touch only what the task requires. Do not reformat, rename, or "improve" adjacent code.
 - **The doc comments in this codebase explain *why*.** Read them; they are the design rationale, not noise. Keep that density when you add code near them.
 - **Next.js 16 has breaking changes** vs. most training data. See `Frontend/vestora/AGENTS.md`. Check `node_modules/next/dist/docs/` before relying on an API.
 - **The database is remote and shared.** Never run `dotnet ef database update` without saying so.
-- **The test suite covers the domain layer only** — 48 xUnit tests over `FundingMath` and `PipelineStages` (`cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj`). There are **no** integration, authorisation, payment or end-to-end tests. A green run proves the arithmetic and the stage vocabulary, nothing else. State how you verified a change; do not claim it works if you did not run it.
+- **The test suite is 85 xUnit tests in two halves** (`cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj`, ~29 s).
+  - **57 domain tests** over `FundingMath`, `PipelineStages` and `ProjectCategories` — no I/O, no database.
+  - **28 integration tests** — `AuthEndpointsTests`, `PaymentsEndpointsTests`, `ProjectsEndpointsTests`, `SecurityBoundaryTests` — which start the real app and drive it over HTTP.
+  - **The integration half runs on EF Core InMemory, not SQL Server.** It proves endpoint behaviour, status codes and authorisation. It does **not** prove that a query translates to SQL, so a predicate that works in memory and fails against the database will pass here.
+  - Still absent: end-to-end browser tests, load tests, and any CI — the suite passes because *somebody ran it*. State how you verified a change; do not claim it works if you did not run it.
 - **The project is under git**, with history pushed to GitHub (`origin/main`). Branch or commit before a large deletion — `git` is the only undo there is.
 
 ---

@@ -206,7 +206,7 @@ This project contributes the following, in decreasing order of generality.
   what makes the simulated path a legitimate test surface rather than a
   stand-in.
 
-+ *A working platform.* An implemented system of twenty-two API controllers
++ *A working platform.* An implemented system of twenty-five API controllers
   over a relational model of more than forty entities, with a React front end
   of sixty-five routes, evolved across a versioned migration history.
 

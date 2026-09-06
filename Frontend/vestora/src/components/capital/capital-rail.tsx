@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { Bookmark, Check, Search, X } from "lucide-react";
+import { categoryOrRawLabel } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { CapitalFacets, CapitalSort, TicketBand } from "@/lib/types/api";
@@ -142,7 +143,7 @@ export function CapitalRail({
               count={s.count}
               onClick={() => onApply({ sector: sector === s.value ? undefined : s.value })}
             >
-              {s.value}
+              {categoryOrRawLabel(s.value, t)}
             </Chip>
           ))}
         </Group>

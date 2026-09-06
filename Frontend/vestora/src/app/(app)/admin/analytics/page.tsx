@@ -5,6 +5,7 @@ import { Banknote, Clock, Filter, Rocket } from "lucide-react";
 import { DashPageHeader } from "@/components/dashboard/page-header";
 import { Panel } from "@/components/dashboard/panel";
 import { ChartEmpty, compactUsd } from "@/components/dashboard/chart-kit";
+import { RevenueByMonthChart } from "@/components/dashboard/dashboard-charts";
 import { ErrorState } from "@/components/ui/error-state";
 import { adminApi } from "@/lib/api/admin";
 import { useLocale } from "@/lib/i18n/locale";
@@ -39,7 +40,9 @@ export default function AdminAnalyticsPage() {
     );
   }
 
-  const widest = Math.max(1, ...data.funnel.map((s) => s.count));
+  // Measured against the first rung, so each bar reads as "share of everyone
+  // who entered the funnel that got this far".
+  const firstStep = data.funnel[0]?.count ?? 0;
 
   return (
     <div className="space-y-6">
@@ -60,7 +63,7 @@ export default function AdminAnalyticsPage() {
                 <FunnelRow
                   key={step.stage}
                   step={step}
-                  widest={widest}
+                  first={firstStep}
                   previous={i > 0 ? data.funnel[i - 1] : null}
                 />
               ))}
@@ -89,23 +92,13 @@ export default function AdminAnalyticsPage() {
           <ChartEmpty label={t("admin.analytics.noHistory")} />
         ) : (
           <>
-            <ul className="divide-y divide-border/50">
+            <ul className="space-y-3.5">
               {data.stageDwell.map((d) => (
-                <li key={d.stage} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-3 text-sm">
-                  <span className="min-w-0 flex-1 font-medium">{d.stage}</span>
-                  <span className="font-numeric">
-                    {duration(d.medianMinutes, t)}
-                    <span className="text-muted-foreground"> {t("admin.analytics.median")}</span>
-                  </span>
-                  <span className="font-numeric text-xs text-muted-foreground">
-                    {t("admin.analytics.longest")} {duration(d.longestMinutes, t)}
-                  </span>
-                  {/* The sample size is never optional. A median over three moves is not
-                      a fact about the platform, and printing it alone would imply it is. */}
-                  <span className="shrink-0 rounded-full border border-border px-2 py-0.5 font-numeric text-[11px] leading-5 text-muted-foreground">
-                    n={d.samples}
-                  </span>
-                </li>
+                <DwellRow
+                  key={d.stage}
+                  dwell={d}
+                  scale={Math.max(1, ...data.stageDwell.map((x) => x.longestMinutes))}
+                />
               ))}
             </ul>
             {data.relationshipsWithHistory < data.totalRelationships && (
@@ -125,24 +118,13 @@ export default function AdminAnalyticsPage() {
           {data.revenueByMonth.length === 0 ? (
             <ChartEmpty />
           ) : (
-            <ul className="divide-y divide-border/50">
-              {data.revenueByMonth.map((r) => (
-                <li key={r.label} className="flex items-baseline gap-3 py-2.5 text-sm">
-                  <span className="w-20 shrink-0 font-numeric text-muted-foreground">
-                    {monthName(r.label, locale)}
-                  </span>
-                  <span className="font-numeric text-xs text-muted-foreground/70">
-                    {r.transactions} {t("admin.analytics.transactions")}
-                  </span>
-                  <span className="ms-auto text-end font-numeric">
-                    <span className="block text-primary">{compactUsd(r.fees)}</span>
-                    <span className="block text-[11px] text-muted-foreground">
-                      {t("admin.analytics.of")} {compactUsd(r.gross)}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
+            // Money over time was a list of rows, which is the one shape that
+            // hides a trend: a reader had to hold six figures in their head to
+            // notice a decline. Gross and the platform's own cut are drawn on
+            // one pair of axes so the margin between them is visible directly.
+            <div className="h-64">
+              <RevenueByMonthChart data={data.revenueByMonth} />
+            </div>
           )}
         </Panel>
 
@@ -150,14 +132,32 @@ export default function AdminAnalyticsPage() {
           {data.revenueByVenture.length === 0 ? (
             <ChartEmpty />
           ) : (
-            <ul className="divide-y divide-border/50">
-              {data.revenueByVenture.map((r) => (
-                <li key={r.projectId} className="flex items-baseline gap-3 py-2.5 text-sm">
-                  <span className="min-w-0 flex-1 truncate">{r.name}</span>
-                  <span className="font-numeric text-xs text-muted-foreground/70">{r.transactions}</span>
-                  <span className="shrink-0 font-numeric text-primary">{compactUsd(r.fees)}</span>
-                </li>
-              ))}
+            // A sorted list already ranks these correctly, but rank alone cannot
+            // say whether the top venture earns twice the second or twenty times
+            // it. The bar carries the magnitude the ordering leaves out.
+            <ul className="space-y-2.5">
+              {(() => {
+                const top = Math.max(1, ...data.revenueByVenture.map((r) => r.fees));
+                return data.revenueByVenture.map((r) => (
+                  <li key={r.projectId} className="text-sm">
+                    <div className="flex items-baseline gap-3">
+                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                      <span className="font-numeric text-xs text-muted-foreground/70">
+                        {r.transactions}
+                      </span>
+                      <span className="shrink-0 font-numeric text-primary">
+                        {compactUsd(r.fees)}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                      <span
+                        className="block h-full rounded-full bg-primary/70"
+                        style={{ width: `${(r.fees / top) * 100}%` }}
+                      />
+                    </div>
+                  </li>
+                ));
+              })()}
             </ul>
           )}
         </Panel>
@@ -167,40 +167,76 @@ export default function AdminAnalyticsPage() {
 }
 
 /**
- * One rung. The bar is scaled against the widest step, and the drop-off from the step
- * above is stated as a count first.
+ * One rung of the funnel, drawn so the leak is the thing you see.
+ *
+ * The previous version scaled every bar against the widest step, which made a
+ * funnel of 110 → 92 → 88 → 77 → 75 → 71 → 52 render as seven bars of nearly
+ * the same length: the shape a funnel exists to show was invisible, and the only
+ * way to read a drop-off was the small "−18" caption beside it.
+ *
+ * Two changes fix that. The bar is measured against the FIRST step, so its
+ * length is "share of everyone who started that got this far". And the people
+ * lost at this step are drawn as their own dim segment immediately after the
+ * survivors, in the same track — the gap between the two is the leak, at the
+ * point in the ladder where it happened.
  */
 function FunnelRow({
   step,
-  widest,
+  first,
   previous,
 }: {
   step: AdminFunnelStep;
-  widest: number;
+  first: number;
   previous: AdminFunnelStep | null;
 }) {
   const { t } = useLocale();
-  const width = Math.round((step.count / widest) * 100);
-  const lost = previous ? previous.count - step.count : 0;
+  const kept = first > 0 ? (step.count / first) * 100 : 0;
+  const lost = previous ? Math.max(0, previous.count - step.count) : 0;
+  const lostWidth = first > 0 ? (lost / first) * 100 : 0;
+  // Step-to-step conversion is the number an operator acts on: "of the people
+  // who reached the previous rung, how many took this one?"
+  const conversion = previous && previous.count > 0
+    ? Math.round((step.count / previous.count) * 100)
+    : null;
 
   return (
     <li>
-      <div className="flex items-baseline justify-between gap-3 text-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
         <span className="font-medium">{step.stage}</span>
         <span className="flex items-baseline gap-2">
           <span className="font-numeric text-foreground">{step.count}</span>
-          {lost > 0 && (
+          {conversion != null && (
             <span className="font-numeric text-[11px] text-muted-foreground">
+              {conversion}% {t("admin.analytics.ofPrevious")}
+            </span>
+          )}
+          {lost > 0 && (
+            <span className="font-numeric text-[11px] text-bronze">
               −{lost} {t("admin.analytics.dropped")}
             </span>
           )}
         </span>
       </div>
-      <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-secondary">
+      <div className="mt-1.5 flex h-2.5 w-full overflow-hidden rounded-full bg-secondary">
         <span
-          className={cn("block h-full rounded-full", step.stage === "Funded" ? "bg-primary" : "bg-bronze")}
-          style={{ width: `${width}%` }}
+          className={cn(
+            "block h-full transition-[width] duration-700 ease-out",
+            step.stage === "Funded" ? "bg-primary" : "bg-bronze"
+          )}
+          style={{ width: `${kept}%` }}
         />
+        {/* The leak, in place. Striped rather than solid so it never reads as
+            another cohort that is still in the funnel. */}
+        {lostWidth > 0 && (
+          <span
+            className="block h-full opacity-45"
+            style={{
+              width: `${lostWidth}%`,
+              backgroundImage:
+                "repeating-linear-gradient(135deg, var(--bronze) 0 3px, transparent 3px 6px)",
+            }}
+          />
+        )}
       </div>
     </li>
   );
@@ -240,4 +276,59 @@ function monthName(iso: string, locale: string): string {
     month: "short",
     year: "2-digit",
   }).format(new Date(y, (m ?? 1) - 1, 1));
+}
+
+/**
+ * How long one stage takes, drawn as a range rather than two numbers.
+ *
+ * Median and longest were printed side by side as text, which hid the thing an
+ * operator is looking for: the gap between them. A stage with a median of two
+ * days and a worst case of two days is running smoothly; a stage with the same
+ * median and a worst case of three weeks has a queue nobody is watching. As text
+ * those two read almost identically.
+ *
+ * Every row shares one scale — the longest wait anywhere in the pipeline — so
+ * the bars are comparable across stages instead of each filling its own track.
+ * The solid part is the median, the dim extension is the tail out to the worst
+ * case, and a long dim tail is the bottleneck.
+ */
+function DwellRow({
+  dwell,
+  scale,
+}: {
+  dwell: { stage: string; medianMinutes: number; longestMinutes: number; samples: number };
+  scale: number;
+}) {
+  const { t } = useLocale();
+  const medianPct = Math.min(100, (dwell.medianMinutes / scale) * 100);
+  const longestPct = Math.min(100, (dwell.longestMinutes / scale) * 100);
+  const tailPct = Math.max(0, longestPct - medianPct);
+
+  return (
+    <li>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm">
+        <span className="font-medium">{dwell.stage}</span>
+        <span className="flex items-baseline gap-2">
+          <span className="font-numeric text-foreground">{duration(dwell.medianMinutes, t)}</span>
+          <span className="text-[11px] text-muted-foreground">{t("admin.analytics.median")}</span>
+          <span className="font-numeric text-[11px] text-muted-foreground">
+            {t("admin.analytics.longest")} {duration(dwell.longestMinutes, t)}
+          </span>
+          {/* The sample size is never optional. A median over three moves is not
+              a fact about the platform, and printing it alone would imply it is. */}
+          <span className="shrink-0 rounded-full border border-border px-2 py-0.5 font-numeric text-[11px] leading-5 text-muted-foreground">
+            n={dwell.samples}
+          </span>
+        </span>
+      </div>
+      <div
+        className="mt-1.5 flex h-2.5 w-full overflow-hidden rounded-full bg-secondary"
+        role="img"
+        aria-label={`${dwell.stage}: ${t("admin.analytics.median")} ${duration(dwell.medianMinutes, t)}, ${t("admin.analytics.longest")} ${duration(dwell.longestMinutes, t)}`}
+      >
+        <span className="block h-full bg-bronze" style={{ width: `${medianPct}%` }} />
+        <span className="block h-full bg-bronze/25" style={{ width: `${tailPct}%` }} />
+      </div>
+    </li>
+  );
 }

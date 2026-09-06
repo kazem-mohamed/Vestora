@@ -46,8 +46,11 @@ schema migration rather than a patch.
     columns: (42mm, 1fr),
     align: (left + top, left + top),
     table.header([Feature], [What it does]),
-    [Venture creation], [Title, description, sector, location, stage and funding
-      target.],
+    [Venture creation], [Title, description, category, location, stage and
+      funding target.],
+    [Closed category list], [Thirty-nine categories, validated on the server and
+      translated on the client. A venture cannot be classified as anything
+      else.],
     [Imagery], [A cover image and a gallery, size-capped and content-type
       verified against the bytes rather than the name.],
     [Team members], [The people behind the venture, with roles.],
@@ -113,6 +116,30 @@ questions and are written by three different actors.
   caption: [Three columns, three writers, three questions. No column has two
     writers, and no writer touches two columns.],
 )
+
+== A venture is classified from a closed list
+
+Category was once two free-text fields — `Category` and `Industry` — and neither
+was validated or translated.
+
+#delivered[
+  The consequence was concrete: *the same clothing brand could be typed
+  "Fashion", "Apparel" and "Retail" by three different founders*, and every one of
+  them was displayed as raw English on an Arabic screen. Two filters over that
+  data would have found three different populations for one industry.
+]
+
+The replacement is a single closed list of thirty-nine keys, defined once on the
+server in `ProjectCategories` and mirrored in the client's `categories.ts`. The
+server validates against it; the client translates each key through the
+dictionaries, so an Arabic reader sees Arabic rather than whatever the founder
+happened to type.
+
+The list is also deliberately *not* a generic startup taxonomy. It is grounded in
+the businesses this platform actually serves — apparel manufacturers, textile
+exporters, food production, furniture workshops, restaurants, logistics,
+import-export — alongside the digital categories, because a platform whose
+categories only describe software cannot classify most of the ventures on it.
 
 #full-page-figure(
   "/assets/diagrams/out/state-project.svg",

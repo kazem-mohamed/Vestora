@@ -1,0 +1,20 @@
+flowchart TB
+    A["Relationship exists<br/>investor committed, founder accepted"] --> B{"Either side<br/>drafts terms"}
+    B --> C["TermSheet · Proposed<br/>amount · equity · conditions"]
+    C --> D{"The other side<br/>answers"}
+    D -->|"accept"| E["TermSheet · Accepted"]
+    D -->|"decline · reason required"| F["TermSheet · Declined<br/>reason retained"]
+    F -->|"redraft"| C
+    E --> G[["CommitmentTargetAsync<br/>the accepted amount becomes<br/>what tranches are measured against"]]
+    G --> H["Funding request<br/>calls in against this target"]
+
+    subgraph NP["Never a party"]
+        AD["Administrator<br/>may read · may not propose,<br/>accept or decline"]
+    end
+
+    classDef gate fill:#F6F2E7,stroke:#B08A3F,color:#241C14
+    classDef key fill:#FCFAF3,stroke:#8B4F2A,stroke-width:2px,color:#241C14
+    classDef off fill:#F6F2E7,stroke:#E3D9C4,color:#71614C
+    class B,D gate
+    class E,G key
+    class AD off

@@ -400,7 +400,12 @@ export default function AdminRevenuePage() {
                     </div>
                     <PaymentStatusPill status={tx.status} />
                   </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/50 pt-3 text-center">
+                  {/* Three currency figures in three columns leaves ~110px each
+                      on a phone, which wraps the numbers and destroys the
+                      alignment that makes them comparable. Below `sm` they read
+                      as labelled rows instead — the same data, in the shape a
+                      narrow column can actually hold. */}
+                  <div className="mt-3 flex flex-col gap-1.5 border-t border-border/50 pt-3 sm:grid sm:grid-cols-3 sm:gap-2 sm:text-center">
                     <Cell label={t("pay.col.amount")} value={exactMoney(tx.amount)} />
                     <Cell label={t("pay.col.fee")} value={exactMoney(tx.feeAmount)} />
                     <Cell label={t("pay.col.net")} value={exactMoney(tx.netToFounder)} />
@@ -686,9 +691,9 @@ function Kpi({
 
 function Cell({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="flex items-baseline justify-between gap-3 sm:block">
       <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className="font-numeric mt-0.5 text-[12.5px]">{value}</p>
+      <p className="font-numeric text-[12.5px] sm:mt-0.5">{value}</p>
     </div>
   );
 }

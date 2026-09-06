@@ -3,461 +3,419 @@
 
 #show: deck
 
-// ═══════════════════════════════════════════════════════════ TITLE ═══
+// Rules this deck is written against, because the previous one broke all four:
+//   1. The title is the claim. The body is the evidence for it.
+//   2. Fragments, never sentences. The speaker says the sentences.
+//   3. Fill the frame. Nothing small and centred in a wide one.
+//   4. Show the product. An argument about software is weaker than the software.
+
+// ══════════════════════════════════════════════════════════ TITLE ═══
 #set page(footer: none)
 #v(1fr)
 #align(center)[
   #grid(
     columns: (auto, auto),
-    column-gutter: 10mm,
-    align: (center + horizon, center + horizon),
-    image("/assets/logo-university.png", width: 17mm),
-    image("/assets/logo-faculty.png", width: 22mm),
+    column-gutter: 12mm,
+    align: (horizon, horizon),
+    image("/assets/logo-university.png", width: 19mm),
+    image("/assets/logo-faculty.png", width: 24mm),
   )
   #v(9mm)
-  #image("/assets/vestora-mark.svg", width: 15mm)
+  #image("/assets/vestora-mark.svg", width: 17mm)
   #v(4mm)
-  #text(font: display-font, size: 34pt, weight: 700, tracking: 0.24em)[VESTORA]
-  #v(3mm)
-  #line(length: 30mm, stroke: 1pt + gold)
-  #v(5mm)
-  #text(size: 17pt, fill: muted)[An equity crowdfunding platform for founders and investors]
+  #text(font: display-font, size: 40pt, weight: 600, tracking: 0.08em)[VESTORA]
+  #v(4mm)
+  #text(size: 16pt, fill: muted)[An equity crowdfunding platform for founders and investors]
   #v(12mm)
-  #eyebrow[Graduation Project · Supervised by Dr. Khaled Amin]
+  #text(font: heading-font, size: 11pt, fill: muted, tracking: 0.06em)[
+    Graduation Project · Menoufia University · Faculty of Computers and Information
+  ]
+  #v(2mm)
+  #text(font: heading-font, size: 11pt, fill: muted)[Supervisor · Dr. Khaled Amin]
 ]
 #v(1fr)
 #set page(footer: auto)
 
-// ═══════════════════════════════════════════════════════ THE CLAIM ═══
+// ═════════════════════════════════════════════════════ THE PROBLEM ═══
+
 #statement[
-  Capital and ideas are both plentiful.
+  Access to capital is decided by who a founder already knows.
 ][
-  What is scarce is a reliable way for the two to find each other
-  at the smallest end of the market.
+  Everything in this project follows from treating that as a software problem
+  rather than a market one.
 ]
 
-#slide(eyebrow-text: "The gap", title: "Two models, neither of them ours")[
+#slide(eyebrow-text: "The problem", title: "Four failures, one shape")[
+  #v(3mm)
+  #grid(
+    columns: (1fr, 1fr),
+    column-gutter: 12mm,
+    row-gutter: 9mm,
+    callout(label: "01 · Discovery")[
+      Found through *who the founder knows* — not through what the venture is.
+    ],
+    callout(label: "02 · Evaluation")[
+      Team, ask, documents, progress — scattered across decks and email, and
+      *verifiable by nobody*.
+    ],
+    callout(label: "03 · Commitment")[
+      Existing platforms model a *purchase*. An equity commitment has an
+      approval step and a settlement step.
+    ],
+    callout(label: "04 · After the money")[
+      The platform stops at payment. *Accountability becomes goodwill.*
+    ],
+  )
+  #v(6mm)
+  #align(center, text(size: 15pt, fill: muted)[
+    Each one is a software problem before it is a market problem.
+  ])
+]
+
+#slide(eyebrow-text: "Where this sits", title: "Two models. Neither of them ours.")[
   #v(2mm)
   #table(
-    columns: (1fr, 1fr, 1fr),
-    align: (left + top, left + top, left + top),
-    table.header([], [Reward platforms], [Equity platforms]),
-    [Accepts small amounts], [Yes], [No],
-    [Models a holding], [No — it is a pre-order], [Yes],
-    [Supports diligence], [No], [Yes],
-    [Continues after funding], [Ends at fulfilment], [Ends at close],
+    columns: (1fr, auto, auto, auto),
+    align: (left + horizon, center + horizon, center + horizon, center + horizon),
+    table.header([], [Reward\ platforms], [Equity\ platforms], [*Vestora*]),
+    [Discovery without an account], [Yes], [Often no], [*Yes*],
+    [Models a holding, not a purchase], [No], [Yes], [*Yes*],
+    [Open to small individual amounts], [Yes], [No], [*Yes*],
+    [Approved and funded kept separate], [No], [Varies], [*Yes*],
+    [The relationship after the money], [Partial], [Rare], [*Yes*],
+    [Legal execution of the instrument], [N/A], [Yes], [*No*],
+    [Identity and AML checks], [Partial], [Yes], [*No*],
   )
-  #v(6mm)
-  #callout(label: "Where Vestora sits")[
-    The *intersection*: small individual amounts, a real holding, evidence
-    channels, and a relationship that continues after the money moves.
-  ]
+  #v(4mm)
+  #align(center, text(size: 14pt, fill: muted)[
+    The last two rows are ours to lose. A comparison the author wins on every
+    line is not a comparison.
+  ])
 ]
 
-#slide(eyebrow-text: "Problem", title: "Four failures, each a software problem")[
-  #v(3mm)
-  #stats(
-    stat("01", "Discovery is networked"),
-    stat("02", "Evaluation is unsupported"),
-    stat("03", "Commitment is unmodelled"),
-    stat("04", "Relationship ends at payment"),
-  )
-  #v(9mm)
-  #set text(size: 14.5pt)
-  - A venture is found through *who the founder knows*, not what it is.
-  - Diligence material is scattered and unverifiable by the host.
-  - Existing platforms model a *purchase*; a commitment has an approval step
-    and a settlement step that must never be confused.
-  - Once funds move, the platform stops. Accountability becomes goodwill.
+// ════════════════════════════════════════════════════ THE CORE IDEA ═══
+
+#section-slide(1, "The idea the system rests on", sub: "One distinction, enforced everywhere")
+
+#statement[
+  An approved commitment is not a funded one.
+][
+  Saying yes is not paying. The platform never lets the two become one number.
 ]
 
-// ══════════════════════════════════════════════════════ THE SYSTEM ═══
-#section-slide(1, "What was built", sub: "The system, in four minutes")
-
-#diagram-slide(
-  "/assets/diagrams/out/c4-container.svg",
-  label: "System overview — containers and boundaries",
-)
-
-#slide(eyebrow-text: "Scale", title: "The system in numbers")[
-  #v(6mm)
-  #stats(
-    stat("22", "API controllers", accent-value: true),
-    stat("150", "endpoints", accent-value: true),
-    stat("40+", "entities", accent-value: true),
-    stat("65", "frontend routes", accent-value: true),
-  )
-  #v(12mm)
-  #stats(
-    stat("20+", "migrations"),
-    stat("3", "roles"),
-    stat("2", "languages · LTR and RTL"),
-    stat("2", "themes"),
-  )
-]
-
-#slide(eyebrow-text: "Running system", title: "Three roles, one platform")[
+#slide(eyebrow-text: "Why it matters", title: "One column, three writers, one bug")[
   #v(2mm)
-  #grid(
-    columns: (1fr, 1fr, 1fr),
-    column-gutter: 5mm,
-    shot("/assets/screenshots/invest-overview.png", cap: [Investor — funded and committed as separate figures]),
-    shot("/assets/screenshots/founder-funding.png", cap: [Founder — incoming commitments]),
-    shot("/assets/screenshots/admin-overview.png", cap: [Administrator — platform oversight]),
-  )
-]
-
-// ════════════════════════════════════════════════ THE ENGINEERING ═══
-#section-slide(2, "The engineering", sub: "Four decisions worth defending")
-
-#slide(eyebrow-text: "Decision 1", title: "Approved is not funded")[
   #two(
     [
-      #set text(size: 14.5pt)
-      *The defect we shipped.* A founder approved a commitment and the venture's
-      funding progress went up. No money had moved.
-
-      #v(4mm)
-      *Why patching the handler was wrong.* The schema had one amount and no
-      concept of settlement. Moving the increment would have moved the symptom
-      and left the class.
-
-      #v(4mm)
-      *The fix.* Four objects, each holding a fact the previous cannot.
+      #callout(label: "The symptom")[
+        A venture that was *actively raising* reverted to an early stage after
+        its founder edited the description and an admin re-approved it.
+      ]
+      #v(5mm)
+      #callout(label: "The cause")[
+        One status column written by three actors — administrator, founder,
+        funding pipeline — each for a good reason, none aware of the others.
+      ]
     ],
-    callout(label: "The rule", accent: gold)[
-      Exactly *one* state — `Settled` — contributes to a venture's total.
-
-      #v(3mm)
-      The founder's dashboard shows *two numbers*, permanently, because there
-      are two facts.
+    [
+      #callout(label: "The fix", accent: gold)[
+        Three columns. *One writer each.*
+        #v(3mm)
+        #set text(size: 13pt)
+        `ModerationStatus` — administrator \
+        `LifecycleStatus` — founder \
+        `Stage` — funding pipeline
+      ]
+      #v(5mm)
+      #text(size: 15pt)[
+        The sequence that produced the defect is now *structurally impossible*.
+        Approval writes one column and cannot reach the other two.
+      ]
     ],
   )
 ]
 
-#slide(eyebrow-text: "Decision 2", title: "One field, two writers, one bug")[
+#slide(eyebrow-text: "The consequence", title: "Totals are derived, never stored")[
+  #v(2mm)
   #two(
     [
-      #set text(size: 14pt)
-      A perfectly ordinary sequence, with a single status column:
-
-      #v(3mm)
-      + Founder submits → `pending`
-      + Admin approves → `approved`
-      + Investors fund → `funding`
-      + Founder edits the description → `pending`
-      + Admin approves again → `approved`
-
-      #v(4mm)
-      *Step 5 erased the fact that the venture was funding* — by an operation
-      unrelated to funding, performed by someone not thinking about funding.
-    ],
-    [
-      #callout(label: "The general form", accent: gold)[
-        A field written by two actors for two reasons *is two fields*.
+      #text(size: 15.5pt)[
+        Four figures, four predicates, *no stored aggregate anywhere.*
       ]
       #v(5mm)
       #set text(size: 14pt)
-      Three columns, three writers, three questions:
-      #v(2mm)
       #table(
         columns: (auto, 1fr),
-        align: (left, left),
-        table.header([Column], [Written by]),
-        [`ModerationStatus`], [Administrator],
-        [`LifecycleStatus`], [Owner or system],
-        [`Stage`], [Funding pipeline],
+        align: (left + top, left + top),
+        table.header([Figure], [Counted from]),
+        [Interest], [requests awaiting a decision],
+        [Committed], [the founder accepted],
+        [Payment due], [an open funding request],
+        [*Funded*], [*a settled payment*],
       )
     ],
-  )
-]
-
-#slide(eyebrow-text: "Decision 3", title: "Totals are derived, never stored")[
-  #two(
     [
-      #set text(size: 14.5pt)
-      There is *no* `AmountRaised` column anywhere in the schema.
-
-      #v(4mm)
-      A stored total can drift silently, and — worse — it structurally invites
-      incrementing at approval rather than at settlement.
-
-      #v(4mm)
-      Totals are computed from settled transactions, in one place, on read.
-      *There is nothing to drift from.*
-    ],
-    [
-      ```cs
-      _db.PaymentTransactions
-         .Where(t => t.Status == Settled)
-         .SumAsync(t => t.Amount)
-      ```
-      #v(4mm)
-      #callout(label: "The cost we accepted")[
-        A read-time aggregation on the hottest page in the platform.
-
-        #v(2mm)
-        A stale cache is recoverable. A drifted counter is not.
+      #callout(label: "Why not a counter", accent: gold)[
+        A counter can drift and cannot be recomputed.
+        #v(3mm)
+        An aggregation over rows is always correct and can be rebuilt from
+        history at any time.
       ]
-    ],
-  )
-]
-
-#slide(eyebrow-text: "Decision 4", title: "Constraints beat conventions")[
-  #v(2mm)
-  #set text(size: 15pt)
-  Four business rules in this system are *database indexes*, not application
-  checks:
-  #v(4mm)
-  #table(
-    columns: (1fr, 1fr),
-    align: (left, left),
-    table.header([Rule], [Enforced by]),
-    [Save a venture at most once], [`Bookmark (UserId, ProjectId)` unique],
-    [Follow a user at most once], [`Follow (FollowerId, FollowedId)` unique],
-    [Review a venture at most once], [`Review (ProjectId, InvestorId)` unique],
-    [Process a provider event once], [`PaymentEvent.ProviderEventId` unique],
-  )
-  #v(6mm)
-  #callout(label: "Why it matters", accent: gold)[
-    An application check leaves a race: two concurrent requests can both pass it
-    before either writes. *The constraint does not.*
-  ]
-]
-
-#diagram-slide(
-  "/assets/diagrams/out/seq-payment.svg",
-  label: "Payments — rules live above the provider",
-  note: [Signature verified over the raw body → duplicate event is a no-op →
-    the total is *derived* at the end, not incremented along the way.],
-)
-
-// ═══════════════════════════════════════════════════════ EVIDENCE ═══
-#section-slide(3, "Evidence", sub: "What was measured, and what was not")
-
-#slide(eyebrow-text: "Testing", title: "41 tests, and an honest coverage story")[
-  #two(
-    [
-      #v(2mm)
-      #stats(
-        stat("41", "tests passing", accent-value: true),
-        stat("34", "milliseconds"),
-      )
-      #v(8mm)
-      #set text(size: 14pt)
-      The suite covers the *domain* layer — the components deliberately built
-      with no I/O, which is why it runs in 34 ms.
-    ],
-    [
-      #table(
-        columns: (1fr, auto, auto),
-        align: (left, right, right),
-        table.header([Scope], [Line], [Branch]),
-        [`PipelineStages`], [*100%*], [*100%*],
-        [`FundingMath`], [25.8%], [*80%*],
-        [Whole solution], [0.06%], [1.1%],
-      )
       #v(5mm)
-      #callout(label: "Read the third row")[
-        0.06% is diluted by 22 controllers and hundreds of DTO properties.
-        It is shown to demonstrate *why it is not used*.
+      #text(size: 14.5pt, fill: muted)[
+        The cost is accepted knowingly: a read-time sum on the busiest page.
+        A stale cache is recoverable. A drifted number is not.
       ]
     ],
   )
 ]
 
-#slide(eyebrow-text: "Performance", title: "Measured — including the miss")[
+// ═══════════════════════════════════════════════════ THE PRODUCT ═══
+
+#section-slide(2, "The platform", sub: "Live demonstration — or the journey that follows")
+
+#slide(eyebrow-text: "Discovery", title: "Found on attributes, without an account")[
   #v(2mm)
-  #two(
-    [
-      #table(
-        columns: (1fr, auto, auto),
-        align: (left, right, right),
-        table.header([Page], [TTFB], [FCP]),
-        [Landing], [147 ms], [468 ms],
-        [Venture listing], [92 ms], [320 ms],
-      )
-      #v(4mm)
-      #set text(size: 13.5pt)
-      Server rendering doing what it was chosen for: content in the first
-      response.
-    ],
-    [
-      #table(
-        columns: (1fr, auto, auto),
-        align: (left, right, right),
-        table.header([Endpoint], [p50], [p95]),
-        [`GET /api/projects`], [495 ms], [*519 ms*],
-      )
-      #v(4mm)
-      #callout(label: "NFR-02 is not met", accent: bronze)[
-        Target was 300 ms at p95. We measure *519 ms*.
-
-        #v(2mm)
-        p50 and p95 are 24 ms apart and the floor is 472 ms — a *fixed* cost,
-        not a slow plan. It is the round trip to a remote database.
-      ]
-    ],
-  )
-]
-
-#slide(eyebrow-text: "Credibility", title: "What we did not do")[
-  #v(3mm)
-  #set text(size: 14.5pt)
-  - *No live money.* The Stripe path is written, signature-verified and
-    idempotent — and has never run against a merchant account.
-  - *No regulatory onboarding.* No identity or anti-money-laundering checks.
-  - *Testing covers the domain layer only.* 54 of 58 requirements rest on
-    inspection.
-  - *No user study.* Specified, not run.
-  - *No CI, no alerting, no metrics pipeline.*
-  - *Load behaviour above five concurrent readers is unknown* — our harness was
-    a browser and could not generate more.
-
+  #shot("/assets/screenshots/deck-discovery.png")
   #v(6mm)
-  #callout(label: "Why this slide exists", accent: gold)[
-    The previous version of this project claimed four weeks of testing and a QA
-    role while showing no test artefact. *A committee that finds one invented
-    number discounts every other number.*
-  ]
-]
-
-// ═══════════════════════════════════════════════════════ THE BOOK ═══
-#slide(eyebrow-text: "Documentation", title: "The book behind this deck")[
-  #v(4mm)
-  #stats(
-    stat("170", "pages", accent-value: true),
-    stat("20", "chapters"),
-    stat("13", "diagrams"),
-    stat("10", "ADRs"),
-    stat("36", "references"),
-  )
-  #v(10mm)
   #two(
     [
       #set text(size: 14pt)
-      *Against the previous version:*
+      - No sign-in required — the founding claim, shown rather than asserted
+      - One search field, *four* attribute filters, *six* sort orders
+    ],
+    [
+      #set text(size: 14pt)
+      - *Thirty-nine* categories, closed and translated — free text cannot be
+        filtered coherently
+      - Ranking is *deterministic*: a founder can be told why they rank where
+        they do
+    ],
+  )
+]
+
+#slide(eyebrow-text: "The relationship", title: "One investor, one venture, one page")[
+  #v(1mm)
+  #shot("/assets/screenshots/deck-dealroom.png", h: 60mm)
+  #v(4mm)
+  #two(
+    [
+      #set text(size: 13.5pt)
+      Three badges, and only one of them is typed by a person. *Committed* is
+      the relationship stage. *Funded* is money that settled.
+    ],
+    [
+      #set text(size: 13.5pt)
+      *Slowing · 178d quiet* is derived — a score spent down from 100 by named
+      problems, computed on read. A health field somebody has to keep current
+      is a health field that is permanently green.
+    ],
+  )
+]
+
+#slide(eyebrow-text: "The record", title: "A timeline nobody maintains")[
+  #v(1mm)
+  #two(
+    [
       #v(2mm)
+      #set text(size: 15pt)
+      - Every stage move is an *append-only* row: from, to, actor, reason, and
+        the minutes spent in the previous stage
+      - The timeline is *assembled at read time* from those rows, the funding
+        request and the transactions
+      - So an event cannot be missing because nobody remembered to write it
+      #v(4mm)
+      #callout(label: "Measured, not estimated", accent: gold)[
+        #set text(size: 14pt)
+        *In discussion — 9 days. Committed — 178 days.*
+        #v(2mm)
+        Real elapsed time on a real relationship, which is why the health score
+        above reads as it does.
+      ]
+    ],
+    shot("/assets/screenshots/deck-timeline.png"),
+    ratio: (1.25fr, 1fr),
+  )
+]
+
+#slide(eyebrow-text: "Platform economics", title: "Every figure a sum over rows")[
+  #v(3mm)
+  #shot("/assets/screenshots/deck-revenue.png", h: 64mm)
+  #v(6mm)
+  #two(
+    [
+      #set text(size: 15pt)
+      Not one of these is stored as a balance. Revenue is the sum of the fee on
+      settled transactions; net to founders is the difference.
+    ],
+    [
+      #set text(size: 15pt)
+      A refund removes its row from the settled set and every figure falls by
+      itself — *no compensating entry, no reconciliation step.*
+    ],
+  )
+]
+
+// ═══════════════════════════════════════════════════ ENGINEERING ═══
+
+#section-slide(3, "How it is defended", sub: "Constraints, tests, and what we measured")
+
+#slide(eyebrow-text: "Correctness", title: "Constraints beat conventions")[
+  #v(3mm)
+  #two(
+    [
+      #callout(label: "The race")[
+        Two rapid taps. Two requests. Both pass the application check *before
+        either one writes.*
+      ]
+      #v(5mm)
+      #text(size: 15pt)[
+        A check in code can be raced. A unique index cannot — the second insert
+        fails, and that failure is the correct outcome.
+      ]
+    ],
+    [
+      #set text(size: 14pt)
       #table(
-        columns: (1fr, auto, auto),
-        align: (left, right, right),
-        table.header([], [Old], [New]),
-        [Pages], [93], [170],
-        [Words], [12,038], [82,000],
-        [Diagrams], [*0*], [13],
-        [References], [*0*], [36],
+        columns: (1fr,),
+        align: (left,),
+        table.header([Enforced by the database, not by code]),
+        [`Bookmark (UserId, ProjectId)` — saved once],
+        [`Follow (FollowerId, FollowedId)` — followed once],
+        [`Review (ProjectId, InvestorId)` — one per venture],
+        [`PaymentEvent.ProviderEventId` — a webhook applied once],
+        [`OneActivePerRequest` — one live attempt],
+        [`OneSucceededPerRequest` — one settlement],
       )
     ],
-    callout(label: "The change of standard")[
-      Half the old book narrated code line by line and its "References" section
-      was five installer download links.
+    ratio: (1fr, 1.2fr),
+  )
+]
+
+#slide(eyebrow-text: "Verification", title: "85 tests, and an honest limit")[
+  #v(2mm)
+  #two(
+    [
+      #stats(
+        stat("57", "domain tests"),
+        stat("28", "integration tests"),
+      )
+      #v(6mm)
+      #set text(size: 14.5pt)
+      *Domain* — arithmetic over rows and a transition table. No I/O, so no
+      database at all.
 
       #v(3mm)
-      This one argues, and every figure it states was measured.
+      *Integration* — the real application, driven over HTTP. That is what lets
+      `SecurityBoundaryTests` assert that a role check is not an ownership
+      check.
+    ],
+    [
+      #callout(label: "What it does not prove", accent: gold)[
+        The integration half runs on an *in-memory provider*, not SQL Server.
+
+        #v(3mm)
+        It proves endpoint behaviour, status codes and authorisation.
+        It does *not* prove that every query translates.
+      ]
+      #v(5mm)
+      #text(size: 14pt, fill: muted)[
+        Still absent: end-to-end browser tests, load tests, continuous
+        integration. The suite passes because somebody ran it.
+      ]
     ],
   )
 ]
 
-#slide(eyebrow-text: "Next", title: "Future work, ordered by dependency")[
-  #v(4mm)
-  #set text(size: 15pt)
-  + *Operate the Stripe path against a live merchant account.* Every other item
-    is worth less until money can actually move.
-  + *Identity and anti-money-laundering onboarding.* Legally prerequisite to
-    item 1.
-  + *CI, alerting and observability.* The operational floor.
-  + *Backplane for presence, durable notification queue.* Unlocks horizontal
-    scaling — and must precede a second instance.
+#slide(eyebrow-text: "Measurement", title: "Including the target we missed")[
+  #v(2mm)
+  #two(
+    [
+      #set text(size: 14pt)
+      #table(
+        columns: (1fr, auto, auto),
+        align: (left, right, right),
+        table.header([`GET /api/projects`], [p50], [p95]),
+        [Page 1], [495 ms], [*519 ms*],
+        [Page 2], [475 ms], [500 ms],
+      )
+      #v(4mm)
+      #text(size: 15pt)[
+        `NFR-02` asked for *300 ms* at the 95th percentile. We measure *519*.
+      ]
+    ],
+    [
+      #callout(label: "The distribution is the diagnosis", accent: gold)[
+        p50 and p95 are *24 ms apart*, and the floor is 472 ms.
 
+        #v(3mm)
+        A slow *plan* varies. A slow *floor* is a fixed cost — the round trip to
+        a database on another network.
+      ]
+      #v(4mm)
+      #text(size: 14pt, fill: muted)[
+        Page 2 measures marginally faster than page 1, which confirms the cost
+        is not in the row count. The optimisations were correct; they addressed
+        the part that was not the bottleneck.
+      ]
+    ],
+  )
+]
+
+// ═════════════════════════════════════════════════════════ CLOSING ═══
+
+#slide(eyebrow-text: "Scope", title: "What we did not build")[
+  #v(3mm)
+  #two(
+    [
+      #set text(size: 15pt)
+      - *Live money movement* — the Stripe path is implemented and
+        configurable; the application refuses to start on a live key
+      - *Regulatory onboarding* — no identity verification, no AML
+      - *Legal execution* — commitments are recorded, instruments are not
+        issued
+    ],
+    [
+      #set text(size: 15pt)
+      - *Secondary transfer* — a commitment cannot be sold on
+      - *Learned recommendation* — ranking stays explicable by choice
+      - *Horizontal scale* — presence and the notification queue are
+        process-local
+    ],
+  )
   #v(7mm)
-  #callout(label: "Deliberately last", accent: gold)[
-    *Assisted discovery.* Ranking today is deterministic and explicable, which
-    was a requirement. An opaque model reintroduces exactly the unexplainable
-    advantage the project set out to remove.
-  ]
+  #align(center, callout(label: "Every one of these is in the book", accent: gold)[
+    #align(center)[
+      #set text(size: 15pt)
+      Declared in the scope exclusions before it was built, and repeated in the
+      chapter that would otherwise be expected to contain it.
+    ]
+  ])
 ]
 
 #statement[
-  Funding is the middle of a relationship,
-  not the end of a transaction.
+  The distinction between an intention and a settlement is not specific to crowdfunding.
 ][
-  Questions.
+  It is the part of this project we would carry into the next one.
 ]
 
-// ══════════════════════════════════════════════════ TEAM APPENDIX ═══
-#section-slide(4, "For the team", sub: "Not presented — read before the defence")
-
-#slide(eyebrow-text: "Team briefing", title: "Who reads what")[
-  #v(2mm)
-  #table(
-    columns: (auto, 1fr, 1fr),
-    align: (left + top, left + top, left + top),
-    table.header([Area], [Chapters to own], [You must be able to explain]),
-    [Backend · data],
-      [6 Architecture, 7 Database, 9 API],
-      [Why a monolith. Why three state columns. Why totals are derived.],
-    [Payments · security],
-      [10 Security, 11 Payments],
-      [Why the webhook is verified over the raw body, in constant time, before
-       any state change.],
-    [Frontend],
-      [5.3 Migration, 6.5 Frontend, 8 Design system],
-      [Why we left Angular. Why the rewrite touched no business rule.],
-    [Real-time],
-      [12 Real-time],
-      [Why presence is in memory and last-seen is on disk.],
-    [Quality · docs],
-      [15 Testing, 17 Performance, 19 Evaluation],
-      [What is measured, what is not, and why we said so.],
+#slide(eyebrow-text: "The delivered system", title: "In numbers")[
+  #v(6mm)
+  #stats(
+    stat("25", "API controllers"),
+    stat("169", "endpoints"),
+    stat("34", "entity sets"),
+    stat("58", "client routes"),
   )
-]
-
-#slide(eyebrow-text: "Team briefing", title: "Questions to expect — and where the answer is")[
-  #v(2mm)
-  #set text(size: 14pt)
-  #table(
-    columns: (1fr, auto),
-    align: (left + top, left + top),
-    table.header([Question], [Answer lives in]),
-    ["Does money actually move?"], [§11.9 — no, and we say so],
-    ["Where are your tests?"], [§15.2 — 41 passing, domain layer only],
-    ["Is it scalable?"], [§17.7 — no, and here is what binds first],
-    ["Why not microservices?"], [ADR-06, §6.2],
-    ["What happens if the webhook fires twice?"], [§11.5 — unique index, no-op],
-    ["Can an admin read private messages?"], [§10.9 — no, deliberately],
-    ["Why is the listing slow?"], [§17.3 — remote database round trip],
-    ["What is the hardest thing you solved?"], [Ch18 — pick §18.1 or §18.2],
+  #v(10mm)
+  #stats(
+    stat("85", "tests passing", accent-value: true),
+    stat("30", "migrations"),
+    stat("2 × 2", "languages · themes"),
+    stat("20", "diagrams"),
   )
-]
-
-#slide(eyebrow-text: "Team briefing", title: "Numbers to know — and claims to avoid")[
-  #v(2mm)
-  #two(
-    [
-      #callout(label: "Know these cold")[
-        #set text(size: 13.5pt)
-        - 22 controllers · 150 endpoints
-        - 40+ entities · 20+ migrations
-        - 65 frontend routes
-        - 41 tests passing, 34 ms
-        - `PipelineStages` 100% branch covered
-        - Listing p95 = 519 ms (target 300)
-        - 170 pages · 13 diagrams · 36 references
-      ]
-    ],
-    [
-      #callout(label: "Never say these", accent: bronze)[
-        #set text(size: 13.5pt)
-        - "It's fully tested" — it is not
-        - "It's scalable" — single instance
-        - "Payments work" — say *simulated by default*
-        - "It's secure" — say *what* is defended and how
-        - Any number you have not read in the book
-
-        #v(3mm)
-        If you do not know, say *"that is in section X, I would have to check"*.
-        That answer costs nothing. A wrong number costs the whole document.
-      ]
-    ],
-  )
+  #v(9mm)
+  #align(center, text(size: 14pt, fill: muted)[
+    Every figure counted from the source, not estimated.
+  ])
 ]

@@ -15,7 +15,14 @@
   date: "September 2026",
 )
 
-#team-page()
+#team-page(members: (
+  (name: "كاظم محمد حسن عامر", id: "2022040320", role: "Team Leader (Full Stack)"),
+  (name: "كريم حمدي عبدالشافي عيسى", id: "2022040323", role: "UI/UX Design"),
+  (name: "عبدالفتاح احمد محمد الجمل", id: "2022040285", role: "Frontend Development"),
+  (name: "محمود فتحي عبدالله عطية", id: "2022040404", role: "Backend Development"),
+  (name: "سيف الدين طاهر صلاح حسن", id: "190539", role: "Quality Assurance & Testing"),
+  (name: "محمد محمود عبدالعاطي محمد بدوى", id: "2023040473", role: "Database Design"),
+))
 
 // ── Front matter (roman folios) ─────────────────────────────────────
 #set page(numbering: "i")

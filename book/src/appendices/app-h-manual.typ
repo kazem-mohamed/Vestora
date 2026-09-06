@@ -23,7 +23,19 @@ sitting in an inbox is a higher-value target.
 message is identical to a wrong password, so the mechanism does not confirm
 whether an account exists.
 
+#let _pair(a, b, cap) = figure(
+  grid(
+    columns: (1fr, 1fr), column-gutter: 3mm,
+    image("/assets/screenshots/" + a, width: 100%),
+    image("/assets/screenshots/" + b, width: 100%),
+  ),
+  caption: cap,
+)
+
 == For Investors
+
+#_pair("discover-list-en-light.png", "discover-detail-en-light.png",
+  [Finding a venture, and reading one. Neither screen requires an account.])
 
 === Finding ventures
 
@@ -33,6 +45,10 @@ uses no hidden score, and a venture's position can be explained.
 
 *Save a search* to turn a filter combination into a standing interest, and
 *bookmark* ventures to build a watchlist.
+
+#_pair("commit-pipeline-en-light.png", "settled-portfolio-en-light.png",
+  [The pipeline — every request and where it stands — and the portfolio, which
+   shows only what actually settled.])
 
 === Assessing a venture
 
@@ -72,6 +88,9 @@ platform.
 
 == For Founders
 
+#_pair("venture-author-en-light.png", "board-founder-en-light.png",
+  [Listing a venture, and the control room it appears in afterwards.])
+
 === Submitting a venture
 
 + *Create* the venture with a title, description, funding target and imagery.
@@ -110,6 +129,9 @@ that you grant or refuse, access is recorded, and downloads are logged — so yo
 can see that a document was actually read.
 
 == For Administrators
+
+#_pair("review-queue-en-light.png", "gov-audit-en-light.png",
+  [The review queue, and the audit trail every decision in it writes.])
 
 === The review queue
 

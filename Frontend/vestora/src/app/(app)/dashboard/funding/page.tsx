@@ -71,22 +71,6 @@ export default function DashboardFundingPage() {
                 </div>
               )}
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-0.5 w-4 rounded-full bg-primary" />
-                {t("dash.fund.chartFunded")}
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  className="h-0.5 w-4 rounded-full"
-                  style={{
-                    backgroundImage:
-                      "repeating-linear-gradient(90deg, var(--bronze) 0 4px, transparent 4px 7px)",
-                  }}
-                />
-                {t("dash.fund.chartCommitted")}
-              </span>
-            </div>
           </Panel>
 
           <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">

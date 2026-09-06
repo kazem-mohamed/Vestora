@@ -1,0 +1,18 @@
+flowchart LR
+    T["Agreed target<br/>accepted term sheet,<br/>else opening request"] --> R1["Funding request #1"]
+    R1 --> P1["Payment settles<br/>part of the target"]
+    P1 --> S{"sum of settled<br/>>= target?"}
+    S -->|"no"| ST["State = PartiallyFunded<br/>money that arrived is not erased"]
+    ST --> R2["Funding request #2<br/>UnsettledCommitment remaining"]
+    R2 --> P2["Payment settles"]
+    P2 --> S
+    S -->|"yes"| F["State = Funded<br/>the ask closes"]
+
+    N["A first-success test would close<br/>the ask on the opening instalment<br/>and strand the rest"]
+
+    classDef gate fill:#F6F2E7,stroke:#B08A3F,color:#241C14
+    classDef key fill:#FCFAF3,stroke:#8B4F2A,stroke-width:2px,color:#241C14
+    classDef warn fill:#F6F2E7,stroke:#E3D9C4,color:#71614C
+    class S gate
+    class F,ST key
+    class N warn

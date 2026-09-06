@@ -17,9 +17,9 @@
 #let heading-font = ("Karla", "Segoe UI")
 #let body-font = ("Spectral", "Cambria")
 #let mono-font = ("Cascadia Mono", "Consolas")
-// The brand's Arabic faces (Cairo, Aref Ruqaa) are not installed here and were
-// not in the frontend's font cache. Segoe UI carries the Arabic abstract.
-#let arabic-font = ("Segoe UI", "Arial")
+// The brand's own Arabic face — the same one every Arabic screenshot in this
+// book was captured in.
+#let arabic-font = ("Cairo", "Segoe UI")
 
 #let body-size = 10.5pt
 #let small-size = 9pt

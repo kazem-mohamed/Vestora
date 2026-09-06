@@ -1189,12 +1189,34 @@ namespace MyAppApi.Services.Payments
         /// Sequential, human-quotable references: VST-FR-2026-000042, VST-TX-2026-000123.
         /// A person reading one out on a phone should not have to spell a GUID.
         /// </summary>
+        /// <remarks>
+        /// Taken from the highest reference already issued, not from how many rows
+        /// survive. Counting looks equivalent and is not: a deleted request walks the
+        /// counter back over numbers that were already handed out, and the unique index
+        /// on <c>Reference</c> then refuses the insert — so every funding request on the
+        /// platform fails with a 500 until the table grows back past its own high-water
+        /// mark. That is not hypothetical. It is how this method was found: seventy-one
+        /// rows survived, eighty-one references had been issued, and the next ask died.
+        /// <para>
+        /// The maximum is taken over the whole string. That works because every segment
+        /// ahead of the counter is fixed width and ascending — one kind per table, the
+        /// year before the sequence, the sequence zero-padded — so the lexicographic
+        /// maximum is the numeric one and nothing has to be parsed in SQL.
+        /// </para>
+        /// </remarks>
         private async Task<string> NextReferenceAsync(string kind, CancellationToken ct)
         {
             var year = DateTime.UtcNow.Year;
-            var seq = kind == "FR"
-                ? await _db.FundingRequests.IgnoreQueryFilters().CountAsync(ct)
-                : await _db.PaymentTransactions.IgnoreQueryFilters().CountAsync(ct);
+            var last = kind == "FR"
+                ? await _db.FundingRequests.IgnoreQueryFilters().MaxAsync(f => (string?)f.Reference, ct)
+                : await _db.PaymentTransactions.IgnoreQueryFilters().MaxAsync(t => (string?)t.Reference, ct);
+
+            // An empty table has no maximum, and a reference that has been shortened by
+            // hand is not worth trusting — both start again from one.
+            var seq = 0;
+            if (last is { Length: >= 6 } && int.TryParse(last[^6..], out var issued))
+                seq = issued;
+
             return $"VST-{kind}-{year}-{seq + 1:D6}";
         }
 

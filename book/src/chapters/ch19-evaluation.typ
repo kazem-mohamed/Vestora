@@ -121,24 +121,37 @@ are different claims. The counts come from the matrix in @app:traceability.
       [Deferred items were removed from @ch:requirements rather than left
        unmet; they appear in §20.3.],
   ),
-  caption: [Requirements coverage. Every requirement is built; none is
-    verified by an automated test.],
+  caption: [Requirements coverage. Every requirement is built; the areas an
+    automated test now reaches are named below.],
 )
 
-The middle row is the result. Fifty-four of fifty-eight requirements rest on
-inspection, on the structural guarantees of @ch:database, and on manual exercise
-of the journeys in §15.5.
+Verification now comes from two places rather than one, and the difference is
+worth stating precisely.
 
-The four that do not are the ones that matter most — the separation of stage
-from status, the derivation of funding totals, the self-investment rule and
-exact decimal money — and they are covered because §6.4 put those rules in
-components that hold no I/O and can therefore be tested in 34 milliseconds. The
-architecture is what made those four cheap to verify; it is also why the other
-fifty-four are not, since they involve a database or a browser.
+The *domain* rules that matter most — the separation of stage from status, the
+derivation of funding totals including tranche settlement, the self-investment
+rule, exact decimal money, and the closed category vocabulary — are covered by
+tests that need no database, because §6.4 put those rules in components that hold
+no I/O.
 
-Stated as a number rather than as prose, because a number is harder to read
-past. The twenty-nine remaining cases in @app:tests are the work that closes it,
-and §20.3 places it accordingly.
+The *integration* suite added since reaches four further areas over real HTTP:
+authentication and lockout, the payment lifecycle including duplicate
+confirmation, the venture lifecycle and its visibility rule, and the
+authorisation boundaries themselves. The last of these is the significant one:
+the claim that a role check is not an ownership check is now asserted rather than
+argued.
+
+#note[
+  *What this does not entitle the document to claim.* The per-requirement mapping
+  in @app:tests has not been recomputed against the integration suite, so no
+  updated "N of 58 verified" figure is offered here. Naming the covered *areas* is
+  defensible; converting that into a requirement count without redoing the mapping
+  would be a number invented to look like progress.
+
+  What remains genuinely absent is unchanged and stated in §20.3: an end-to-end
+  browser suite, a load test above five concurrent readers, and continuous
+  integration — the suite passes because somebody runs it.
+]
 
 == User Evaluation
 
@@ -208,10 +221,11 @@ from the qualifications scattered through earlier chapters.
 / No dependency scanning: Dependencies are updated deliberately but nothing
   automatically checks them for known vulnerabilities (§10.2).
 
-/ Automated testing covers the domain layer only: Forty-one tests pass against
-  the pure rule components (§15.2). The integration, authorisation, security and
-  end-to-end cases in @app:tests are specified and unexecuted, so fifty-four of
-  fifty-eight requirements rest on inspection (§19.2).
+/ No end-to-end or load testing, and no continuous integration: Eighty-five
+  tests pass — fifty-seven domain and twenty-eight integration (§15.2) — but the
+  integration half runs against an in-memory provider, so query translation is
+  unverified, and nothing runs the suite automatically. The browser and load
+  cases in @app:tests remain specified and unexecuted (§19.2).
 
 / No user evaluation was conducted: The study in §19.3 is specified and unrun.
   No claim in this document rests on observed user behaviour.

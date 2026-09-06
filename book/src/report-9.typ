@@ -61,6 +61,10 @@ can silently disagree with reality.
     [Founder requests], [Incoming commitments awaiting a decision.],
     [Founder funding view], [The same two figures from the other side of the
       relationship.],
+    [Tranche support], [A commitment may be called in over several requests; it
+      is funded when the sum reaches the agreed target.],
+    [Agreed target], [An accepted term sheet from Report 8 replaces the opening
+      request as the figure tranches are measured against.],
   ),
   caption: [Features delivered in this part. Everything that touches a payment
     provider is Report 10.],
@@ -85,7 +89,7 @@ That is not a cosmetic error. It is the platform telling someone that other
 people have already backed a venture in order to persuade them to back it — which
 is the precise mechanism the system exists to make unnecessary.
 
-== Seven states, one of which is money
+== Eight states, two of which are money
 
 Where a single relationship sits on the money axis is *derived*, not stored — a
 stored column would be a fifth place for the numbers to disagree.
@@ -101,10 +105,12 @@ stored column would be a fifth place for the numbers to disagree.
     [Declined], [The founder refused. The row is kept.], [9],
     [Payment due], [A funding request is open, with an expiry.], [10],
     [Processing], [A provider session exists and has not resolved.], [10],
-    [Funded], [A payment settled. *The only state that is money.*], [10],
+    [Partially funded], [Some of the commitment has settled and some has not.],
+      [10],
+    [Funded], [The commitment has settled *in full*.], [10],
     [Refunded], [A settled payment was reversed.], [10],
   ),
-  caption: [The seven relationship states, and which report owns each. This
+  caption: [The eight relationship states, and which report owns each. This
     report owns the three that exist before a provider is involved.],
 )
 
@@ -112,18 +118,81 @@ stored column would be a fifth place for the numbers to disagree.
   ```cs
   // Where one relationship sits on the money axis, derived rather than stored.
   // A stored column would be a fifth place for the numbers to disagree.
-  if (hasSucceededPayment)                       return StateFunded;
+  // Partial settlement outranks an open ask on purpose. Money that has arrived
+  // is the strongest fact in the room, and a relationship that is half paid with
+  // the next tranche outstanding should read as half paid — "PaymentDue" would
+  // erase the part that is already done.
+  if (hasSucceededPayment && isFullySettled)       return StateFunded;
   if (investmentStatus == PipelineStages.Declined) return StateDeclined;
-  if (hasProcessingPayment)                      return StateProcessing;
-  if (hasOpenRequest)                            return StatePaymentDue;
-  if (hasRefundedPayment)                        return StateRefunded;
-  if (investmentStatus == "Approved")            return StateCommitted;
+  if (hasSucceededPayment)                         return StatePartiallyFunded;
+  if (hasProcessingPayment)                        return StateProcessing;
+  if (hasOpenRequest)                              return StatePaymentDue;
+  if (hasRefundedPayment)                          return StateRefunded;
+  if (investmentStatus == "Approved")              return StateCommitted;
   return StateRequested;
   ```,
-  caption: [`StateOf`. The order of the tests is the precedence rule: settled
-    money outranks every other signal, so a relationship that has been paid reads
-    as funded even while a later request is open against it.],
+  caption: [`StateOf`. The order of the tests is the precedence rule, and the
+    second line of the comment is the reason the eighth state exists.],
 )
+
+== A commitment can be called in over several tranches
+
+Large cheques are not paid in one movement, and the platform models that rather
+than pretending otherwise.
+
+A commitment is settled when the *sum* of its succeeded payments reaches its
+target — not when one payment succeeds. The distinction is the whole of this
+section, and getting it wrong has a specific, expensive consequence:
+
+#delivered[
+  A first-success test would have declared a relationship funded on its *opening
+  instalment*, closed the ask permanently, and left the rest of the money
+  uncollectable.
+]
+
+#figure(
+  ```cs
+  /// Whether a relationship's commitment has been settled in full. Compared as a
+  /// sum against the commitment, not as "has one payment succeeded".
+  public static bool IsFullySettled(decimal settled, decimal commitment) =>
+      commitment <= 0m ? settled > 0m : settled >= commitment;
+
+  /// How much of a commitment may still be called in, given what has settled.
+  public static decimal UnsettledCommitment(decimal commitment, decimal settled) =>
+      Math.Max(0m, commitment - settled);
+  ```,
+  caption: [Tranche arithmetic. The zero-commitment branch is not defensive
+    padding: a relationship with no target left to reach would otherwise report as
+    perpetually partial, which would be arithmetic rather than truth.],
+)
+
+=== What the tranches are measured against
+
+The target is not always the number the investor first typed.
+
+#figure(
+  ```cs
+  // Agreed terms win over the opening request when they exist. The investor's
+  // original number is what they asked for before anybody had talked; the term
+  // sheet is what the two of them accepted afterwards, and measuring tranches
+  // against the first would call a relationship complete while the agreement it
+  // actually rests on was still half unpaid.
+  var agreed = await db.TermSheets
+      .Where(s => s.InvestmentId == investmentId && s.Status == TermSheetStatus.Accepted)
+      .OrderByDescending(s => s.Version)
+      .Select(s => (decimal?)s.Amount)
+      .FirstOrDefaultAsync(ct);
+
+  return agreed ?? fallbackAmount;
+  ```,
+  caption: [`CommitmentTargetAsync`. The accepted term sheet of Report 8 is what
+    the money is measured against, and the opening request is only the fallback.],
+)
+
+This is the one place where Report 8's terms panel stops being a written record
+and becomes arithmetic. Two people negotiate an amount in the deal room; that
+amount — not the original ask — is what decides whether the relationship is
+funded.
 
 == Capacity is measured in commitments, not payments
 

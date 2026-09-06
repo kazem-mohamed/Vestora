@@ -3,10 +3,14 @@
 
 = Test Case Catalogue <app:tests>
 
-The domain cases below were executed with `dotnet test`; their status is the
-result of that run. Cases in the integration, authorisation, security and
-end-to-end groups remain specified and unexecuted — they require a test database
-and a driven browser (§15).
+The domain, integration, authorisation and security cases below were executed
+with `dotnet test`; their status is the result of that run. The end-to-end and
+load groups remain specified and unexecuted — they require a driven browser and a
+concurrency harness (§15).
+
+One caveat carries across the executed integration cases: they run against an
+in-memory provider rather than SQL Server, so they prove endpoint behaviour,
+status codes and authorisation, and not that every query translates.
 
 The catalogue is organised by the layers of §15.1. Cases derived from an actual
 defect carry a reference to the section that records it — those are the cases

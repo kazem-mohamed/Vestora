@@ -396,13 +396,26 @@
   );
   transition: background 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.plate:hover {
+.plate:hover,
+.plate:focus-visible {
   background: linear-gradient(
     160deg,
     color-mix(in oklab, var(--primary) 85%, transparent) 0%,
     color-mix(in oklab, var(--primary) 30%, transparent) 38%,
     color-mix(in oklab, var(--primary) 18%, transparent) 62%,
     color-mix(in oklab, var(--bronze) 70%, transparent) 100%
+  );
+}
+/* A venture you already opened keeps a warmer edge than its neighbours — the
+   same device at half strength, so "seen" is legible without a badge and
+   without relying on hover, which touch devices never deliver. */
+.plate.is-visited {
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--primary) 70%, transparent) 0%,
+    color-mix(in oklab, var(--primary) 22%, transparent) 38%,
+    color-mix(in oklab, var(--primary) 13%, transparent) 62%,
+    color-mix(in oklab, var(--bronze) 56%, transparent) 100%
   );
 }
 .plate-face {
@@ -771,5 +784,194 @@
   ::view-transition-old(*),
   ::view-transition-new(*) {
     animation: none !important;
+  }
+}
+
+/* ── Touch ergonomics ─────────────────────────────────────────────────────
+   Keyed to the INPUT METHOD, not the viewport width. A 1024px tablet and a
+   360px phone are both thumbs; a 900px desktop window is not. Width-based
+   breakpoints get this wrong in both directions, which is how a product ends
+   up "responsive" and still unusable in the hand.
+
+   These raise the floor for every control in the product at once, so a page
+   does not have to remember to be touchable. Anything that needs to be denser
+   than this opts out locally — the floor is a default, not a cage. */
+@media (pointer: coarse) {
+  /* The 44px target from the platform guidelines, applied where it is missing
+     rather than to every element: padding-based controls already clear it, and
+     forcing a min-height onto them would break their internal alignment. */
+  button,
+  [role="button"],
+  a[href],
+  summary,
+  label[for],
+  select,
+  input[type="checkbox"],
+  input[type="radio"] {
+    touch-action: manipulation;
+  }
+
+  /* Icon-only controls are the usual offenders: a 28px glyph button is a
+     coin-sized target. `:has()` identifies them precisely — a control whose
+     only child is an icon — so text buttons, which already clear the floor
+     through their padding, are left exactly as they are.
+     A pseudo-element hit area was the other option and was rejected: several
+     controls here (`.gold-cta`, `.link-underline`) already own their ::after. */
+  button:has(> svg):not(:has(> :not(svg))):not([data-dense]),
+  a[aria-label]:has(> svg):not(:has(> :not(svg))):not([data-dense]),
+  [role="button"][aria-label]:has(> svg):not(:has(> :not(svg))):not([data-dense]) {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Any control the browser will focus must be able to receive a thumb. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select,
+  .btn,
+  button[type="submit"] {
+    min-height: 44px;
+  }
+
+  /* Under 16px, iOS zooms the whole page the moment a field takes focus, and
+     the user is left scrolled sideways in a layout that was fine a second ago.
+     This is a browser behaviour, not a preference — the only fix is the size. */
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1rem);
+  }
+
+  /* Navigation and footer text sized for a cursor is a 19px strip for a thumb.
+     Padding rather than min-height on purpose: on an inline link padding grows
+     the hit box without touching the line box, so the tap target doubles and
+     nothing on the page moves. */
+  nav a[href],
+  nav button,
+  footer a[href],
+  footer button {
+    padding-block: 0.7rem;
+  }
+
+  /* Small pill controls in the header — language, theme — carry text, so the
+     icon-only rule above does not reach them.
+     Restricted to elements that are actually interactive: an earlier version
+     matched any `rounded-full` inside a nav and inflated the bottom bar's
+     decorative active marker from a 2px hairline into a 40px slab. */
+  header button,
+  header a[href],
+  nav a[href][class*="rounded-full"],
+  nav button[class*="rounded-full"] {
+    min-height: 40px;
+  }
+}
+
+/* Devices that cannot hover must never depend on it to reveal meaning. Effects
+   that only decorate are left alone; anything that carries information is
+   pinned visible instead of waiting for a pointer that will never arrive. */
+@media (hover: none) {
+  .group\/card:hover .group-hover\/card\:opacity-100,
+  .group\/rail:hover .group-hover\/rail\:opacity-100 {
+    opacity: 1;
+  }
+}
+
+/* ── Safe areas ───────────────────────────────────────────────────────────
+   Paired with `viewportFit: "cover"` in the root layout. Anything pinned to an
+   edge has to clear the notch, the rounded corners and the home indicator. */
+.pad-safe-b {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+.pad-safe-t {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+
+/* Reserve the bottom bar's height at the end of the document. Set by BottomNav
+   itself, so a signed-out visitor — who gets no bar — gets no dead space. */
+@media (max-width: 767px) {
+  body[data-bottom-nav] {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ── Bottom sheet ─────────────────────────────────────────────────────────
+   Below `sm` every dialog is a sheet on the bottom edge (see ui/dialog.tsx), so
+   it enters by rising from that edge rather than by zooming from the middle —
+   the movement traces where the surface came from. The Tailwind enter/exit
+   utilities on the popup are all `sm:`-prefixed so they never run here too. */
+@keyframes sheet-in {
+  from {
+    translate: 0 100%;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+@keyframes sheet-out {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 0 100%;
+  }
+}
+
+@media (max-width: 639px) {
+  [data-slot="dialog-content"][data-open] {
+    animation: sheet-in 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  [data-slot="dialog-content"][data-closed] {
+    animation: sheet-out 0.2s cubic-bezier(0.4, 0, 1, 1);
+  }
+}
+
+/* A sheet that flies in is the one motion a motion-sensitive reader most wants
+   stopped: it is large, fast and travels the height of the screen. */
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="dialog-content"][data-open],
+  [data-slot="dialog-content"][data-closed] {
+    animation: none;
+  }
+}
+
+/* ── Touch target floor ───────────────────────────────────────────────────
+   Every control a finger can hit clears 44px on a coarse pointer.
+
+   This used to be a list of the specific offenders somebody had noticed — the
+   scrolling nav rails, the inline row actions — set to 42px, which is a floor
+   that fails the thing it was written for. Enumerating offenders never finishes:
+   a measurement of the admin screens at 390px still found filter chips at 34px,
+   action pills at 36px, and the twelve user rows themselves at 36px, none of
+   which were on the list. The rule belongs on the category, not on the examples.
+
+   `min-height` is inert on an inline box, so prose links keep their line rhythm
+   and only real controls — buttons, and links that are block, flex or grid —
+   are lifted. Checkboxes and radios are left alone: growing the box without the
+   tick inside it moves the target without enlarging it, and their labels are
+   the honest place to widen the hit area. */
+@media (pointer: coarse) {
+  /* `!important` because these are element selectors and a Tailwind size utility
+     is a class one, so `min-h-10` on a header button outranks them and quietly
+     reinstates a 40px target. A floor any utility can undercut is not a floor.
+     It stays safe to force: `min-height` only ever raises a box, so nothing that
+     is already large enough is touched. */
+  a[href],
+  button,
+  [role="button"],
+  summary,
+  select,
+  input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px !important;
+  }
+
+  /* Inline text actions inside dense data rows — "refund", "resolve", "view".
+     Padding as well as the floor above, so the label sits centred in the taller
+     box instead of riding its top edge. */
+  .link-underline {
+    display: inline-block;
+    padding-block: 0.85rem;
   }
 }

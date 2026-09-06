@@ -133,7 +133,7 @@ export function InvestMobileNav() {
   const dueCount = data?.kpis.paymentDueCount ?? 0;
 
   return (
-    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden [scrollbar-width:none]">
+    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:hidden [scrollbar-width:none]">
       {INVEST_SECTIONS.map((s) => {
         const on = isInvestActive(pathname, s.href);
         return (

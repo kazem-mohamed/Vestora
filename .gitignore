@@ -21,6 +21,7 @@ secrets.json
 *.p12
 *.pem
 *.key
+MyAppApi/deploy.sh
 
 # ---- .NET ----
 bin/

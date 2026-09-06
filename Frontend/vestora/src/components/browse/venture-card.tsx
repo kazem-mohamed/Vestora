@@ -3,7 +3,14 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion, useReducedMotion } from "framer-motion";
+import {
+  motion,
+  useMotionTemplate,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+} from "framer-motion";
 import { ArrowUpRight, Eye, Users } from "lucide-react";
 import { BookmarkButton } from "@/components/projects/bookmark-button";
 import { VentureImage } from "@/components/browse/venture-image";
@@ -58,6 +65,24 @@ export function VentureCard({
   const signal = primarySignal(project, viewThreshold);
   const sector = sectorOf(project);
 
+  // Pointer position drives the specular highlight. Springs keep the light
+  // trailing the cursor slightly, which is what reads as a physical surface
+  // rather than a CSS gradient snapping around.
+  const px = useMotionValue(0.5);
+  const py = useMotionValue(0.5);
+  const sx = useSpring(px, { stiffness: 90, damping: 22, mass: 0.5 });
+  const sy = useSpring(py, { stiffness: 90, damping: 22, mass: 0.5 });
+  const gx = useTransform(sx, (v) => `${v * 100}%`);
+  const gy = useTransform(sy, (v) => `${v * 100}%`);
+  const glare = useMotionTemplate`radial-gradient(340px circle at ${gx} ${gy}, color-mix(in oklab, var(--primary) 13%, transparent), transparent 62%)`;
+
+  function onPointerMove(e: React.PointerEvent<HTMLElement>) {
+    if (reduce || e.pointerType !== "mouse") return;
+    const r = e.currentTarget.getBoundingClientRect();
+    px.set((e.clientX - r.left) / r.width);
+    py.set((e.clientY - r.top) / r.height);
+  }
+
   return (
     <motion.article
       ref={ref}
@@ -83,16 +108,38 @@ export function VentureCard({
             e.preventDefault();
           }
         }}
+        onPointerMove={onPointerMove}
+        onPointerLeave={() => {
+          px.set(0.5);
+          py.set(0.5);
+        }}
         data-cursor-text={t("browse.card.cursor")}
         className={cn(
-          "relative flex h-full flex-col overflow-hidden rounded-[1.25rem] border bg-card/70 outline-none",
-          "transition-[border-color,box-shadow,transform] duration-500 ease-out",
-          "hover:border-primary/45 hover:shadow-[0_28px_60px_-32px_rgba(0,0,0,0.65)]",
-          "focus-visible:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/25",
-          "motion-safe:hover:-translate-y-1",
-          wasVisited ? "border-primary/45" : "border-border/70"
+          // The plate is the house device — a chamfered gold edge that gains
+          // light on approach. Browse was the one surface not wearing it, which
+          // is why a page full of real ventures still read as a template.
+          "plate block h-full outline-none",
+          "transition-transform duration-500 ease-out motion-safe:hover:-translate-y-1",
+          "focus-visible:ring-3 focus-visible:ring-ring/30",
+          wasVisited && "is-visited"
         )}
       >
+        <span
+          className={cn(
+            "plate-face relative flex h-full flex-col",
+            "transition-shadow duration-500 ease-out",
+            "group-hover/card:shadow-[0_30px_70px_-38px_rgba(0,0,0,0.75)]"
+          )}
+        >
+          {/* Specular sweep tracking the pointer, on its own layer so the
+              compositor moves light instead of the card repainting. */}
+          {!reduce && (
+            <motion.span
+              aria-hidden
+              style={{ background: glare }}
+              className="pointer-events-none absolute inset-0 z-20 opacity-0 transition-opacity duration-500 group-hover/card:opacity-100"
+            />
+          )}
         {/* --- Plate: identity. No text sits on the photograph. --- */}
         <motion.div
           ref={plateRef}
@@ -112,7 +159,7 @@ export function VentureCard({
           {/* Hairline frame, brightening on hover — depth without tilting the card. */}
           <span
             aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-[1.25rem] ring-1 ring-inset ring-white/[0.07] transition-colors duration-500 group-hover/card:ring-primary/25"
+            className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/[0.07] transition-colors duration-500 group-hover/card:ring-primary/25"
           />
 
           {/* Only the plate's very bottom is darkened, and only where the chip sits. */}
@@ -233,11 +280,12 @@ export function VentureCard({
               .join(". ")}
           </span>
         </motion.div>
+        </span>
       </Link>
 
       {/* Save sits outside the link so it is its own control, not part of the
           venture's accessible name. */}
-      <div className="absolute end-3 top-3 z-10">
+      <div className="absolute end-3 top-3 z-30">
         <BookmarkButton projectId={project.id} className="size-11 sm:size-10" />
       </div>
     </motion.article>

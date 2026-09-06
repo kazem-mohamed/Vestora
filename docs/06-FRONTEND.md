@@ -325,7 +325,7 @@ components/messages/chat-realtime.tsx  ← مركّب في <Providers>، بيس�
 | `validation/rules.ts` | **مرآة `AccountRules.cs` بالحرف** — غيّر واحد، غيّر التاني في نفس الـ commit |
 | `validation/server-errors.ts` | تحويل أخطاء الـ ModelState لأخطاء حقول في react-hook-form |
 | `format/money.ts` | تنسيق المبالغ |
-| `config/categories.ts` | قايمة القطاعات المقترَحة (الـ backend بيقبل أي نصّ) + `mergeCategories()` |
+| `config/categories.ts` | **قايمة مقفولة بـ 39 مفتاح** لتصنيف المشروع + `categoryLabelKey()` (صارم — أي قيمة مش معروفة بتبقى "أخرى") و`categoryOrRawLabel()` (مرن — للحقول الحرّة زي `PreferredIndustries`). **مِرآة لـ `Services/ProjectCategories.cs`، لازم يفضلوا متطابقين**، والباك إند بيرفض أي مفتاح بره القايمة. كل مفتاح له ترجمة `category.*` في EN و AR |
 | `config/social.ts` · `legal/documents.ts` · `metadata/public-preview.ts` | إعدادات ومحتوى |
 | `chat/thread-utils.ts` | مساعدات المحادثات |
 | `onboarding.ts` | علامة الإتمام في `localStorage` — **لكل متصفّح، مش لكل حساب** (مفيش حقل في الـ backend لسه) |

@@ -151,7 +151,7 @@ between two concurrent requests.
 
 Expected outcomes are values, not exceptions (§6.5). The mapping from outcome to
 HTTP status exists once for the whole API rather than being re-decided in each
-of the twenty-two controllers (§9.6).
+of the twenty-five controllers (§9.6).
 
 #figure(
   ```cs

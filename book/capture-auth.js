@@ -26,6 +26,13 @@ const VARIANTS = [
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The Next.js development overlay renders into <nextjs-portal>. It is a
+// development affordance, not part of the product, and a red "N issues" badge
+// in a documentation screenshot reads as an application fault.
+const hideDevOverlay = (p) =>
+  p.addStyleTag({ content: 'nextjs-portal{display:none!important}' }).catch(() => {});
+
+
 (async () => {
   const browser = await puppeteer.launch({
     executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -62,7 +69,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       await page.goto(ORIGIN + p.url, { waitUntil: 'networkidle2' });
       await sleep(2500);
       const file = `${p.name}-${v.locale}-${v.theme}.png`;
-      await page.screenshot({ path: path.join(OUT, file) });
+      await hideDevOverlay(page); await page.screenshot({ path: path.join(OUT, file) });
       console.log(file, '<-', page.url());
     }
   }

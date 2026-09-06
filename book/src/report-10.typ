@@ -65,7 +65,16 @@ is never rewritten. A retry is a new row, and the failed attempt stays.
     [Refunds], [A settled payment can be reversed; the record survives the
       reversal.],
     [Platform fee], [A percentage taken on settled payments only, stored per
-      transaction.],
+      transaction and *frozen at the moment of payment* so a later rate change
+      cannot rewrite what was charged.],
+    [Tranche settlement], [One commitment may be called in over several requests;
+      it is funded when the sum reaches the agreed target.],
+    [Expiry reminders], [A ladder of reminders before an ask lapses — sent to the
+      investor, because it is their move.],
+    [Provider re-check before write-off], [The sweeper asks the provider what
+      actually happened before it lapses an attempt.],
+    [Reconciliation queue], [Confirmations that changed nothing, or that conflict
+      with what the platform holds, are queued for an administrator.],
     [Settlement history], [The investor's record of every attempt, successful or
       not.],
   ),
@@ -148,7 +157,21 @@ simultaneous deliveries can both pass a check before either writes; the second
 reasoning that made bookmarking idempotent in Report 6, applied where the cost of
 getting it wrong is money rather than a duplicate row.
 
-== Expiry
+The same discipline is expressed a second time, in the schema rather than in a
+handler. Two filtered unique indexes —
+`UX_PaymentTransactions_OneActivePerRequest` and
+`UX_PaymentTransactions_OneSucceededPerRequest` — make it impossible for one
+funding request to carry two live attempts, or two successful ones, whatever any
+code path believes.
+
+#delivered[
+  *Claiming the idempotency key is itself a durable write.* The gate is not a
+  lookup followed by an action; the claim commits first, so a dropped connection
+  or a timeout mid-flight leaves the key taken rather than leaving the door open
+  for the retry that is already on its way.
+]
+
+== Expiry, and what the sweeper does before it writes anything off
 
 A checkout that nobody completes holds capacity, because Report 9 measures
 capacity in commitments rather than in settled money. A background sweeper lapses
@@ -157,6 +180,32 @@ funding requests past their expiry and releases the capacity automatically.
 The time box is configuration rather than a constant: the checkout lifetime is
 *35 minutes* and a funding request lives *14 days*. Both are read at start-up
 alongside every other setting in the platform.
+
+Two behaviours make the sweeper more than a timer.
+
+*It asks the provider first.* Before lapsing an attempt whose session is nearly
+expired, the sweeper calls `GetSessionResultAsync` and takes the provider's
+answer. A payment that succeeded while the callback was lost is found here rather
+than written off — the platform's own clock is not allowed to overrule the
+provider's record of what happened.
+
+*It reminds before it lapses.* A ladder of reminders goes out as the deadline
+approaches, and only to the *investor*: the outstanding action is theirs, and
+reminding the founder about a payment they cannot make would be noise. The
+sweeper reads which reminders a request has already had from the request itself,
+so a restart does not send the ladder twice.
+
+== When a confirmation cannot be applied
+
+Not every provider callback resolves cleanly. Some arrive for a transaction that
+is already terminal; some carry an amount or a state that disagrees with what the
+platform holds.
+
+Neither is silently discarded. Both are recorded and surfaced in an
+administrative *reconciliation* queue, with a re-verify action that asks the
+provider again. A payment system that quietly drops what it cannot interpret is a
+payment system that will one day be wrong without anybody knowing when it
+started.
 
 = Interface
 

@@ -8,27 +8,70 @@
     columns: (1fr, 26mm),
     align: (left, right),
     table.header([Run], [Result]),
-    [Tests executed], [*41*],
-    [Passed], [*41*],
+    [Tests executed], [*85*],
+    [Passed], [*85*],
     [Failed], [0],
     [Skipped], [0],
-    [Wall time], [34 ms],
+    [Wall time], [29 s],
   ),
   caption: [`dotnet test` against `MyAppApi.Tests`. Figures are from the run,
     not from a plan.],
 )
 
-The suite covers the *domain* layer — the components §6.4 separated out
-precisely because they carry rules and perform no I/O. That separation is what
-makes a 34 ms suite possible: none of these tests touches a database.
+The suite is in two halves, and the halves prove different kinds of claim.
+
+#figure(
+  table(
+    columns: (1fr, 18mm, 1fr),
+    align: (left + top, center + top, left + top),
+    table.header([Suite], [Tests], [What it can prove]),
+    [`FundingMathTests`], [23], [Funding arithmetic, including tranche
+      settlement.],
+    [`PipelineStagesTests`], [25], [Every permitted and forbidden stage move.],
+    [`ProjectCategoriesTests`], [9], [That the category vocabulary is closed and
+      matches the client's.],
+    [`AuthEndpointsTests`], [9], [Registration, verification, sign-in, refresh
+      and lockout, over HTTP.],
+    [`PaymentsEndpointsTests`], [6], [Checkout, settlement and duplicate
+      confirmation, over HTTP.],
+    [`ProjectsEndpointsTests`], [6], [Creation, submission and the visibility
+      rule, over HTTP.],
+    [`SecurityBoundaryTests`], [7], [That a caller cannot reach what their role
+      and ownership do not permit.],
+  ),
+  caption: [Fifty-seven domain tests and twenty-eight integration tests.],
+)
+
+The *domain* half covers the components §6.4 separated out precisely because they
+carry rules and perform no I/O. That separation is why they run without a
+database at all.
+
+The *integration* half starts the real application and drives it over HTTP, which
+is what lets it assert an authorisation claim rather than an arithmetic one.
+`SecurityBoundaryTests` is the one that matters most to this document: every
+place the text says *a role check is not an ownership check* is asserted there
+rather than merely stated.
 
 #note[
-  *What is not covered.* Integration, authorisation, security and end-to-end
-  cases (@app:tests) remain specified and unexecuted — they need a test
-  database and a driven browser. The forty-one executed tests are the domain
-  cases only. §19.2 reports the resulting coverage of requirements, which is
-  partial and stated as such.
+  *What the integration half does not prove.* It runs against EF Core's InMemory
+  provider rather than SQL Server, deliberately — several queries in this codebase
+  build LINQ predicates that InMemory evaluates client-side and a real provider
+  would have to translate to SQL.
+
+  So these tests prove *endpoint behaviour, status codes and authorisation*. They
+  do not prove that every query translates, and they cannot catch a predicate that
+  works in memory and fails against the database.
+
+  *Still absent:* an end-to-end browser suite, a load test, and continuous
+  integration. The eighty-five tests pass because somebody ran them.
 ]
+
+#full-page-figure(
+  "/assets/diagrams/out/test-architecture.svg",
+  caption: [The two suites, and the boundary between what they prove. The
+    in-memory provider is the reason the integration half can assert
+    authorisation but cannot assert query translation.],
+)
 
 == Testing Approach
 
@@ -119,7 +162,7 @@ LINQ expression trees, which cannot execute without a database; every decision
 the class actually makes is exercised.
 
 And the solution-wide figure is *0.06%*, which is worse than useless. It is
-diluted by twenty-two controllers, several hundred DTO properties and the
+diluted by twenty-five controllers, several hundred DTO properties and the
 generated model — code that carries no decisions. Reporting that number as "the
 project's coverage" would be technically true and completely uninformative,
 which is why coverage here is reported per class and the aggregate is shown only

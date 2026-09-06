@@ -58,6 +58,13 @@ const ROLES = [
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The Next.js development overlay renders into <nextjs-portal>. It is a
+// development affordance, not part of the product, and a red "N issues" badge
+// in a documentation screenshot reads as an application fault.
+const hideDevOverlay = (p) =>
+  p.addStyleTag({ content: 'nextjs-portal{display:none!important}' }).catch(() => {});
+
+
 // Never hit /logout between roles: it revokes the refresh chain server-side and
 // the next sign-in races its own rotation (§10.6). Clearing storage is enough.
 async function signIn(page, email) {
@@ -107,7 +114,7 @@ async function gotoAuthed(page, email, url) {
     for (const [name, url] of r.pages) {
       const landed = await gotoAuthed(page, r.email, url);
       const ok = landed === url;
-      await page.screenshot({ path: path.join(OUT, `${name}.png`) });
+      await hideDevOverlay(page); await page.screenshot({ path: path.join(OUT, `${name}.png`) });
       console.log(`${ok ? 'OK  ' : 'REDIR'} ${name}.png  ${url}${ok ? '' : ' -> ' + landed}`);
     }
   }

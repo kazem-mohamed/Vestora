@@ -146,10 +146,53 @@
   left-body, right-body,
 )
 
-#let shot(path, cap: none) = block({
-  block(width: 100%, stroke: 0.5pt + border, clip: true, image(path, width: 100%))
+// A slide body is roughly 79mm tall. An image sized only by width will exceed
+// that on any portrait capture and push the rest of its slide onto the next
+// page, leaving a title alone. `h` caps the height; width follows the aspect.
+#let shot(path, cap: none, h: none) = block(width: 100%, {
+  align(center, block(
+    stroke: 0.5pt + border, clip: true,
+    if h == none { image(path, width: 100%) } else { image(path, height: h) },
+  ))
   if cap != none {
     v(2mm)
-    text(font: heading-font, size: 9pt, fill: muted)[#cap]
+    text(font: heading-font, size: 10pt, fill: muted)[#cap]
   }
+})
+
+// ── Added for the presentation rebuild ───────────────────────────────
+//
+// The first deck failed in two ways that these three helpers exist to stop:
+// prose written into bullets, and artwork floated in the middle of a 16:9
+// frame with a third of the width unused.
+
+// A tall capture cropped to its top. A deal room is two thousand pixels of
+// page; a slide can carry the part that makes the point and no more.
+#let crop-shot(path, height: 78mm, cap: none) = block({
+  block(
+    width: 100%, height: height, clip: true,
+    stroke: 0.5pt + border,
+    image(path, width: 100%),
+  )
+  if cap != none {
+    v(2mm)
+    text(font: heading-font, size: 10pt, fill: muted)[#cap]
+  }
+})
+
+// Artwork beside its point, rather than artwork alone in a wide frame.
+// The image takes the height it needs and the argument sits next to it.
+#let figure-point(path, body, img: 1fr, txt: 1fr, h: 74mm) = grid(
+  columns: (img, txt), column-gutter: 10mm, align: (center + horizon, left + horizon),
+  block(height: h, image(path, height: 100%)),
+  block(body),
+)
+
+// A claim with its evidence directly under it. The claim is the sentence the
+// speaker says; the evidence is what the committee reads while hearing it.
+#let claim(text-body, evidence) = block(width: 100%, {
+  set par(leading: 0.6em)
+  text(font: display-font, size: 21pt, weight: 600)[#text-body]
+  v(5mm)
+  evidence
 })

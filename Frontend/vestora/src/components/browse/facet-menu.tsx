@@ -21,13 +21,21 @@ export function FacetMenu({
   selected,
   onSelect,
   allLabel,
+  formatValue,
 }: {
   label: string;
   options: FacetValue[];
   selected?: string;
   onSelect: (value: string | undefined) => void;
   allLabel: string;
+  /**
+   * How to display an option, when the stored value is not what a person should
+   * read — the sector facet holds category keys ("apparel_manufacturing"), which
+   * have to stay the filter value while showing their translation.
+   */
+  formatValue?: (value: string) => string;
 }) {
+  const display = formatValue ?? ((v: string) => v);
   const { locale } = useLocale();
   const rtl = locale === "ar";
   const reduce = useReducedMotion() ?? false;
@@ -82,7 +90,7 @@ export function FacetMenu({
             : "border-border/80 text-muted-foreground hover:border-primary/40 hover:text-foreground"
         )}
       >
-        <span className="max-w-[10rem] truncate">{selected ?? label}</span>
+        <span className="max-w-[10rem] truncate">{selected ? display(selected) : label}</span>
         <ChevronDown
           className={cn("size-3.5 shrink-0 transition-transform duration-300", open && "rotate-180")}
           aria-hidden
@@ -141,7 +149,7 @@ export function FacetMenu({
                     active ? "text-foreground" : "text-muted-foreground"
                   )}
                 >
-                  <span className="min-w-0 truncate">{opt.value}</span>
+                  <span className="min-w-0 truncate">{display(opt.value)}</span>
                   <span className="flex shrink-0 items-center gap-2">
                     <span className="font-numeric text-[11px] text-muted-foreground/70">
                       {opt.count}

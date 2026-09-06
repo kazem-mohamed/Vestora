@@ -37,6 +37,13 @@ const VARIANTS = [
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The Next.js development overlay renders into <nextjs-portal>. It is a
+// development affordance, not part of the product, and a red "N issues" badge
+// in a documentation screenshot reads as an application fault.
+const hideDevOverlay = (p) =>
+  p.addStyleTag({ content: 'nextjs-portal{display:none!important}' }).catch(() => {});
+
+
 // Clearing storage rather than calling /logout: logout revokes the refresh
 // chain server-side and the next sign-in races its own rotation (Report 3).
 async function signIn(page, email) {
@@ -85,7 +92,7 @@ async function signIn(page, email) {
           await sleep(2500);
         }
         const file = `${name}-${v.locale}-${v.theme}.png`;
-        await page.screenshot({ path: path.join(OUT, file) });
+        await hideDevOverlay(page); await page.screenshot({ path: path.join(OUT, file) });
         const landed = new URL(page.url()).pathname;
         console.log(`${landed === url ? 'OK   ' : 'REDIR'} ${file}  ${url}${landed === url ? '' : ' -> ' + landed}`);
       }

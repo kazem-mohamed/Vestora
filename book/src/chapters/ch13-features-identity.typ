@@ -24,6 +24,29 @@ decision, that is stated in a sentence rather than padded into a page.
 
 == User Profile Journey
 
+#let _pair(a, b, cap) = figure(
+  grid(
+    columns: (1fr, 1fr), column-gutter: 3mm,
+    image("/assets/screenshots/" + a, width: 100%),
+    image("/assets/screenshots/" + b, width: 100%),
+  ),
+  caption: cap,
+)
+
+#_pair("register-en-light.png", "register-ar-dark.png",
+  [Registration, in both languages and both themes. The account created here
+   cannot sign in until the address is confirmed — the next screen is not
+   optional.])
+
+#_pair("verify-email-en-light.png", "verify-email-ar-dark.png",
+  [Verification. The screen asks for the address as well as the code: the code
+   is only ever checked against the account that requested it, so a code observed
+   in isolation is not a credential.])
+
+#_pair("onboarding-en-light.png", "profile-public-en-light.png",
+  [First-run onboarding, and the public profile it eventually produces.
+   Onboarding is skippable by design — it shapes discovery and gates nothing.])
+
 *Goal.* Establish enough identity that a stranger on the other side of a
 funding decision can assess who they are dealing with.
 
@@ -52,6 +75,18 @@ introduction. This is RQ1 from §1.3, and it is the reason the platform exists.
 listing, a search over that listing, and a feed personalised to what a user
 follows and has interacted with.
 
+#full-page-figure(
+  "/assets/diagrams/out/flow-discovery.svg",
+  caption: [The discovery path. A visitor reaches a venture page without an
+    account; everything that *retains* interest — saving, following, saving a
+    search — requires one.],
+)
+
+#_pair("discover-list-en-light.png", "discover-list-ar-dark.png",
+  [The venture listing, captured while signed out, in both languages and both
+   themes. Neither capture required an account, which is the claim this section
+   opens with shown rather than asserted.])
+
 The listing query is the platform's hottest read path, and its shape is
 determined by the state model in §7.6. A venture is publicly visible only when
 its moderation status is approved *and* its lifecycle status is active. Those
@@ -79,6 +114,31 @@ one-off query into a standing interest. This is the feature that makes
 discovery repeatable: an investor watching for ventures in a sector does not
 have to reconstruct the filter each visit.
 
+=== A venture is classified from a closed list
+
+Attribute filtering only works if the attributes are drawn from a fixed set, and
+category was once two free-text fields — `Category` and `Industry` — neither
+validated nor translated.
+
+#note[
+  The consequence was concrete: the same clothing brand could be typed
+  "Fashion", "Apparel" and "Retail" by three different founders, and every one of
+  them was rendered as raw English on an Arabic screen. A filter over that data
+  would have found three different populations for one industry.
+]
+
+The replacement is a closed list of thirty-nine keys, defined once on the server
+in `ProjectCategories` and mirrored in the client's `categories.ts`. The server
+validates against it; the client translates each key through the dictionaries,
+so an Arabic reader sees Arabic rather than whatever the founder happened to
+type.
+
+The list is deliberately not a generic startup taxonomy. It is grounded in the
+businesses this platform serves — apparel manufacturers, textile exporters, food
+production, furniture workshops, restaurants, logistics, import and export —
+alongside the digital categories, because a taxonomy that only describes software
+cannot classify most of the ventures on this platform.
+
 == Saved Projects and Saved Searches
 
 *Goal.* Let an investor keep a shortlist without committing to anything.
@@ -95,6 +155,11 @@ second write fail, and the failure is the correct outcome.
 
 The same reasoning covers saved searches: they belong to a user, they are named,
 and they are re-runnable rather than snapshots.
+
+#_pair("engage-watchlist-en-light.png", "engage-searches-en-light.png",
+  [The watchlist, and saved searches. The first is what an investor is
+   considering; the second is what turns a standing question into a returning
+   habit rather than a filter rebuilt on every visit.])
 
 == Following and Investor Networks
 

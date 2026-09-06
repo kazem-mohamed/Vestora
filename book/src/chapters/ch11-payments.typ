@@ -211,25 +211,110 @@ and §17.5 describes the caching applied. That cost was accepted knowingly, and
 it is the correct trade: a stale cached number is recoverable, a drifted stored
 number is not.
 
+== Tranche Settlement
+
+*A commitment is not necessarily one payment.* Large cheques are not paid in one
+movement, and the model reflects that rather than pretending otherwise.
+
+A commitment is settled when the *sum* of its succeeded payments reaches its
+target — not when one payment succeeds. The distinction is small in code and
+expensive to get wrong:
+
+#note[
+  A first-success test would have declared a relationship funded on its *opening
+  instalment*, closed the ask permanently, and left the rest of the money
+  uncollectable.
+]
+
+Two functions carry it. `IsFullySettled` compares the sum against the target,
+and `UnsettledCommitment` reports how much may still be called in. A commitment
+of zero or less is treated as settled once anything arrives: there is no target
+left to reach, and reporting such a relationship as perpetually partial would be
+arithmetic rather than truth.
+
+*The eighth state exists because of this.* `PartiallyFunded` sits between
+`PaymentDue` and `Funded`, and it outranks an open ask deliberately — money that
+has arrived is the strongest fact in the room, and a relationship that is half
+paid with the next tranche outstanding should read as half paid. Reporting it as
+`PaymentDue` would erase the part that is already done.
+
+#full-page-figure(
+  "/assets/diagrams/out/flow-tranche.svg",
+  caption: [Tranche settlement. The loop closes only when the sum reaches the
+    target, which is why a single success cannot end the ask.],
+)
+
+*What the sum is measured against.* Not always the number the investor first
+typed. Where the two sides have accepted a term sheet (§14.4.2), the agreed
+amount replaces the opening request as the target. The original figure is what
+somebody asked for before anyone had talked; the accepted sheet is what the two
+of them settled on afterwards, and measuring tranches against the first would
+call a relationship complete while the agreement it rests on was still half
+unpaid.
+
 == Expiry, Refunds and Reconciliation
 
 *Expiry.* Checkouts hold a time box, and abandoned ones are swept by a
 background component rather than left to be noticed on the next read. Without
 this, an abandoned checkout would hold an unresolved claim indefinitely.
 
+*The sweeper asks before it writes anything off.* Before lapsing an attempt
+whose session is close to expiry, it calls the provider for the session's actual
+result and takes that answer. A payment that succeeded while its callback was
+lost is found here rather than discarded — the platform's own clock is not
+allowed to overrule the provider's record of what happened.
+
+*Reminders precede expiry.* A ladder of reminders goes out as the deadline
+approaches, and only to the *investor*: the outstanding action is theirs, and
+reminding a founder about a payment they cannot make would be noise. Which
+reminders a request has already had is read from the request itself, so a
+restart does not send the ladder twice.
+
 *Fees.* The platform fee is configuration expressed in basis points, and it is
-stored per transaction rather than recomputed. A transaction must remain
-interpretable after the fee schedule changes; recomputing it would silently
-rewrite history.
+stored per transaction rather than recomputed — frozen at the moment of payment.
+A transaction must remain interpretable after the fee schedule changes;
+recomputing it would silently rewrite history.
 
 *Refunds.* A refund is a transition, not a deletion. The transaction stays and
-changes state, so the record of what happened survives.
+changes state, so the record of what happened survives. It carries its own
+idempotency key, so a repeated refund instruction cannot reverse the same
+payment twice.
 
 *Reconciliation.* Because every transaction carries its provider name and the
 provider's own reference, a settled set can be compared line by line against a
 provider's report. This is the property that makes the model auditable, and it
 is why `Provider` is stored on every row rather than inferred from
 configuration — configuration changes, history must not.
+
+*And what cannot be applied is not discarded.* Not every callback resolves
+cleanly: some arrive for a transaction that is already terminal, some carry a
+state that disagrees with what the platform holds. Both are recorded and
+surfaced in an administrative reconciliation queue with a re-verify action that
+asks the provider again. A payment system that quietly drops what it cannot
+interpret is a payment system that will one day be wrong without anybody knowing
+when it started.
+
+#let _pair(a, b, cap) = figure(
+  grid(
+    columns: (1fr, 1fr), column-gutter: 3mm,
+    image("/assets/screenshots/" + a, width: 100%),
+    image("/assets/screenshots/" + b, width: 100%),
+  ),
+  caption: cap,
+)
+
+#_pair("checkout-live-en-light.png", "payment-return-en-light.png",
+  [The sandbox checkout against a live funding request, and the settlement it
+   produces. The checkout names the amount and the transaction reference and
+   offers the two outcomes a card form would produce; the return page names what
+   settled and states, in the product rather than in this document, that no real
+   money moved.])
+
+#_pair("settled-payments-en-light.png", "settled-revenue-en-light.png",
+  [The same settlement from two sides: the investor's history, and the
+   platform's revenue. \$40,000 gross, \$2,000 fee at the configured 5%,
+   \$38,000 net to the founder — every figure a sum over transaction rows rather
+   than a maintained balance.])
 
 == Environment Separation
 

@@ -3,7 +3,7 @@
 
 = Complete API Reference <app:api>
 
-The API exposes *150 endpoints across 22 controllers*. This appendix maps the
+The API exposes *169 endpoints across 25 controllers*. This appendix maps the
 surface by area; the authoritative, always-current definition is the generated
 OpenAPI document (§9.8), from which this listing is derived.
 

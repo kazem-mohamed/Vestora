@@ -24,7 +24,10 @@ import {
   compactUsd,
   dayLabel,
   gridProps,
+  meanOf,
   monthLabel,
+  niceCeil,
+  toPerPeriod,
   useChartTheme,
 } from "@/components/dashboard/chart-kit";
 import { useLocale } from "@/lib/i18n/locale";
@@ -51,6 +54,10 @@ export function FundingAreaChart({ data, goal }: { data: TimePoint[]; goal?: num
 
   const rows = data.map((d) => ({ ...d, month: monthLabel(d.label, locale) }));
 
+  // Same reasoning as the gap chart below: the axis must clear the highest value, and
+  // the goal too, or the curve is drawn on the frame and the goal marker never appears.
+  const axisMax = niceCeil(Math.max(...rows.map((r) => r.value), goal ?? 0) * 1.05);
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -62,7 +69,7 @@ export function FundingAreaChart({ data, goal }: { data: TimePoint[]; goal?: num
         </defs>
         <CartesianGrid {...gridProps(theme)} />
         <XAxis dataKey="month" {...axisProps(theme)} dy={6} />
-        <YAxis {...axisProps(theme)} width={52} tickFormatter={compactUsd} />
+        <YAxis {...axisProps(theme)} width={52} tickFormatter={compactUsd} domain={[0, axisMax]} />
         {/* The target, drawn once, so "is this ahead or behind?" is answerable without
             reading the number off a KPI tile somewhere else on the page. */}
         {goal != null && goal > 0 && (
@@ -138,6 +145,13 @@ export function CommittedVsFundedChart({
     funded: lastAtOrBefore(funded, label),
   }));
 
+  // The axis has to clear the highest line, and the goal as well when there is one —
+  // an unreached goal sits above every value in the data, and an axis that stops at the
+  // data would drop its marker off the top without saying so.
+  const axisMax = niceCeil(
+    Math.max(...rows.map((r) => Math.max(r.committed, r.funded)), goal ?? 0) * 1.05
+  );
+
   return (
     <div className="flex h-full flex-col">
       <div className="min-h-0 flex-1">
@@ -155,7 +169,7 @@ export function CommittedVsFundedChart({
             </defs>
             <CartesianGrid {...gridProps(theme)} />
             <XAxis dataKey="month" {...axisProps(theme)} dy={6} />
-            <YAxis {...axisProps(theme)} width={52} tickFormatter={compactUsd} />
+            <YAxis {...axisProps(theme)} width={52} tickFormatter={compactUsd} domain={[0, axisMax]} />
             {goal != null && goal > 0 && (
               <ReferenceLine
                 y={goal}
@@ -189,9 +203,12 @@ export function CommittedVsFundedChart({
           </AreaChart>
         </ResponsiveContainer>
       </div>
+      {/* Line swatches, not dots: these two series are told apart by dash pattern as
+          much as by colour, and the legend has to say so. */}
       <ChartLegend
+        variant="line"
         items={[
-          { color: theme.bronze, label: t("fund.word.committed") },
+          { color: theme.bronze, label: t("fund.word.committed"), dashed: true },
           { color: theme.primary, label: t("fund.word.funded") },
         ]}
       />
@@ -360,5 +377,121 @@ function SplitRow({
       </span>
       <span className="font-numeric text-foreground">{compactUsd(amount)}</span>
     </li>
+  );
+}
+
+/* ---------- 6. Arrivals per period (bars) ---------- */
+
+/**
+ * How many arrived in each period, not how many exist in total.
+ *
+ * This replaces the cumulative area charts that used to sit on the admin
+ * overview. A running total is guaranteed to slope upward — a dead month and a
+ * record month both bend the line the same way — so the old charts could not
+ * report a bad month even when there was one. Differencing the same series turns
+ * it into a figure that can fall, and the average line gives every bar something
+ * to be measured against instead of just being taller or shorter than its
+ * neighbour.
+ *
+ * Bars rather than a line: these are counts of discrete events in separate
+ * buckets, and a line between them would imply a continuous quantity that was
+ * passed through on the way.
+ */
+export function PerPeriodBarsChart({
+  data,
+  format = compactCount,
+}: {
+  data: TimePoint[];
+  format?: (v: number) => string;
+}) {
+  const theme = useChartTheme();
+  const { locale, t } = useLocale();
+
+  const series = toPerPeriod(data);
+  if (series.length === 0) return <ChartEmpty />;
+
+  const rows = series.map((p) => ({ ...p, month: monthLabel(p.label, locale) }));
+  const avg = meanOf(series);
+
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <CartesianGrid {...gridProps(theme)} />
+        <XAxis dataKey="month" {...axisProps(theme)} dy={6} />
+        <YAxis {...axisProps(theme)} width={40} allowDecimals={false} tickFormatter={format} />
+        <Tooltip cursor={{ fill: theme.border, fillOpacity: 0.25 }} content={<ChartTooltip format={format} />} />
+        {/* The baseline that makes a bar mean something. */}
+        {avg > 0 && (
+          <ReferenceLine
+            y={avg}
+            stroke={theme.muted}
+            strokeDasharray="4 4"
+            label={{
+              value: t("chart.average"),
+              position: "insideTopRight",
+              fill: theme.muted,
+              fontSize: 11,
+            }}
+          />
+        )}
+        <Bar
+          dataKey="value"
+          fill={theme.primary}
+          radius={[3, 3, 0, 0]}
+          maxBarSize={44}
+          isAnimationActive={false}
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ---------- 7. Revenue by month (gross vs platform fee) ---------- */
+
+/**
+ * What flowed through the platform each month, and what the platform kept.
+ *
+ * Drawn as two bars per month rather than one stacked bar: the fee is about 5%
+ * of gross, and stacking a 5% segment onto a 95% one makes the part the operator
+ * actually cares about a sliver too thin to compare month to month. Side by side
+ * on a shared axis, the fee has its own readable baseline while the relationship
+ * to gross stays visible.
+ */
+export function RevenueByMonthChart({
+  data,
+}: {
+  data: { label: string; gross: number; fees: number; transactions: number }[];
+}) {
+  const theme = useChartTheme();
+  const { locale, t } = useLocale();
+
+  if (data.length === 0) return <ChartEmpty />;
+
+  const rows = data.map((r) => ({ ...r, month: monthLabel(r.label, locale) }));
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 flex-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <CartesianGrid {...gridProps(theme)} />
+            <XAxis dataKey="month" {...axisProps(theme)} dy={6} />
+            <YAxis {...axisProps(theme)} width={52} tickFormatter={compactUsd} />
+            <Tooltip
+              cursor={{ fill: theme.border, fillOpacity: 0.25 }}
+              content={<ChartTooltip format={compactUsd} />}
+            />
+            <Bar dataKey="gross" name={t("adm.rev.gtv")} fill={theme.bronze} radius={[3, 3, 0, 0]} maxBarSize={26} isAnimationActive={false} />
+            <Bar dataKey="fees" name={t("adm.rev.revenue")} fill={theme.primary} radius={[3, 3, 0, 0]} maxBarSize={26} isAnimationActive={false} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <ChartLegend
+        items={[
+          { color: theme.bronze, label: t("adm.rev.gtv") },
+          { color: theme.primary, label: t("adm.rev.revenue") },
+        ]}
+      />
+    </div>
   );
 }

@@ -70,9 +70,9 @@ cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj
 
 | | |
 |---|---|
-| Backend | 22 controller · 161 endpoint · 34 DbSet · 26 migration · 1 SignalR hub · 2 background worker |
+| Backend | 22 controller · 161 endpoint · 34 DbSet · 30 migration · 1 SignalR hub · 2 background worker |
 | Frontend | 55 صفحة (route) · 149 component · 17 API module · دعم كامل EN/AR مع RTL |
-| الاختبارات | 48 اختبار وحدة (xUnit) على طبقة المجال — `FundingMath` + `PipelineStages`. مفيش integration ولا E2E. |
+| الاختبارات | 85 اختبار (xUnit): 57 على طبقة المجال — `FundingMath` + `PipelineStages` + `ProjectCategories` — و28 integration بيشغّلوا التطبيق فعليًا على EF Core InMemory. مفيش E2E ولا CI. |
 | المدفوعات | **Sandbox فقط** — simulator أوفلاين أو Stripe test-mode. التطبيق بيرفض يشتغل بمفتاح Stripe حقيقي. |
 | الإيميل | SMTP حقيقي (Brevo عبر MailKit) — الأسرار في `user-secrets`، مش في الكود. تفاصيل الإعداد في [docs/07-SETUP.md §7](docs/07-SETUP.md). |
 

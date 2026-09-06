@@ -27,7 +27,20 @@ const EASE = [0.22, 1, 0.36, 1] as const;
  * Opens as a full-height panel from the reading edge, with the same house curve
  * and gold hairline the rest of the product uses.
  */
-export function MobileNav() {
+/**
+ * Optionally controlled: the bottom bar owns the primary destinations and opens
+ * this panel for everything else, so both surfaces drive one drawer instead of
+ * the product having two separate menus that can disagree about what is open.
+ */
+export function MobileNav({
+  open: openProp,
+  onOpenChange,
+  hideTrigger,
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+} = {}) {
   const { t, locale } = useLocale();
   const rtl = locale === "ar";
   const reduce = useReducedMotion() ?? false;
@@ -35,7 +48,9 @@ export function MobileNav() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
-  const [open, setOpen] = useState(false);
+  const [uncontrolled, setUncontrolled] = useState(false);
+  const open = openProp ?? uncontrolled;
+  const setOpen = (v: boolean) => (onOpenChange ? onOpenChange(v) : setUncontrolled(v));
 
   async function signOut() {
     try {
@@ -70,16 +85,18 @@ export function MobileNav() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label={t("nav.menu")}
-        aria-expanded={open}
-        data-cursor="hover"
-        className="grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground md:hidden"
-      >
-        <Menu className="size-5" strokeWidth={1.7} />
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label={t("nav.menu")}
+          aria-expanded={open}
+          data-cursor="hover"
+          className="grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground md:hidden"
+        >
+          <Menu className="size-5" strokeWidth={1.7} />
+        </button>
+      )}
 
       {typeof document !== "undefined" &&
         createPortal(

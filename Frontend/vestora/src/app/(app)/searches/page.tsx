@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { ErrorState } from "@/components/ui/error-state";
 import { signalsApi } from "@/lib/api/deals";
+import { categoryOrRawLabel } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { SavedSearch } from "@/lib/types/api";
@@ -39,10 +40,13 @@ function hrefFor(s: SavedSearch): string {
 }
 
 /** The criteria, as the chips they were when the search was saved. */
-function criteria(s: SavedSearch) {
+function criteria(s: SavedSearch, t: (key: string) => string) {
   return [
     { icon: SearchIcon, value: s.search },
-    { icon: Layers, value: s.sector },
+    // A saved sector may be a category key (saved from browse) or free text
+    // (saved from the capital directory), so a known key is translated and
+    // anything else is shown exactly as it was saved.
+    { icon: Layers, value: s.sector ? categoryOrRawLabel(s.sector, t) : s.sector },
     { icon: MapPin, value: s.location },
     { icon: Compass, value: s.stage },
     { icon: Wallet, value: s.commitment },
@@ -190,7 +194,7 @@ export default function SearchesPage() {
             <ol className="divide-y divide-border/50 border-y border-border/50">
               {searches.map((s, i) => {
                 const isNew = s.newMatches > 0;
-                const chips = criteria(s);
+                const chips = criteria(s, t);
                 return (
                   <motion.li
                     key={s.id}

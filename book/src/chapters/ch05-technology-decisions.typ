@@ -420,6 +420,22 @@ can rely on having, and it introduces a dependency that cannot be run offline.
     — which the interface reduces to a single-class change.],
 )
 
+*What happened in practice, and what it proved.* The deployed system sends
+through Brevo's SMTP relay — an account, a verified sender address and a
+generated SMTP key, with every value in user secrets rather than in a committed
+file. Verification codes and password resets reach real inboxes rather than
+being written to a log.
+
+That is worth recording because it is the decision being *tested* rather than
+merely defended. Pointing the platform at a real relay required no change to any
+call site and no change to `IEmailService` — only configuration. The interface
+was justified on the argument that the transport could be replaced; replacing it
+is the evidence that the argument was true.
+
+The consequence stated in ADR-03 also survives contact: deliverability reporting
+and bounce handling remain unavailable, because they are properties of a managed
+API rather than of SMTP, and Brevo is being used as the latter.
+
 == UI Layer: Tailwind CSS with shadcn/ui
 
 The interface direction in @ch:design requires a specific visual system: a warm,

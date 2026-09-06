@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Compass, TriangleAlert } from "lucide-react";
 import { PillButton } from "@/components/ui/pill-button";
 import { EASE, stepDelay } from "@/lib/browse/motion";
+import { categoryLabelKey } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import type { FacetValue } from "@/lib/types/api";
 
@@ -86,7 +87,7 @@ export function BrowseEmpty({
                 onClick={() => onPick(s.value)}
                 className="rounded-full border border-border px-4 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
               >
-                {s.value}
+                {t(categoryLabelKey(s.value))}
                 <span className="font-numeric ms-1.5 text-xs text-muted-foreground/60">
                   {s.count}
                 </span>

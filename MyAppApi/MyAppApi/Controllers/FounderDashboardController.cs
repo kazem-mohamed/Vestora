@@ -163,20 +163,11 @@ namespace MyAppApi.Controllers
                 followerDates.Select(d => (d, 1.0)));
 
             // --- Investor growth (cumulative DISTINCT investors, by month) ---
-            var investorGrowth = new List<TimePointDto>();
-            var seenInvestors = new HashSet<int>();
-            foreach (var g in approved
-                         .Where(a => a.InvestorId != null)
-                         .GroupBy(a => new DateTime(a.Date.Year, a.Date.Month, 1))
-                         .OrderBy(g => g.Key))
-            {
-                foreach (var a in g) seenInvestors.Add(a.InvestorId!.Value);
-                investorGrowth.Add(new TimePointDto
-                {
-                    Label = g.Key.ToString("yyyy-MM"),
-                    Value = seenInvestors.Count
-                });
-            }
+            // Distinct because one investor backing twice is still one investor.
+            var investorGrowth = MonthlySeries.CumulativeDistinct(
+                approved.Where(a => a.InvestorId != null)
+                        .Select(a => (a.Date, a.InvestorId!.Value)),
+                DateTime.UtcNow);
 
             // --- Funding by venture: settled in front, committed behind ---
             var fundingByVenture = projects
@@ -393,23 +384,11 @@ namespace MyAppApi.Controllers
             });
         }
 
-        // Groups (date, value) pairs by calendar month and returns a running total.
+        // Groups (date, value) pairs by calendar month and returns a running total,
+        // carried through to the present month. The definition lives in MonthlySeries so
+        // the investor dashboard plots the same shape — see the note there for why a
+        // quiet month has to be emitted rather than skipped.
         private static List<TimePointDto> CumulativeByMonth(IEnumerable<(DateTime Date, double Value)> points)
-        {
-            var monthly = points
-                .GroupBy(p => new DateTime(p.Date.Year, p.Date.Month, 1))
-                .Select(g => new { Month = g.Key, Sum = g.Sum(x => x.Value) })
-                .OrderBy(x => x.Month)
-                .ToList();
-
-            var result = new List<TimePointDto>();
-            double running = 0;
-            foreach (var m in monthly)
-            {
-                running += m.Sum;
-                result.Add(new TimePointDto { Label = m.Month.ToString("yyyy-MM"), Value = running });
-            }
-            return result;
-        }
+            => MonthlySeries.Cumulative(points, DateTime.UtcNow);
     }
 }

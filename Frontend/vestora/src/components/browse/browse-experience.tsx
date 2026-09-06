@@ -11,6 +11,7 @@ import { BrowseMasthead } from "@/components/browse/browse-masthead";
 import { DiscoveryBar } from "@/components/browse/discovery-bar";
 import { VentureSpotlight } from "@/components/browse/venture-spotlight";
 import { VentureCard } from "@/components/browse/venture-card";
+import { ClosingRail, closingSoon } from "@/components/browse/closing-rail";
 import { BrowseEmpty, BrowseError, BrowseSkeleton } from "@/components/browse/browse-states";
 import { GuestInvite } from "@/components/browse/guest-invite";
 import { EASE, stepDelay } from "@/lib/browse/motion";
@@ -67,6 +68,24 @@ export function BrowseExperience() {
       placeholderData: keepPreviousData,
       staleTime: 60_000,
     })),
+  });
+
+  // The rail describes the whole filtered inventory, not the pages revealed so
+  // far — a round at 88% is worth surfacing whether or not the visitor has
+  // scrolled far enough to load it. "close" is the sort the API already owns.
+  const closingQuery = useQuery({
+    queryKey: ["browse-closing", queryParams.search, state.sector, state.location, state.stage],
+    queryFn: () =>
+      projectsApi.list({
+        search: state.search || undefined,
+        sector: state.sector,
+        location: state.location,
+        stage: state.stage,
+        sort: "close",
+        page: 1,
+        pageSize: 12,
+      }),
+    staleTime: 60_000,
   });
 
   const facetsQuery = useQuery({
@@ -145,6 +164,11 @@ export function BrowseExperience() {
     [allSectorsQuery.data]
   );
 
+  const closing = useMemo(
+    () => closingSoon(closingQuery.data?.items ?? []),
+    [closingQuery.data]
+  );
+
   return (
     <ReactLenis root options={{ lerp: reduce ? 1 : 0.09 }}>
       {/* The decorative blooms bleed past the container by design; clip them here
@@ -200,6 +224,11 @@ export function BrowseExperience() {
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* Between the single spotlight and the uniform grid, a third
+                  density: the rounds about to close, ordered by how close they
+                  are. Only appears when the inventory actually has them. */}
+              {!savedOnly && <ClosingRail items={closing} />}
 
               {gridItems.length === 0 ? (
                 <div className="mt-14">

@@ -25,6 +25,7 @@ import {
 } from "@/lib/browse/signals";
 import { rememberVisited } from "@/lib/browse/use-browse-state";
 import { navigateWithVentureMorph } from "@/lib/browse/view-transition";
+import { categoryLabelKey } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { ProjectCard } from "@/lib/types/api";
@@ -143,7 +144,7 @@ export function VentureSpotlight({
           >
             {project.stage && <span className="text-foreground">{project.stage}</span>}
             {project.stage && sector && <span aria-hidden>·</span>}
-            {sector && <span>{sector}</span>}
+            {sector && <span>{t(categoryLabelKey(sector))}</span>}
             {sector && project.location && <span aria-hidden>·</span>}
             {project.location && <span>{project.location}</span>}
           </motion.p>

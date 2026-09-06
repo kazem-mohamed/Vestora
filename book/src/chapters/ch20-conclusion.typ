@@ -30,7 +30,7 @@ interface, which carries transport only. This is what makes the simulated
 provider a legitimate test surface rather than a stand-in, and it is why the
 funding logic could be verified without a merchant account.
 
-*A working system.* Twenty-two API controllers over a relational model of more
+*A working system.* Twenty-five API controllers over a relational model of more
 than forty entities, a React front end of sixty-five routes, and a versioned
 migration history that records how the schema arrived at its present shape.
 

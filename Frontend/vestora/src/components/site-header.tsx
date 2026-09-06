@@ -9,6 +9,8 @@ import { NotificationsBell } from "@/components/notifications/notifications-bell
 import { InboxButton } from "@/components/messages/inbox-button";
 import { ProfileMenu } from "@/components/profile/profile-menu";
 import { MobileNav } from "@/components/mobile-nav";
+import { BottomNav } from "@/components/bottom-nav";
+import { navLinksFor } from "@/lib/nav/role-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useAuthStore } from "@/lib/auth/store";
@@ -18,7 +20,13 @@ export function SiteHeader() {
   const user = useAuthStore((s) => s.user);
   const { scrollY } = useScroll();
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   useMotionValueEvent(scrollY, "change", (latest) => setScrolled(latest > 8));
+
+  // With a bottom bar carrying the destinations, the header's hamburger becomes
+  // a second door to the same room. It stays for signed-out visitors, who get
+  // no bar (one destination is not a navigation).
+  const hasBottomNav = navLinksFor(user).length >= 2;
 
   return (
     <header className="sticky top-0 z-40">
@@ -66,8 +74,10 @@ export function SiteHeader() {
               <ProfileMenu />
             </span>
             {/* Below md the nav links collapse into this; without it there is no
-                way out of a page on a phone. */}
-            <MobileNav />
+                way out of a page on a phone. Its trigger is suppressed once the
+                bottom bar is carrying navigation — the panel is then opened from
+                there, and one drawer serves both. */}
+            <MobileNav open={menuOpen} onOpenChange={setMenuOpen} hideTrigger={hasBottomNav} />
           </div>
         </div>
       </div>
@@ -80,6 +90,8 @@ export function SiteHeader() {
           scrolled ? "via-primary/60 opacity-100" : "via-primary/35 opacity-80"
         )}
       />
+
+      <BottomNav onOpenMenu={() => setMenuOpen(true)} />
     </header>
   );
 }

@@ -97,7 +97,18 @@ export function InterestFunnel({
             const prev = i > 0 ? gates[i - 1].count : null;
             // Share of the step above, which is the only comparison that means
             // anything — a percentage of total views flatters every later stage.
-            const carry = prev && prev > 0 ? Math.round((stage.count / prev) * 100) : null;
+            //
+            // A step can legitimately hold more people than the one above it, because
+            // the steps are counted from different records: a view is only recorded when
+            // the listing is actually opened in the app, while an investment survives
+            // whether or not that visit was ever logged. When that happens the ratio is
+            // not a carry-over rate — it is evidence the upper step is undercounted, and
+            // printing it renders "400%", which states something the data cannot support.
+            // No badge is shown for that step instead.
+            const carry =
+              prev && prev > 0 && stage.count <= prev
+                ? Math.round((stage.count / prev) * 100)
+                : null;
             const isWorst = worst?.to.key === stage.key;
 
             return (

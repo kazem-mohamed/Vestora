@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using MyAppApi.Data;
 using MyAppApi.Data.Models;
 using MyAppApi.Data.Models.DTOs;
+using MyAppApi.Services;
 using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -118,38 +119,35 @@ namespace MyAppApi.Controllers
             var committed = approved.Sum(a => a.Amount);
 
             // Daily views for the last 30 days (non-cumulative).
-            var from = DateTime.UtcNow.Date.AddDays(-29);
-            var viewsOverTime = views
+            // Every day in the window is emitted, including the ones nobody looked.
+            // Grouping alone drops those days, which both shortens the series and closes
+            // up the gaps — a venture seen on two days a fortnight apart drew a chart of
+            // two adjacent points, and the quiet fortnight between them disappeared.
+            // Zero views is a measurement, not a missing value.
+            var now = DateTime.UtcNow;
+            var from = now.Date.AddDays(-29);
+            var viewsByDay = views
                 .Where(v => v.CreatedAt >= from)
                 .GroupBy(v => v.CreatedAt.Date)
-                .Select(g => new TimePointDto { Label = g.Key.ToString("yyyy-MM-dd"), Value = g.Count() })
-                .OrderBy(t => t.Label)
+                .ToDictionary(g => g.Key, g => (double)g.Count());
+
+            var viewsOverTime = Enumerable.Range(0, 30)
+                .Select(i => from.AddDays(i))
+                .Select(day => new TimePointDto
+                {
+                    Label = day.ToString("yyyy-MM-dd"),
+                    Value = viewsByDay.TryGetValue(day, out var n) ? n : 0
+                })
                 .ToList();
 
             // Cumulative committed capital by month — the promises curve.
-            double running = 0;
-            var commitmentsOverTime = approved
-                .GroupBy(a => new DateTime(a.Date.Year, a.Date.Month, 1))
-                .OrderBy(g => g.Key)
-                .Select(g =>
-                {
-                    running += (double)g.Sum(x => x.Amount);
-                    return new TimePointDto { Label = g.Key.ToString("yyyy-MM"), Value = running };
-                })
-                .ToList();
+            var commitmentsOverTime = MonthlySeries.Cumulative(
+                approved.Select(a => (a.Date, (double)a.Amount)), now);
 
             // Cumulative settled capital by month — the money curve.
-            double runningFunded = 0;
-            var fundingOverTime = settled
-                .Where(t => t.SucceededAtUtc.HasValue)
-                .GroupBy(t => new DateTime(t.SucceededAtUtc!.Value.Year, t.SucceededAtUtc.Value.Month, 1))
-                .OrderBy(g => g.Key)
-                .Select(g =>
-                {
-                    runningFunded += (double)g.Sum(x => x.Amount);
-                    return new TimePointDto { Label = g.Key.ToString("yyyy-MM"), Value = runningFunded };
-                })
-                .ToList();
+            var fundingOverTime = MonthlySeries.Cumulative(
+                settled.Where(t => t.SucceededAtUtc.HasValue)
+                       .Select(t => (t.SucceededAtUtc!.Value, (double)t.Amount)), now);
 
             return Ok(new ProjectAnalyticsDto
             {

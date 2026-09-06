@@ -527,7 +527,10 @@ export default function AdminUsersPage() {
         }
       />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      {/* One row only once there is genuinely room for a search field and seven chips.
+          Now that a tablet gets the sidebar, the content column is ~516px at 768px and
+          this went horizontal at 640px, which pushed the last status chip off-screen. */}
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -540,7 +543,7 @@ export default function AdminUsersPage() {
             className="w-full rounded-full border border-input bg-card/60 py-2.5 ps-10 pe-4 text-sm outline-none backdrop-blur-sm transition-colors placeholder:text-muted-foreground/70 focus-visible:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/25"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {TYPES.map((ty) => (
             <button
               key={ty || "all"}
@@ -559,7 +562,7 @@ export default function AdminUsersPage() {
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {STATUSES.map((s) => (
             <button
               key={String(s)}

@@ -30,9 +30,13 @@ together because the second feeds the first.
 
 = Objective
 
-*Make discovery attribute-driven.* A venture must be findable by sector, stage,
-location, funding progress and free text — by anyone, including someone who is
-not signed in.
+*Make discovery attribute-driven.* A venture must be findable by category,
+stage, location, funding progress and free text — by anyone, including someone
+who is not signed in.
+
+That this works at all depends on Report 4's closed category list. Free-text
+classification and attribute filtering are incompatible: a filter can only return
+a coherent population if the values it filters on are drawn from a fixed set.
 
 *Make ranking explicable.* A founder who asks why their venture appears where it
 does must be able to receive an answer. That constraint rules out an opaque
@@ -57,7 +61,9 @@ attention.
       account.],
     [Free-text search], [Across venture title, description, sector, location and
       founder.],
-    [Attribute filters], [Sector, stage, location and funding round.],
+    [Attribute filters], [Category, stage, location and funding round — the
+      category filter drawing on the closed list of Report 4, so one filter value
+      matches one population.],
     [Sorting], [Newest, closing soonest, momentum, largest round, most backed,
       most viewed.],
     [Saved searches], [A named filter combination that can be re-run.],

@@ -159,7 +159,7 @@ function PreviewCard({
       <div className="absolute inset-x-0 top-0 flex items-start justify-between p-5 text-[#f0eae0]">
         {values.category?.trim() ? (
           <span className="rounded-full bg-black/30 px-3 py-1 text-[11px] backdrop-blur-sm">
-            {values.category}
+            {t(categoryLabelKey(values.category))}
           </span>
         ) : (
           <span />

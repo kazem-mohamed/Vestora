@@ -134,33 +134,86 @@ export function InvestKpi({
 
 /* ============ Allocation bars ============ */
 
+/** The chart tokens the design system already defines, in reading order. */
+const SLICE_TOKENS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
+
+/**
+ * Where the money sits, as one whole rather than a stack of separate bars.
+ *
+ * This was a list of independent tracks, each drawn with the identical
+ * bronze→gold gradient. Two things were wrong with that. The colour carried no
+ * information, so nothing distinguished one holding from another except its
+ * position in the list. And every bar was measured against its own empty track,
+ * so a portfolio of six near-equal positions and one dominated by a single
+ * position produced the same picture: a column of part-filled bars.
+ *
+ * A composition is a whole with parts, so it is drawn as one: a single full-width
+ * bar segmented by holding, with the rows beneath acting as its legend. Answering
+ * "am I concentrated?" now takes a glance instead of arithmetic.
+ */
 export function AllocationBars({ slices }: { slices: AllocationSlice[] }) {
   const total = slices.reduce((s, x) => s + x.amount, 0);
   if (total <= 0) return null;
+
+  const shown = slices.slice(0, SLICE_TOKENS.length);
+  const rest = slices.slice(SLICE_TOKENS.length);
+  const restAmount = rest.reduce((s, x) => s + x.amount, 0);
+
+  const parts = [
+    ...shown.map((s, i) => ({ ...s, color: SLICE_TOKENS[i] })),
+    // Beyond five, colour stops distinguishing anything — the tail becomes one
+    // honest "other" band rather than five more shades nobody can tell apart.
+    ...(restAmount > 0
+      ? [{ label: "…", amount: restAmount, count: rest.length, color: "var(--muted-foreground)" }]
+      : []),
+  ];
+
   return (
-    <div className="space-y-3.5">
-      {slices.map((s, i) => {
-        const pct = Math.round((s.amount / total) * 100);
-        return (
-          <div key={s.label}>
-            <div className="flex items-baseline justify-between text-sm">
-              <span className="truncate text-muted-foreground">{s.label}</span>
-              <span className="font-numeric shrink-0 ps-3">
-                <span className="text-foreground">{compactUsd(s.amount)}</span>
+    <div>
+      <div
+        className="flex h-3 w-full overflow-hidden rounded-full bg-secondary"
+        role="img"
+        aria-label={parts
+          .map((p) => `${p.label} ${Math.round((p.amount / total) * 100)}%`)
+          .join(", ")}
+      >
+        {parts.map((p, i) => (
+          <motion.span
+            key={p.label}
+            initial={{ width: 0 }}
+            animate={{ width: `${(p.amount / total) * 100}%` }}
+            transition={{ duration: 0.9, delay: 0.15 + i * 0.05, ease: EASE }}
+            style={{ background: p.color }}
+            className="block h-full first:rounded-s-full last:rounded-e-full"
+          />
+        ))}
+      </div>
+
+      <ul className="mt-4 space-y-2">
+        {parts.map((p) => {
+          const pct = Math.round((p.amount / total) * 100);
+          return (
+            <li key={p.label} className="flex items-baseline gap-2.5 text-sm">
+              <span
+                aria-hidden
+                className="mt-1.5 size-2 shrink-0 rounded-full"
+                style={{ background: p.color }}
+              />
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">{p.label}</span>
+              <span className="font-numeric shrink-0">
+                <span className="text-foreground">{compactUsd(p.amount)}</span>
                 <span className="text-muted-foreground/70"> · {pct}%</span>
               </span>
-            </div>
-            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-secondary">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${pct}%` }}
-                transition={{ duration: 0.9, delay: 0.15 + i * 0.06, ease: EASE }}
-                className="h-full rounded-full bg-gradient-to-r from-bronze to-primary"
-              />
-            </div>
-          </div>
-        );
-      })}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

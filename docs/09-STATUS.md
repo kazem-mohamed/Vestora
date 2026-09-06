@@ -35,15 +35,16 @@ funding requests بقيود قاعدة بيانات (ستّة قيود دلوق�
 55 صفحة · ثلاث لوحات (مؤسّس/مستثمر/أدمن) · نظام تصميم كامل (quiet luxury) · فاتح/داكن · **EN/AR كامل مع RTL** · حركة سينمائية مع احترام `prefers-reduced-motion` على طبقتين · حالات تحميل وخطأ وفراغ.
 
 ### إدارة النسخ واختبارات المجال ✅
-المشروع تحت **Git**. و`MyAppApi/MyAppApi.Tests` (xUnit 2.9) فيه **48 اختبار وحدة** على طبقة المجال:
-`FundingMath` (`PublicStatus` · `Pct` · `RemainingCapacity` · `StateOf` بترتيب تقييمها · `IsFullySettled`/`UnsettledCommitment` للأقساط) و`PipelineStages` (`IsValid` · `CountsTowardFunding` · المراحل النهائية).
-بيمرّوا كلهم بالملّي ثانية لأنهم مبيلمسوش قاعدة بيانات — ودي خاصية في المعمارية مش في الاختبارات: الكلاسين دول متعمّدين يكونوا بدون I/O.
+المشروع تحت **Git**. و`MyAppApi/MyAppApi.Tests` (xUnit 2.9) فيه **85 اختبار على نصفين** (~26 ثانية):
+
+- **57 اختبار وحدة** على طبقة المجال: `FundingMath` (`PublicStatus` · `Pct` · `RemainingCapacity` · `StateOf` بترتيب تقييمها · `IsFullySettled`/`UnsettledCommitment` للأقساط) · `PipelineStages` (`IsValid` · `CountsTowardFunding` · المراحل النهائية) · `ProjectCategories` (صلاحية المفاتيح · مفتاح `other` · عدم التكرار). بيمرّوا بالملّي ثانية لأنهم مبيلمسوش قاعدة بيانات — ودي خاصية في المعمارية: الكلاسات دي متعمّدة تكون بدون I/O.
+- **28 اختبار integration** — `AuthEndpointsTests` · `PaymentsEndpointsTests` · `ProjectsEndpointsTests` · `SecurityBoundaryTests` — بيشغّلوا التطبيق الحقيقي ويكلّموه عبر HTTP.
 
 ```bash
 cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj
 ```
 
-> ⚠️ دي **طبقة المجال بس**. اللي مش مغطّى مذكور في §3.
+> ⚠️ **نصف الـ integration بيشتغل على EF Core InMemory مش SQL Server.** بيثبت سلوك الـ endpoint وأكواد الحالة والصلاحيات، لكنه **مبيثبتش إن الاستعلام بيترجم لـ SQL** — استعلام بيشتغل في الذاكرة وبيقع على القاعدة الحقيقية هيعدّي من الاختبارات دي. اللي لسه مش مغطّى مذكور في §3.
 
 ---
 
@@ -67,8 +68,9 @@ cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj
 
 | # | الثغرة | الأثر | الحل |
 |---|---|---|---|
-| 1 | **مفيش integration tests خالص** | الـ 48 اختبار الموجودين على طبقة المجال بس. `PaymentService` — التسوية، الـ idempotency جوّه الـ transaction، الـ refund، سباق webhook/verify، **الأقساط، العروض المقابلة**، `TermSheetService` — **مش مغطّى ولا اختبار واحد**، وهو أعلى مخاطرة في المشروع. نفس الكلام على الستّة قيود على مستوى الـ DB | integration tests على `PaymentService` و`TermSheetService` والقيود، بقاعدة بيانات اختبار |
-| 2 | **مفيش اختبارات صلاحيات** | مصفوفة الصلاحيات في [05-BUSINESS-RULES §6](05-BUSINESS-RULES.md) متحقَّق منها يدويًا بس | الحالات السلبية بالذات: مؤسّس تاني، مستثمر بيحرّك مرحلة، `BackersOnly` من غير موافقة |
+| 1 | **الـ integration بيشتغل على InMemory مش SQL Server** | بقى فيه 28 اختبار integration (auth · payments · projects · حدود الصلاحيات)، بس كلهم على EF Core InMemory — يعني **أي استعلام بيترجم غلط لـ SQL بيعدّي**. ده مش افتراضي: بق `IsPrimaryAdmin` (قراءة عمود خاص بنوع فرعي في TPH) عدّى من الـ 85 اختبار كلهم ووقع على القاعدة الحقيقية بـ 500 | نسخة من الاختبارات الحرجة على SQL Server حقيقي (Testcontainers أو قاعدة اختبار)، وعلى الأقلّ للمسار المالي والاستعلامات اللي فيها أنواع فرعية |
+| 1b | **`PaymentService` و`TermSheetService` لسه ناقصين تغطية عميقة** | فيه 6 اختبارات على endpoints المدفوعات، لكن التسوية والـ idempotency جوّه الـ transaction والـ refund وسباق webhook/verify و**الأقساط والعروض المقابلة** لسه مش متغطّيين بالعمق المطلوب لأعلى مخاطرة في المشروع. نفس الكلام على الستّة قيود على مستوى الـ DB (InMemory مبيفرضهاش) | اختبارات على قاعدة حقيقية تغطّي التسوية والأقساط والعروض المقابلة والقيود |
+| 2 | **اختبارات الصلاحيات جزئية** | `SecurityBoundaryTests` بيغطّي 7 حالات، بس مصفوفة الصلاحيات الكاملة في [05-BUSINESS-RULES §6](05-BUSINESS-RULES.md) لسه متحقَّق منها يدويًا | كمّل الحالات السلبية: مؤسّس تاني، مستثمر بيحرّك مرحلة، `BackersOnly` من غير موافقة |
 | 3 | **مفيش CI/CD** | مفيش `.github/` ولا pipeline — حتى الاختبارات الموجودة مبتتشغّلش تلقائيًا | workflow: `dotnet build` + `dotnet test` + `npm run build` على كل push |
 | 4 | **مفيش خطة نشر (deployment)** | فيه `Properties/PublishProfiles` بس مفيش توثيق للعملية | وثّق خطوات النشر على MonsterASP |
 | 5 | **مفيش `.env.example`** | مطوّر جديد لازم يقرا التوثيق عشان يعرف المفاتيح | ضيف `.env.example` للـ frontend (المفتاح الوحيد المطلوب `NEXT_PUBLIC_API_URL`) |
@@ -133,6 +135,6 @@ cd MyAppApi && dotnet test MyAppApi.Tests/MyAppApi.Tests.csproj
 | منطق العمل | 🟢 عالي | مصدر وحيد للأرقام · state machines واضحة |
 | API | 🟢 عالي | 161 endpoint · صلاحيات صريحة · أخطاء موحّدة |
 | الواجهة | 🟢 عالي | نظام تصميم · i18n كامل · حركة محترمة للتفضيلات |
-| **الاختبارات** | 🟠 **جزئي** | 48 اختبار وحدة على طبقة المجال · صفر integration / API / E2E |
+| **الاختبارات** | 🟠 **جزئي** | 85 اختبار: 57 وحدة + 28 integration · بس الـ integration على InMemory مش SQL Server · صفر E2E |
 | **DevOps** | 🟠 **جزئي** | Git موجود · لا CI · لا مراقبة · لا توثيق نشر |
 | التوثيق | 🟢 عالي | الملفات دي |

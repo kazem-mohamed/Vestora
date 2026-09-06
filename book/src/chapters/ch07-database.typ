@@ -40,6 +40,21 @@ saved searches, analytics counters — are omitted here for legibility and are
 listed in full in @app:schema.
 
 #full-page-figure(
+  "/assets/diagrams/out/erd-core.svg",
+  caption: [The core relational model — identity, the venture, and the objects
+    that hang off them. The commitment-versus-payment split that governs
+    @ch:payments is visible here as two separate tables, because they record two
+    separate facts.],
+)
+
+#full-page-figure(
+  "/assets/diagrams/out/erd-ownership.svg",
+  caption: [Ownership edges. Every endpoint that checks "is this yours" resolves
+    one of these relationships — which is why a role check alone is insufficient
+    almost everywhere (§10.8).],
+)
+
+#full-page-figure(
   "/assets/diagrams/out/erd-funding.svg",
   landscape: false,
   caption: [The funding chain, derived from the Entity Framework configuration

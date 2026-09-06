@@ -284,7 +284,9 @@ cd MyAppApi/MyAppApi && dotnet build
 
 ## 8. اختبار التغيير
 
-**الاختبارات الآلية بتغطّي طبقة المجال بس** — `MyAppApi.Tests` فيه 48 اختبار وحدة على `FundingMath` و`PipelineStages`. أي حاجة تانية (endpoints، صلاحيات، دفع، واجهة) **تحقّقها يدوي**، فخلّي معاييرك واضحة قبل ما تبدأ.
+**`MyAppApi.Tests` فيه 85 اختبار على نصفين**: 57 اختبار وحدة على طبقة المجال (`FundingMath` · `PipelineStages` · `ProjectCategories`) و28 integration بيشغّلوا التطبيق الحقيقي ويكلّموه عبر HTTP (`AuthEndpointsTests` · `PaymentsEndpointsTests` · `ProjectsEndpointsTests` · `SecurityBoundaryTests`).
+
+⚠️ **نصف الـ integration بيشتغل على EF Core InMemory مش SQL Server.** بيثبت سلوك الـ endpoint وأكواد الحالة والصلاحيات، لكنه **مبيثبتش إن الاستعلام بيترجم لـ SQL** — استعلام بيشتغل في الذاكرة وبيقع على القاعدة هيعدّي من هنا. (ده بالظبط اللي خلّى بق `IsPrimaryAdmin` يعدّي.) الواجهة والـ E2E **تحقّقها يدوي**، فخلّي معاييرك واضحة قبل ما تبدأ.
 
 | النوع | إزاي |
 |---|---|

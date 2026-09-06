@@ -3,11 +3,22 @@
 
 = Interface Gallery <app:screenshots>
 
-Captures are produced by a scripted browser session (`book/capture.js` and
-`book/capture-auth.js`) against the running application and a populated
-database — 21 ventures at the time of capture. The script sets theme and locale
-in storage before each navigation, so a variant is never captured by hand and
-the matrix cannot drift.
+Captures are produced by scripted browser sessions against the running
+application and a populated database. Seven scripts cover the surfaces —
+`capture.js` and `capture-auth.js` for the public and signed-in pages,
+`capture-identity.js`, `capture-venture.js`, `capture-discovery.js`,
+`capture-dashboards.js`, `capture-governance.js`, `capture-dealroom.js`,
+`capture-checkout.js` and `capture-settlement.js` for the rest.
+
+Each script sets theme and locale in storage before navigating, so a variant is
+never captured by hand and the matrix cannot drift. *Each shot also verifies the
+rendered document before it is written*: the writing direction, the theme class,
+the landed route and the absence of loading skeletons are all asserted, and a
+capture that fails any of them is reported rather than saved. That check exists
+because an earlier run produced a set of files named for Arabic and dark mode
+that had been rendered in English on the light theme — a sign-in retry had
+cleared the stored preferences, and nothing caught it until the images were
+read by eye.
 
 *Capture rules.* Desktop at 1440×900 and mobile at 390×844, held constant.
 Real seeded content — no `Lorem ipsum`, no placeholder names, no unrelated
@@ -101,7 +112,7 @@ rather than simulated. The public surfaces are in §8.4.
   caption: [An investor account requesting a surface it is not entitled to. The
     client redirects to a refusal rather than rendering an empty page — and the
     API would refuse the underlying call regardless of what the client did
-    (§10.8). This is case AZ-01 of @app:tests, observed rather than executed.],
+    (§10.8). Authorisation is also asserted directly by `SecurityBoundaryTests` (§15.2); this capture is the same boundary observed in the interface.],
 )
 
 #note[

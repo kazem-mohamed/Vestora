@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Bookmark, Search, SlidersHorizontal, X } from "lucide-react";
 import { FacetMenu } from "@/components/browse/facet-menu";
 import { EASE, EASE_OUT } from "@/lib/browse/motion";
+import { categoryLabelKey } from "@/lib/config/categories";
 import { useLocale } from "@/lib/i18n/locale";
 import { cn } from "@/lib/utils";
 import type { BrowseSort, CommitmentFilter, ProjectFacets } from "@/lib/types/api";
@@ -77,10 +78,15 @@ export function DiscoveryBar({
     };
   }, [sheetOpen]);
 
+  // The sector facet stores category keys; everything else stores what it shows.
+  const sectorLabel = (v: string) => t(categoryLabelKey(v));
+
   const filterLabel = (f: ActiveFilter) =>
     f.key === "commitment"
       ? t(COMMITMENTS.find((c) => c.key === f.value)?.labelKey ?? "")
-      : f.value;
+      : f.key === "sector"
+        ? sectorLabel(f.value)
+        : f.value;
 
   const controls = (
     <>
@@ -97,6 +103,7 @@ export function DiscoveryBar({
         options={facets?.sectors ?? []}
         selected={state.sector}
         onSelect={(v) => onApply({ sector: v })}
+        formatValue={sectorLabel}
       />
       <FacetMenu
         label={t("browse.facet.location")}

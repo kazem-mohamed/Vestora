@@ -142,8 +142,10 @@
   align(center, eyebrow(date, size: 8pt))
 }
 
-// Team roster on its own page, at a size that can actually be filled in.
-#let team-page(rows: 6) = {
+// Team roster on its own page. Pass `members` — (name, id, role) dictionaries,
+// in roster order — to print the real roster; any row past `members.len()`
+// falls back to a blank a name can be written onto later.
+#let team-page(rows: 6, members: ()) = {
   set page(
     paper: "a4",
     margin: (x: 24mm, top: 26mm, bottom: 24mm),
@@ -167,13 +169,22 @@
   // One labelled card per member. A three-column table of blank rules was not
   // legible as a form — the reader could not tell which rule belonged to which
   // column once the headings scrolled out of eye-line.
-  let field(label, width: 100%) = block(width: width, {
+  let field(label, value: none, width: 100%, arabic: false) = block(width: width, {
     eyebrow(label, size: 6.2pt)
     v(1.4mm, weak: true)
-    _fill-in(width)
+    if value == none {
+      _fill-in(width)
+    } else if arabic {
+      block(width: width, inset: (bottom: 2pt), stroke: (bottom: 0.7pt + border),
+        align(left, text(font: arabic-font, size: 10.5pt, weight: 600, value)))
+    } else {
+      block(width: width, inset: (bottom: 2pt), stroke: (bottom: 0.7pt + border),
+        text(size: 10.5pt, weight: 600, value))
+    }
   })
 
   for n in range(1, rows + 1) {
+    let m = if n <= members.len() { members.at(n - 1) }
     block(
       width: 100%,
       fill: surface,
@@ -191,13 +202,13 @@
           fill: gold,
         )[#if n < 10 [0#n] else [#n]]),
         {
-          field("Full Name")
+          field("Full Name", value: if m != none { m.name }, arabic: true)
           v(3.5mm)
           grid(
             columns: (34mm, 1fr),
             column-gutter: 10mm,
-            field("Student ID"),
-            field("Role on the Project"),
+            field("Student ID", value: if m != none { m.id }),
+            field("Role on the Project", value: if m != none { m.role }),
           )
         },
       ),

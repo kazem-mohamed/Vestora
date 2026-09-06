@@ -416,7 +416,7 @@ Applies to **every** LINQ query including `Find`. Opt out with `.IgnoreQueryFilt
 
 ## 10. Migrations
 
-26 migrations in `Migrations/`, in order:
+30 migrations in `Migrations/`, in order:
 
 | # | Migration | What it added |
 |---|---|---|
@@ -447,6 +447,9 @@ Applies to **every** LINQ query including `Find`. Opt out with `.IgnoreQueryFilt
 | 25 | `StageHistoryRemindersAndReconciliation` | InvestmentStageEvents, `FundingRequest.RemindersSent`, `PaymentEvent` review columns |
 | 26 | `TermSheetsCounterOffersAndTwoWayDocs` | TermSheets, `FundingRequest` counter-offer + tranche columns, `DocumentRequest` response columns, `DealQuestion.ParentQuestionId` |
 | 27 | `AuditTrailReasonDiffAndIp` | `AdminAuditLog.Reason/BeforeJson/AfterJson/IpAddress` — four nullable columns, no data movement |
+| 28 | `AddPrimaryAdminFlag` | `Admin.IsPrimaryAdmin` (nullable bit — Admin-only in TPH, so NULL on every other user type) + an SQL backfill making the oldest admin primary |
+| 29 | `AddMustChangePasswordFlag` | `User.MustChangePassword` — `NOT NULL DEFAULT 0`, for admin-created accounts on a temporary password |
+| 30 | `RemoveProjectIndustry` | **Destructive.** Drops `Project.Industry`. Category and Industry were two unvalidated free-text fields meaning one thing to the reader; they are now the single closed-key `Category`. Existing rows were mapped to the new keys in the same pass (`HealthTech`→`healthtech`, `Cloud Services`→`saas`, `Robotics`→`hardware_iot`, …) |
 
 **Commands** (from `MyAppApi/MyAppApi`):
 

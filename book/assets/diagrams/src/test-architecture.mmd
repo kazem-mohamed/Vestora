@@ -1,0 +1,27 @@
+flowchart TB
+    subgraph D["Domain suite · 57 tests · no database"]
+        D1["FundingMathTests · 23"]
+        D2["PipelineStagesTests · 25"]
+        D3["ProjectCategoriesTests · 9"]
+        D1 --- DT["Arithmetic over rows<br/>and a transition table.<br/>No I/O, so no database."]
+    end
+
+    subgraph I["Integration suite · 28 tests · over HTTP"]
+        I1["AuthEndpointsTests · 9"]
+        I2["PaymentsEndpointsTests · 6"]
+        I3["ProjectsEndpointsTests · 6"]
+        I4["SecurityBoundaryTests · 7"]
+        I1 --- IF["CustomWebApplicationFactory<br/>starts the real app"]
+    end
+
+    IF --> MEM[("EF Core InMemory<br/>one fresh database<br/>per test class")]
+
+    MEM --> PROVES["Proves: endpoint behaviour,<br/>status codes, authorisation"]
+    MEM --> NOT["Does NOT prove:<br/>that a query translates to SQL"]
+
+    GAP["Still absent:<br/>end-to-end browser · load · CI"]
+
+    classDef key fill:#FCFAF3,stroke:#8B4F2A,stroke-width:2px,color:#241C14
+    classDef warn fill:#F6F2E7,stroke:#E3D9C4,color:#71614C
+    class PROVES key
+    class NOT,GAP warn

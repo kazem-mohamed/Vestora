@@ -51,7 +51,7 @@ it is an implementation detail.
   caption: [URI patterns and what each is for.],
 )
 
-Twenty-two controllers group these by area — authentication, projects,
+Twenty-five controllers group these by area — authentication, projects,
 investors, capital, payments, messages, notifications, follows, bookmarks,
 engagement, deal room, reports, feed, signals, insights, founder and investor
 dashboards, and three administrative areas covering moderation, revenue and
@@ -71,6 +71,118 @@ DTOs are also where over-fetching is prevented. A venture card needs eight
 fields; the entity has forty. The listing query projects into the card DTO in
 the database rather than materialising entities and mapping them in memory
 (§6.6).
+
+== The Surface, by Shape
+
+One hundred and sixty-nine endpoints is a number that means little on its own.
+The distribution is more informative, because it shows where the system's
+complexity actually sits.
+
+#figure(
+  table(
+    columns: (46mm, 14mm, 1fr),
+    align: (left + top, center + top, left + top),
+    table.header([Controller], [Routes], [Why it is this size]),
+    [`ProjectsController`], [22],
+      [The venture is the platform's central object, and it carries imagery,
+       team, documents and lifecycle transitions.],
+    [`ProjectStoryController`], [20],
+      [Updates, milestones and the data room — everything a venture publishes
+       after it is listed.],
+    [`PaymentsController`], [15],
+      [Funding requests, checkout, verification, cancellation, the sandbox
+       resolver and the webhook.],
+    [`AdminController`], [15],
+      [Account administration, the primary-administrator transfer, and the
+       oversight reads.],
+    [`DealRoomController`], [14],
+      [Questions, document requests in both directions, terms, and the private
+       note.],
+    [`InvestorController`], [11],
+      [The relationship from the investor's side, including notes and stage.],
+    [`AuthController`], [10],
+      [The identity lifecycle of @ch:security.],
+    [Nine further areas], [42],
+      [Messages, users, follows, bookmarks, engagement, signals, notifications,
+       reports, feed.],
+    [Six dashboard and insight areas], [20],
+      [Read-only aggregations. Each is small because the work is in the query,
+       not in the surface.],
+  ),
+  caption: [Endpoint distribution. The five largest controllers hold just over
+    half the surface, and every one of them is a place where the domain is
+    genuinely complicated rather than merely large.],
+)
+
+The shape is worth reading as evidence for a claim made in @ch:architecture:
+*controllers are grouped by responsibility rather than by entity.* If they were
+grouped by table there would be a controller per table and each would be the
+same size. They are not, because a venture's story is a different job from a
+venture's lifecycle even though both are rows on the same object.
+
+== A Request, End to End
+
+Every principle in this chapter appears in one exchange. This is an investor
+expressing a commitment.
+
+#figure(
+  ```http
+  POST /api/investor/42/support HTTP/1.1
+  Authorization: Bearer <access token>
+  Content-Type: application/json
+
+  { "amount": 40000, "contactMethod": "Email",
+    "contactValue": "investor@example.com" }
+  ```,
+  caption: [The request. The venture is in the path, the caller is in the token,
+    and nothing identifying the investor appears in the body — a body that named
+    its own investor would be a body a caller could lie in.],
+)
+
+The request passes four gates before anything is written:
+
++ *Authentication.* The bearer token is validated and the caller's identity and
+  role are populated (§10.5). No handler reads a user identifier from the
+  request.
++ *Structural validation.* The amount must be positive and the contact method
+  must be one the platform recognises. A malformed request never reaches a
+  service (§9.5).
++ *Role.* The route is restricted to the `Investor` role.
++ *Ownership, which is not the same thing.* The caller must not own venture 42.
+  An account may hold both roles, so every role gate would pass for a founder
+  backing their own venture; only a comparison of two identifiers refuses it
+  (§10.8).
+
+#figure(
+  ```http
+  HTTP/1.1 201 Created
+
+  { "id": 184, "projectId": 42, "amount": 40000.00,
+    "status": "Pending", "stage": "New", "createdAtUtc": "2026-08-09T03:40:11Z" }
+  ```,
+  caption: [The response. A DTO, never the entity. Note `status` and `stage` as
+    separate fields — the distinction of §14.2 is visible in the contract itself,
+    and a client cannot collapse them because it never receives them collapsed.],
+)
+
+*And the refusal, which is the more interesting half.*
+
+#figure(
+  ```http
+  HTTP/1.1 403 Forbidden
+
+  { "message": "A founder cannot back their own venture." }
+  ```,
+  caption: [The ownership refusal. The message states the rule and nothing about
+    the venture, the account or why the platform believes them to be the same
+    person — an error that explains too much is a disclosure (§9.6).],
+)
+
+Three properties of this exchange are worth naming because they hold across all
+one hundred and sixty-nine routes. The identity comes from the token and never
+from the body. The response is a projection, never an entity. And the failure is
+an ordinary return value shaped into a status code by the shared extension of
+§6.5, not an exception caught somewhere far away.
 
 == Validation Strategy
 
@@ -100,7 +212,7 @@ centrally, logged with detail, and returned without it.
 #figure(
   ```cs
   // Outcome-to-HTTP mapping exists once for the whole API rather than
-  // being re-decided in each of the twenty-two controllers.
+  // being re-decided in each of the twenty-five controllers.
   var result = await _projects.PublishAsync(id, userId, ct);
   return result.ToActionResult(this);
   ```,

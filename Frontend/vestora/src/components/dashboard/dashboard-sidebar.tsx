@@ -110,7 +110,7 @@ export function DashboardMobileNav() {
   const pendingCount = data?.kpis.pendingRequestsCount ?? 0;
 
   return (
-    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden [scrollbar-width:none]">
+    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:hidden [scrollbar-width:none]">
       {DASH_SECTIONS.map((s) => {
         const on = isDashActive(pathname, s.href);
         return (

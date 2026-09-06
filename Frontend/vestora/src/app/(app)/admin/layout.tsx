@@ -25,8 +25,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <AdminMobileNav />
-      <div className="mt-4 lg:mt-0 lg:grid lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-8">
-        <aside className="hidden lg:block">
+      <div className="mt-4 md:mt-0 md:grid md:grid-cols-[196px_minmax(0,1fr)] md:gap-6 lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-8">
+        <aside className="hidden md:block">
           {/* Above the navigation, because looking a record up is more often the reason
               an administrator is here than browsing a section is. */}
           <div className="sticky top-20 space-y-4">

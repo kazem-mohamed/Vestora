@@ -96,7 +96,7 @@ rewrite (§5.3) did not touch a single business rule.
 Within the API, components are grouped by responsibility rather than by
 entity. The grouping below is the actual shape of the codebase.
 
-/ Controllers (22): One per resource area — authentication, projects,
+/ Controllers (25): One per resource area — authentication, projects,
   investments, payments, messages, notifications, follows, bookmarks, reports,
   admin moderation, admin revenue, founder and investor dashboards, insights,
   and so on. Controllers parse, authorise and delegate. They contain no rules.
@@ -134,7 +134,7 @@ A controller does four things and nothing else: bind the request, check
 authorisation, call a service, and shape the result. The last of these is
 handled uniformly rather than per-controller — a shared extension translates a
 service result into an HTTP response, so the mapping from "not found" to `404`
-exists once rather than twenty-two times.
+exists once rather than twenty-five times.
 
 This is the discipline that the old version of this project lacked, and its
 absence is what produced controllers that talked to the data context directly.

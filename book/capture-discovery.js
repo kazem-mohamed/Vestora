@@ -36,6 +36,13 @@ const VARIANTS = [
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The Next.js development overlay renders into <nextjs-portal>. It is a
+// development affordance, not part of the product, and a red "N issues" badge
+// in a documentation screenshot reads as an application fault.
+const hideDevOverlay = (p) =>
+  p.addStyleTag({ content: 'nextjs-portal{display:none!important}' }).catch(() => {});
+
+
 const setPrefs = (page, l, t) =>
   page.evaluate(
     (a, b) => {
@@ -94,7 +101,7 @@ async function shoot(page, name, url, v, authed) {
   if (seen.dark !== wantDark) problems.push(`dark=${seen.dark} want=${wantDark}`);
   if (seen.loading) problems.push(`still-loading=${seen.loading}`);
 
-  await page.screenshot({ path: path.join(OUT, file) });
+  await hideDevOverlay(page); await page.screenshot({ path: path.join(OUT, file) });
   console.log(`${problems.length ? 'CHECK' : 'OK   '} ${file}${problems.length ? '  ' + problems.join(' · ') : ''}`);
 }
 
